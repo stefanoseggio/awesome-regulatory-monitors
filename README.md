@@ -178,6 +178,10 @@ PRs adding a genuinely open, live-verified, machine-readable regulatory/complian
 - If the source turns out to be gated, still worth a PR — add it to the "checked and excluded" table with the real reason, so the next person doesn't re-check it.
 - No affiliate links, no thin wrapper entries whose only content is a redirect to a paid product.
 
+## Maintainer
+
+Built and maintained by **Stefano Seggio** as part of **Delta Registry** — pay-per-event regulatory & compliance data infrastructure. For the full catalog (24 Actors across procurement, enforcement, IP, and compliance monitoring), see the [Apify Store profile](https://apify.com/stefano_seggio) or the [GitHub profile](https://github.com/stefanoseggio). For enterprise licensing or a custom monitor built against a new source, connect on [LinkedIn](https://www.linkedin.com/in/stefanoseggio-deltaregistry).
+
 ## License
 
 Apache-2.0 — see `LICENSE`.
