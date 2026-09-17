@@ -1,8 +1,8 @@
 # awesome-regulatory-monitors
 
-> A curated directory of open, programmatically-accessible regulatory, sanctions, procurement, and compliance data sources — plus a working reference implementation covering 17 of them as ready-to-run Apify Actors.
+> A curated directory of open, programmatically-accessible regulatory, sanctions, procurement, and compliance data sources — plus a working reference implementation covering 28 of them as ready-to-run Apify Actors.
 
-[![Actors](https://img.shields.io/badge/actors-17-blue)](#actor-directory)
+[![Actors](https://img.shields.io/badge/actors-28-blue)](#actor-directory)
 [![Architecture](https://img.shields.io/badge/architecture-delta--tracked-green)](#architecture)
 [![License](https://img.shields.io/badge/license-Apache--2.0-lightgrey)](LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)](#contributing)
@@ -84,6 +84,8 @@ Every actor in the directory below follows the same shape — a source-specific 
 | Compras Córdoba | Córdoba Province, Argentina | [cordoba-compras-monitor](https://apify.com/stefano_seggio/cordoba-compras-monitor) | NEW_LISTING / STATUS_CHANGE / CLOSED | $0.003 / $0.001 |
 | PBA tenders | Buenos Aires Province, Argentina | [pba-tenders-monitor](https://apify.com/stefano_seggio/pba-tenders-monitor) | NEW_LISTING / STATUS_CHANGE / CLOSED | $0.003 / $0.001 |
 | World Bank Procurement Notices + Other Sanctions | Global (World Bank) | [actor-20-mdb-procurement-monitor](https://apify.com/stefano_seggio/actor-20-mdb-procurement-monitor) | NEW_LISTING / STATUS_CHANGE / UPDATED (+ SANCTION on the debarment sub-source) | $0.001 / $0.003 |
+| Anagrafica dei bandi regionali | Lombardy, Italy | [regione-lombardia-grants-registry-monitor](https://apify.com/stefano_seggio/regione-lombardia-grants-registry-monitor) | NEW_LISTING / STATUS_CHANGE / UPDATED | $0.02 / $0.008 |
+| TED (Tenders Electronic Daily) | European Union (27 member states) | [eu-ted-procurement-delta-monitor](https://apify.com/stefano_seggio/eu-ted-procurement-delta-monitor) | NEW_NOTICE / NOTICE_UPDATED | $0.02 / $0.01 |
 
 ### Sanctions, enforcement & legal/regulatory registers
 
@@ -92,12 +94,29 @@ Every actor in the directory below follows the same shape — a source-specific 
 | OFAC SDN List (vessels) + UN Consolidated List | United States (global reach) | [actor-19-maritime-sanctions-monitor](https://apify.com/stefano_seggio/actor-19-maritime-sanctions-monitor) | SANCTION / STATUS_CHANGE / UPDATED / DELISTED | $0.0005 (single tier) |
 | Diario Oficial (official gazette) | Chile | [diario-oficial-cl-monitor](https://apify.com/stefano_seggio/diario-oficial-cl-monitor) | NEW_LISTING / UPDATED | $0.003 (single tier) |
 | USPTO PTAB + EPO OPS | United States / Europe | [actor-21-patent-ip-enforcement-monitor](https://apify.com/stefano_seggio/actor-21-patent-ip-enforcement-monitor) | SANCTION / UPDATED / TERMINATED | $0.002 (single tier) |
+| KIPRIS Plus (patent/trademark filings, BYOK) | South Korea | [kipris-patent-trademark-status-monitor](https://apify.com/stefano_seggio/kipris-patent-trademark-status-monitor) | NEW_APPLICATION / STATUS_CHANGE / UPDATED | $0.02 / $0.008 |
+| SEC litigation releases + administrative proceedings | United States (SEC) | [sec-enforcement-litigation-delta-feed](https://apify.com/stefano_seggio/sec-enforcement-litigation-delta-feed) | NEW_LISTING / UPDATED | $0.05 / $0.02 |
 
 ### Health, safety & consumer protection
 
 | Source | Jurisdiction | Actor | Delta events | Pricing |
 |---|---|---|---|---|
 | FDA openFDA + EMA DHPC | United States / European Union | [actor-22-drug-safety-recalls-monitor](https://apify.com/stefano_seggio/actor-22-drug-safety-recalls-monitor) | SANCTION / NEW_LISTING / STATUS_CHANGE / UPDATED | $0.001 (single tier) |
+| ClinicalTrials.gov + FDA Orange Book | Global (ClinicalTrials.gov) + United States (FDA) | [actor-24-clinical-trials-delta-engine](https://apify.com/stefano_seggio/actor-24-clinical-trials-delta-engine) | NEW_TRIAL / STATUS_CHANGE | $0.002 (single tier) |
+
+### Corporate registries
+
+| Source | Jurisdiction | Actor | Delta events | Pricing |
+|---|---|---|---|---|
+| ACRA Collection 2 (data.gov.sg) | Singapore | [singapore-acra-registry-monitor](https://apify.com/stefano_seggio/singapore-acra-registry-monitor) | NEW_LISTING / STATUS_CHANGE / UPDATED | $0.03 / $0.01 |
+| Modern Slavery Statement Registry (gov.uk) | United Kingdom | [uk-modern-slavery-statement-registry-monitor](https://apify.com/stefano_seggio/uk-modern-slavery-statement-registry-monitor) | NEW_STATEMENT / STATEMENT_UPDATED | $0.02 / $0.01 |
+| Dubai Pulse (DED mainland) + ADGM + DIFC | United Arab Emirates | [uae-corporate-registry-monitor](https://apify.com/stefano_seggio/uae-corporate-registry-monitor) | NEW_ENTITY / STATUS_CHANGED / ENTITY_UPDATED | $0.02 / $0.02 / $0.01 |
+
+### Financial markets
+
+| Source | Jurisdiction | Actor | Delta events | Pricing |
+|---|---|---|---|---|
+| Tesouro Transparente (domestic bond auctions) | Brazil (Tesouro Nacional) | [emerging-market-sovereign-debt-auction-monitor](https://apify.com/stefano_seggio/emerging-market-sovereign-debt-auction-monitor) | NEW_AUCTION / AUCTION_RESULT_REVISED | $0.02 / $0.01 |
 
 ### General-purpose (not registry-monitoring, included for completeness)
 
@@ -105,6 +124,8 @@ Every actor in the directory below follows the same shape — a source-specific 
 |---|---|---|---|
 | Any website's own metadata | [primer-actor (CleanMeta Crawler)](https://apify.com/stefano_seggio/primer-actor) | Page-metadata extraction with per-URL content-change detection | $0.0005 (single tier) |
 | OpenStreetMap Overpass / customer seed lists | [actor-18-b2b-lead-magnet](https://apify.com/stefano_seggio/actor-18-b2b-lead-magnet) | Compliant B2B lead discovery — deliberately never Google Maps | $0.002 / $0.015 |
+| robots.txt AI-crawler directives + Cloudflare Content-Signal + llms.txt | [ai-crawler-content-signal-permission-monitor](https://apify.com/stefano_seggio/ai-crawler-content-signal-permission-monitor) | AI-crawler permission tracking, any domain | $0.015 / $0.006 |
+| Aozora Bunko catalog export | [aozora-bunko-public-domain-text-feed](https://apify.com/stefano_seggio/aozora-bunko-public-domain-text-feed) | Newly digitized/revised public-domain Japanese texts | $0.05 / $0.01 |
 
 ## Sources checked and excluded (and why)
 
@@ -180,7 +201,7 @@ PRs adding a genuinely open, live-verified, machine-readable regulatory/complian
 
 ## Maintainer
 
-Built and maintained by **Stefano Seggio** as part of **Delta Registry** — pay-per-event regulatory & compliance data infrastructure. For the full catalog (24 Actors across procurement, enforcement, IP, and compliance monitoring), see the [Apify Store profile](https://apify.com/stefano_seggio) or the [GitHub profile](https://github.com/stefanoseggio). For enterprise licensing or a custom monitor built against a new source, connect on [LinkedIn](https://www.linkedin.com/in/stefanoseggio-deltaregistry).
+Built and maintained by **Stefano Seggio** as part of **Delta Registry** — pay-per-event regulatory & compliance data infrastructure. For the full catalog (28 Actors across procurement, enforcement, IP, compliance, corporate registries, and financial markets monitoring), see the [Apify Store profile](https://apify.com/stefano_seggio) or the [GitHub profile](https://github.com/stefanoseggio). For enterprise licensing or a custom monitor built against a new source, connect on [LinkedIn](https://www.linkedin.com/in/stefanoseggio-deltaregistry).
 
 ## License
 
