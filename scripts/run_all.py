@@ -25,8 +25,8 @@ from apify_client import ApifyClient
 # Real actor directory, actor slug -> its real delta-flag field name (NOT
 # all identical across this fleet - actor-18 uses skipKnownLeads instead of
 # onlyNew, since it has no content-change concept, only a "seen before"
-# one; primer-actor uses onlyChanged, since it tracks per-URL content
-# change rather than a registry listing).
+# one; page-metadata-extractor uses onlyChanged, since it tracks per-URL
+# content change rather than a registry listing).
 ACTOR_DELTA_FLAGS = {
     "australia-grantconnect-monitor": "onlyNew",
     "uk-hse-enforcement-monitor": "onlyNew",
@@ -39,7 +39,7 @@ ACTOR_DELTA_FLAGS = {
     "cordoba-compras-monitor": "onlyNew",
     "pba-tenders-monitor": "onlyNew",
     "diario-oficial-cl-monitor": "onlyNew",
-    "primer-actor": "onlyChanged",
+    "page-metadata-extractor": "onlyChanged",
     "actor-18-b2b-lead-magnet": "skipKnownLeads",
     "actor-19-maritime-sanctions-monitor": "onlyNew",
     "actor-20-mdb-procurement-monitor": "onlyNew",

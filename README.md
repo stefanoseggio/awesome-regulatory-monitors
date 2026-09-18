@@ -122,7 +122,7 @@ Every actor in the directory below follows the same shape — a source-specific 
 
 | Source | Actor | Notes | Pricing |
 |---|---|---|---|
-| Any website's own metadata | [primer-actor (CleanMeta Crawler)](https://apify.com/stefano_seggio/primer-actor) | Page-metadata extraction with per-URL content-change detection | $0.0005 (single tier) |
+| Any website's own metadata | [Page Metadata Extractor](https://apify.com/stefano_seggio/page-metadata-extractor) | Page-metadata extraction with per-URL content-change detection | $0.0005 (single tier) |
 | OpenStreetMap Overpass / customer seed lists | [actor-18-b2b-lead-magnet](https://apify.com/stefano_seggio/actor-18-b2b-lead-magnet) | Compliant B2B lead discovery — deliberately never Google Maps | $0.002 / $0.015 |
 | robots.txt AI-crawler directives + Cloudflare Content-Signal + llms.txt | [ai-crawler-content-signal-permission-monitor](https://apify.com/stefano_seggio/ai-crawler-content-signal-permission-monitor) | AI-crawler permission tracking, any domain | $0.015 / $0.006 |
 | Aozora Bunko catalog export | [aozora-bunko-public-domain-text-feed](https://apify.com/stefano_seggio/aozora-bunko-public-domain-text-feed) | Newly digitized/revised public-domain Japanese texts | $0.05 / $0.01 |

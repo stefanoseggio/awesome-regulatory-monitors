@@ -20,7 +20,7 @@ const OWNER = 'stefano_seggio';
 
 // Real actor directory, actor slug -> its real delta-flag field name (NOT
 // identical across the fleet - actor-18 uses skipKnownLeads (no
-// content-change concept, only "seen before"); primer-actor uses
+// content-change concept, only "seen before"); page-metadata-extractor uses
 // onlyChanged (per-URL content-change tracking, not a registry listing).
 const ACTOR_DELTA_FLAGS = {
     'australia-grantconnect-monitor': 'onlyNew',
@@ -34,7 +34,7 @@ const ACTOR_DELTA_FLAGS = {
     'cordoba-compras-monitor': 'onlyNew',
     'pba-tenders-monitor': 'onlyNew',
     'diario-oficial-cl-monitor': 'onlyNew',
-    'primer-actor': 'onlyChanged',
+    'page-metadata-extractor': 'onlyChanged',
     'actor-18-b2b-lead-magnet': 'skipKnownLeads',
     'actor-19-maritime-sanctions-monitor': 'onlyNew',
     'actor-20-mdb-procurement-monitor': 'onlyNew',
