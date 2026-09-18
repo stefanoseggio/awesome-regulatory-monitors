@@ -4,6 +4,7 @@
 
 [![Actors](https://img.shields.io/badge/actors-28-blue)](#actor-directory)
 [![Architecture](https://img.shields.io/badge/architecture-delta--tracked-green)](#architecture)
+[![AI Agent Tool Schemas](https://img.shields.io/badge/AI_Agent_Tools-OpenAI_%7C_Anthropic_%7C_Gemini_%7C_LangChain-8A2BE2)](#ai-agent-tool-schemas)
 [![License](https://img.shields.io/badge/license-Apache--2.0-lightgrey)](LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)](#contributing)
 
@@ -15,6 +16,7 @@ This list exists because most "regulatory data" round-ups either link to sources
 - [Actor directory](#actor-directory)
 - [Sources checked and excluded (and why)](#sources-checked-and-excluded-and-why)
 - [Quickstart](#quickstart)
+- [AI agent tool schemas](#ai-agent-tool-schemas)
 - [The delta-tracking pattern](#the-delta-tracking-pattern)
 - [Contributing](#contributing)
 - [License](#license)
@@ -182,6 +184,39 @@ for (const record of items) {
 ```
 
 See `scripts/` in this repo for a loader that runs every actor in the directory above in one pass, useful as a starting point for building your own cross-source monitor.
+
+## AI agent tool schemas
+
+Every actor in the directory above is also generated, per actor, into 10 ready-to-use AI-agent
+tool definitions — derived directly from that actor's real `.actor/input_schema.json`, not
+hand-written, by [delta-registry-website](https://github.com/stefanoseggio/delta-registry-website)'s
+schema generator (`lib/schema-generator/`). Each actor has its own folder at
+`https://delta-registry-website.vercel.app/schemas/{slug}/`:
+
+| Format | File |
+|---|---|
+| OpenAI — Chat Completions | `openai-chat-completions.json` |
+| OpenAI — Responses API | `openai-responses.json` |
+| OpenAPI 3.1 — GPT Actions | `openapi.json` (sync or async run+poll shape, decided per actor from real observed runtime — see below) |
+| Anthropic — `tool_use` | `anthropic.json` |
+| Gemini — `functionDeclarations` | `gemini.json` |
+| LangChain (Python, `StructuredTool`) | `langchain_tool.py` |
+| LangChain.js (TypeScript, `tool()`) | `langchain_tool.ts` |
+| LlamaIndex (Python, `FunctionTool`) | `llamaindex_tool.py` |
+| CrewAI (Python, `BaseTool`) | `crewai_tool.py` |
+| AG2 / AutoGen-lineage (Python, `register_function`) | `ag2_tool.py` |
+
+The full, current manifest — every actor, which schema source (local checkout vs. live Apify API)
+generated it, and whether its OpenAPI spec uses the sync or async pattern — is at
+[`/schemas/index.json`](https://delta-registry-website.vercel.app/schemas/index.json).
+
+**Why some actors' OpenAPI spec uses an async run+poll pattern instead of a single call**: Apify's
+`run-sync-get-dataset-items` endpoint allows a run up to 300 seconds, but ChatGPT's GPT Actions
+enforces a hard 45-second round-trip cap — a real conflict, not a hypothetical one. Actors whose
+real observed runtime (or, for the 16 with no production run history yet, a conservative default)
+exceeds a safety margin under that cap get a 3-operation async spec (`POST .../runs` → poll
+`GET .../actor-runs/{runId}` → `GET .../datasets/{id}/items`) instead of a single sync call that
+GPT Actions would kill mid-run.
 
 ## The delta-tracking pattern
 
