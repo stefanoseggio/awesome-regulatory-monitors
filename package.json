@@ -1,0 +1,8 @@
+{
+  "name": "awesome-regulatory-monitors-scripts",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "apify-client": "^2.25.0"
+  }
+}
