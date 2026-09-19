@@ -45,6 +45,17 @@ ACTOR_DELTA_FLAGS = {
     "actor-20-mdb-procurement-monitor": "onlyNew",
     "actor-21-patent-ip-enforcement-monitor": "onlyNew",
     "actor-22-drug-safety-recalls-monitor": "onlyNew",
+    "actor-24-clinical-trials-delta-engine": "onlyChanged",
+    "singapore-acra-registry-monitor": "onlyNew",
+    "ai-crawler-content-signal-permission-monitor": "onlyNew",
+    "regione-lombardia-grants-registry-monitor": "onlyNew",
+    "sec-enforcement-litigation-delta-feed": "onlyNew",
+    "kipris-patent-trademark-status-monitor": "onlyNew",
+    "aozora-bunko-public-domain-text-feed": "onlyNew",
+    "eu-ted-procurement-delta-monitor": "onlyNew",
+    "uk-modern-slavery-statement-registry-monitor": "onlyNew",
+    "emerging-market-sovereign-debt-auction-monitor": "onlyNew",
+    "uae-corporate-registry-monitor": "onlyNew",
 }
 
 OWNER = "stefano_seggio"
