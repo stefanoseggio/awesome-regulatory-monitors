@@ -1,0 +1,443 @@
+# Apify portfolio refactor strategy, 2026
+
+Consolidation of the single-source Apify Actors in the `stefanoseggio/*` corpus into three flagship Master Engines.
+
+| | |
+|---|---|
+| Status | Implemented and tested on branch `claude/busy-fermi-yhcyfl` (PR #2). **Not deployed.** Nothing in this document has been run on the Apify platform. |
+| Date | 2026-10-21 |
+| Code | [`master_engines/`](../master_engines/) (TypeScript, strict, Node 22) |
+| Verification | 1,419 fixture-driven tests, strict typecheck clean, live checks against public upstreams, a local run of a staged engine, an adversarial review (22 agents) |
+
+Everything stated here as fact was checked against code, a live fetch, or a cited primary source. Claims that could not be checked are marked **UNVERIFIED**, and premises from the engagement brief that turned out wrong are listed in section 1.2.
+
+---
+
+## 1. Executive summary
+
+### 1.1 What exists
+
+Three Actors, one shared runtime:
+
+| Engine | Active sources | Held sources |
+|---|---|---|
+| `global-regtech-compliance-feed` | 6 | 3 |
+| `latam-global-tender-intelligence` | 9 | 6 |
+| `global-corporate-patent-intelligence` | 5 | 0 |
+| **Total** | **20** | **9** |
+
+The shared runtime (`lib/`) owns what must behave identically across sources: preflight, per-source options, delta memory, watchlist guarding, per-source billing events, failure isolation, credential scrubbing. A source is a small connector, ported from a legacy Actor's real parsing code where the corpus had it, or implemented from a live-verified endpoint where the legacy repo was README-only.
+
+### 1.2 Premises in the brief that did not survive verification
+
+| Brief said | Finding |
+|---|---|
+| "Store policy §2.2.4.2 requires 14 days' notice for price changes" | **Wrong section.** §2.2.4.2 is "Specific Prohibitions". The price-change rule is **§9.4** of the Store Publishing Terms (last updated 2026-09-15): a change that can raise a user's price, including a pricing-model change and a new paid event, takes effect only after 14 days, at most one per month. The payloads cite §9.4. |
+| "`PUT /v2/acts/{actorId}`" | The current reference documents `PUT /v2/actors/{actorId}`. `GET` works on both paths; the `PUT` alias was not tested (needs an owner token). |
+| "`apify-actor-start` start floor of $0.002-$0.01" | There is no floor. The default is **$0.00005**, Apify recommends keeping it, and the event is charged **once per GB of memory**. $0.002-$0.01 is 40-200x the default. It is allowed in practice (880 of 3,386 sampled public PPE Actors sit in that range) but is a commercial choice. |
+| "Mandatory 14-day notice metadata in the payload" | No API field sets a notice period. `startedAt` is the effective date; `notifiedAboutFutureChangeAt` is stamped by the platform. The builder sets `startedAt = now + 14 days` and emits a separate `*.notice.json`. |
+| "`Actor.charge()` strictly protected by `perEventPrices` validation" | The SDK has no such validation. An event missing from the pricing is treated as **free** and reported as charged (`chargedCount === count`). The protection is implemented in this codebase. |
+| "$0.15 ghost billing per record" | Not corroborated by any legacy document. The legacy SEC actor billed `result` at $0.05 (`sec-enforcement-litigation-delta-feed/README.md:38`), and no legacy README defines a `watchlist-hit` event. The $0.15 figure is used as the `watchlist-hit` price and is labelled `operator-stated`. |
+| "23 connectors" / "28 Actors" | Not reproducible from the corpus. The registry holds **29 connectors (20 active, 9 held)**, absorbing 22 legacy repositories. Legacy repos not assigned to any engine: `uk-hse-enforcement-monitor`, `emerging-market-sovereign-debt-auction-monitor`, `kipris-patent-trademark-status-monitor`, `aozora-bunko-public-domain-text-feed`, `actor-18-b2b-lead-magnet`, `primer-actor`. |
+| "`_guards.ts` / `_guards.py`" | Only TypeScript was needed; no Python Actor runs these guards. |
+| "`master_engines/`, `scripts/apify_remediation_suite/`, the strategy doc already exist" | None of them exists on the default branch of any of the 37 cloned repositories (searched by file name and by content). The clones are shallow and single-branch, so other branches and unpushed local work were not visible. Everything here was rebuilt from the corpus. |
+
+### 1.3 Decisions that need an owner
+
+Details in section 10.
+
+1. **`ar_cordoba` ships active but probably cannot run from Apify's cloud.** Its own docs record the same network block that got `ar_pba` held (non-Argentine traffic times out; the legacy workaround is a paid residential Argentine proxy).
+2. **Start-event price.** $0.005 x GB per run is charged even for an empty run (regtech: 2 GB = $0.01).
+3. **Provisional and operator-stated prices** (one event per engine at least). Run the generator with `--strict` once they are confirmed.
+4. **robots.txt exceptions.** DIFC `/api/`, the ClinicalTrials.gov API and six of seven Diario Oficial CL sections are requested although the host's `robots.txt` disallows them. IDB is held for exactly that reason, so the policy is applied inconsistently.
+5. **Florida contact details.** Now opt-in (default off); the legacy actor emitted them.
+6. **Whether to retire the legacy Actors** and when (section 11).
+
+---
+
+## 2. Architecture
+
+```mermaid
+flowchart LR
+  I[Actor input] --> P[Preflight]
+  P -->|unknown / held / missing credential / bad option| F[FAILED, full list of problems, no request, no charge]
+  P --> L[Live pricing check]
+  L -->|apify-default-dataset-item priced| F
+  L --> R[Per source, isolated]
+  R --> C[Connector.fetch via ctx.http]
+  C --> D[Delta classify against memory]
+  D -->|deltaMode| E[Emit row + bill its own event in one call]
+  E --> W[Watchlist match via _guards]
+  W -->|valid keyword AND priced AND under caps| H[Bill watchlist-hit]
+  E --> S[Checkpoint delta memory every 25 rows and in finally]
+```
+
+### 2.1 Contract
+
+`Connector<Options>` (`lib/types.ts`): `id`, `engine`, `legacyActor`, `status` (`active` | `held`), strict zod `optionsSchema`, optional `requiredOptions`, optional `maxSeenIds`, optional `billing`, and `fetch(ctx, options, run) -> SourceRecord[]`.
+
+`SourceRecord` = `{ recordId, fingerprint, payload, watchText?, billingEvent? }`. `recordId` is stable across runs; `fingerprint` changes iff a consumer-visible field changed. Connectors reach the network only through `ctx.http`, and the clock only through `ctx.now()`.
+
+The router stamps every row with `engine`, `source`, `record_id`, `delta_status`, `is_new`, `is_watchlist_match`, `matched_watchlist_keyword`, `scraped_at`. A connector cannot set these (tested).
+
+### 2.2 Delta memory
+
+| Mode | Emits | Legacy equivalent |
+|---|---|---|
+| `onlyNew` | first sighting | none |
+| `onlyChanged` (default) | first sighting + changed | the legacy `onlyNew: true` |
+| `all` | everything; unchanged rows tagged `delta_status: "unchanged"` | the legacy `onlyNew: false` |
+
+Memory is one key-value record per source, `state.<namespace>.<source>`, in the named store `<engine>-delta-state`. It keeps `seenIds` (newest first) and `fingerprints`.
+
+- **Sizing.** Memory is never smaller than `maxItemsPerSource`, never shrinks below what it already holds, and is capped at 50,000 ids. A connector that declares `maxSeenIds` (UK registry 40,000; ClinicalTrials, ACRA, UAE 20,000) is authoritative.
+- **Namespaces.** `stateNamespace` input, else one per Task (`task-<id>`), else `default`. Two Tasks with different watchlists no longer consume each other's "new" records.
+- **Delivery semantics.** At-least-once. State is checkpointed every 25 emitted rows and in a `finally`, so after an exception the rows already pushed and billed are remembered. After a hard kill (timeout, OOM, migration) at most 25 rows can be delivered again.
+
+### 2.3 Failure semantics
+
+- A source that throws is isolated: its error goes on the run summary, other sources still run, its memory is untouched.
+- Non-fatal problems a connector logs through `ctx.log.warning` (one sub-source down, a throttled stop) are captured on `RunSummary.sources[].warnings`.
+- A preflight problem fails the whole run before any request or charge, listing every problem at once.
+
+---
+
+## 3. Master engine inventory
+
+"Basis": **ported** = real parsing code from the legacy actor; **live** = implemented from an endpoint verified live in this work because the legacy repo is README-only; **held** = registered but refused.
+
+### 3.1 `global-regtech-compliance-feed`
+
+| Source | Legacy actor | Basis | Live-verified 2026-10-21 | Limits worth knowing |
+|---|---|---|---|---|
+| `ofac` | actor-19-maritime-sanctions-monitor | ported | yes, 1,559 vessels | Vessels only (`sdnType=Vessel`), as the legacy actor. Needs >= 1 GB RAM (about 660 MB measured). No DELISTED events. |
+| `world_bank_debarred` | actor-20-mdb-procurement-monitor | ported | yes | **Table 2 ("Other Sanctions") only**, 4 rows today. The main debarment register is served by an undocumented gateway the doctrine excludes. A miss here does **not** mean "not debarred". |
+| `uk_modern_slavery` | uk-modern-slavery-statement-registry-monitor | ported | yes | Own RFC 4180 CSV parser, byte-identical to Python's `csv` on four full live years. Record id now ends with the company number (the legacy id collided on live rows). |
+| `sec_enforcement` | sec-enforcement-litigation-delta-feed | live | yes, two RSS feeds, 25 + 25 items | Legacy repo is README-only. Emits only what the feeds carry: no sanctions, statutes, docket or EDGAR linking. A rolling window, not a backfill. |
+| `ai_crawler_signals` | ai-crawler-content-signal-permission-monitor | live | yes, 5 real `robots.txt` files | README-only legacy. SSRF-guarded hostnames, https-only, per-hop redirect validation, 8 MiB body cap. Requires `domains`. |
+| `fda_ema_recalls` | actor-22-drug-safety-recalls-monitor | ported | yes | Fixes a legacy bug: openFDA answers an empty search with HTTP 404, which the legacy fetcher treated as fatal. |
+| `paris_mou_thetis` | actor-19 | held | n/a | Login wall (Keycloak OpenID Connect on every request, including `robots.txt`). |
+| `tokyo_mou_apcis` | actor-19 | held | n/a | CAPTCHA input on the public search form. |
+| `imo_gisis` | actor-19 | held | n/a | `robots.txt` disallows `/Members/`, `/Secretariat/`, `/WebServices/`; Public module is session-gated. |
+
+### 3.2 `latam-global-tender-intelligence`
+
+| Source | Legacy actor | Basis | Live-verified 2026-10-21 | Limits worth knowing |
+|---|---|---|---|---|
+| `ar_santafe` | santafe-compras-monitor | ported | yes | Detail page fetched by default; a record whose detail fails is left out and retried. |
+| `ar_tucuman` | tucuman-compras-monitor | ported | yes | ISO-8859-1 page; field data is entity-encoded so it works with the text client, and decodes properly through `getRaw`. |
+| `ar_entrerios` | entrerios-compras-monitor | ported | yes (with a scratch raw client) | Windows-1252 bytes labelled UTF-8. **Requires `getRaw`** (now in `lib/http.ts`); fails closed without it. Not re-run live through the final `getRaw`. |
+| `ar_cordoba` | cordoba-compras-monitor | ported | **no, portal unreachable from the sandbox** | ASP.NET session chain needs `getRaw`. **Probably blocked from Apify's cloud** (see 1.3). Parsers verified on trimmed real captures only. |
+| `cl_diario_oficial` | diario-oficial-cl-monitor | ported | access only; every section was on a quiet day | Row parser verified only against HTML the legacy authors describe as reconstructed from a real fetch. |
+| `eu_ted` | eu-ted-procurement-delta-monitor | ported | yes | `PAGE_NUMBER` mode only (max 15,000 per query); no BACKFILL. |
+| `us_florida` | florida-tenders-monitor | ported | yes | Honest identity works; the legacy Chrome-TLS impersonation was deliberately **not** ported. Contact details opt-in. |
+| `world_bank_notices` | actor-20-mdb-procurement-monitor | ported | yes | No contact details or notice text (privacy). |
+| `it_lombardia_grants` | regione-lombardia-grants-registry-monitor | live | yes (Socrata `bukx-h2uy`) | README-only legacy. The README's sample dataset id returns 404; the real id is used. Honours `Crawl-delay: 1`. |
+| `au_grantconnect` | australia-grantconnect-monitor | **held** | live-verified reason | 403 to an honest User-Agent. The legacy actor passed only with a Chrome UA and TLS fingerprint (impersonation). |
+| `adb_procurement` | actor-20 | **held** | n/a | Cloudflare challenge on every path, including its RSS. |
+| `idb_procurement` | actor-20 | **held** | n/a | Power BI embed only; the CKAN API is `robots.txt`-disallowed. |
+| `ar_salta` | salta-compras-monitor | **held** | n/a | Operator-designated. The legacy repo documents no technical constraint. |
+| `ar_mendoza` | mendoza-compras-monitor | **held** | n/a | Operator-designated. The legacy repo documents no technical constraint. |
+| `ar_pba` | pba-tenders-monitor | **held** | n/a | Documented: blocks non-residential, non-Argentine traffic outright; 0 successes in two cloud runs. |
+
+### 3.3 `global-corporate-patent-intelligence`
+
+| Source | Legacy actor | Basis | Live-verified 2026-10-21 | Limits worth knowing |
+|---|---|---|---|---|
+| `uspto_ptab` | actor-21-patent-ip-enforcement-monitor | ported | **no** (BYOK, no key held; route exists and is key-gated) | Field names rest on the legacy record. Honours USPTO's 5 s retry floor. |
+| `epo_opposition` | actor-21 | ported | **no** (BYOK) | **Legacy parser defect fixed**: it selected `legal-event, event`, which matches nothing in the documented OPS structure. New parser reads `ops:legal`. Rests on the public OPS guide, not a live reply. Needs a watchlist of at most 100 EP numbers. |
+| `clinicaltrials_orange_book` | actor-24-clinical-trials-delta-engine | live | yes | README-only legacy. Orange Book via openFDA (the FDA flat-file ZIP is reachable but not consumed). The Apify platform slug is `clinicaltrials-orange-book-delta`; the corpus uses both names. Honours `Crawl-delay: 1`. |
+| `sg_acra` | singapore-acra-registry-monitor | live | yes | README-only legacy. Data.gov.sg datastore; shard-to-dataset map hard-coded from live metadata. Newest registrations first, so changes to old entities are seen only if targeted. |
+| `ae_registers` | uae-corporate-registry-monitor | ported | **no live rows** | ADGM answers with a server-side exception and DIFC with HTTP 500, the legacy outage signature. Active but currently returns nothing. Dubai Pulse not ported (wire protocol never verified). |
+
+---
+
+## 4. Held sources and governance
+
+### 4.1 What "held" means
+
+A held connector is registered, so selecting it fails preflight with its documented reason instead of "unknown source". It carries no billing, and its `fetch()` throws before any network call. Tests prove, for `ar_salta`, `ar_mendoza` and `ar_pba`, that preflight rejects them **even when options (including a proxy URL) are supplied**, and that a run mixing an active and a held source is rejected whole, before any request.
+
+### 4.2 The operator-designated Argentine sources
+
+| Held source | Operational constraint |
+|---|---|
+| `ar_pba` | Documented network block on non-residential, non-Argentine traffic. Only a paid residential Argentine proxy works. |
+| `ar_salta` | None documented. Held by portfolio decision. |
+| `ar_mendoza` | None documented. Held by portfolio decision; its sibling's docs call it "the most fragile of the five". |
+
+They are never runnable. Reactivating one is a code change that removes `createHeldConnector`, which review will see.
+
+### 4.3 Compliance doctrine (applied to every connector)
+
+No CAPTCHA solving, no fingerprint or User-Agent spoofing, no WAF or login bypass, credentials are bring-your-own and never logged, and only open public sources. Enforced by:
+
+- a static scan test over the tender connectors (`tenders-b.doctrine`);
+- `sec_enforcement` refusing a browser User-Agent and requiring a contact;
+- `au_grantconnect`, `paris_mou_thetis`, `tokyo_mou_apcis`, `imo_gisis`, `adb_procurement`, `idb_procurement` registered as held with reasons.
+
+### 4.4 Change control
+
+1. A connector is registered explicitly in `<engine>/index.ts`. Never glob.
+2. An active connector with no entry in `pricing/event_catalog.ts` makes the engine fail to load (`applyCatalogBilling`).
+3. Generated artifacts (`.actor/*`, `pricing/payloads/*`) are committed and a test fails if they drift from their generators.
+4. Any keyword or name-list option is read through `sanitizeKeywordList()`.
+5. Credentials are top-level `isSecret` inputs, validated with a static message, and scrubbed from every log, warning and error.
+6. A source needing a gate bypass is registered held with a precise reason, not worked around.
+
+---
+
+## 5. Security and vulnerability remediation
+
+### 5.1 Root cause of the "ghost billing" (zero-match inversion)
+
+The legacy SEC actor documents `watchlistNames` as "case-insensitive substrings matched against parsed respondents; a hit sets `is_watchlist_match: true`". A substring test against an **empty needle is vacuously true** in every language: `"anything".includes("") === true`. So any of these inputs turned a no-watchlist run into an everything-matches run:
+
+| Input | Why it matched everything |
+|---|---|
+| `[""]` | empty needle |
+| `[" "]` | blank after trim |
+| `""` where an array is expected | split/iteration yields an empty element |
+| `"a"` where an array is expected | iterated per character |
+| `["a"]` | one letter matches most names |
+
+Every record then carried `is_watchlist_match: true` and was billed as a `watchlist-hit`. **The legacy SEC repository is README-only, so this mechanism is reconstructed from the documented behaviour, not read from the closed source.**
+
+### 5.2 Remediation, in layers (`lib/_guards.ts`, `lib/charging.ts`, `lib/router_core.ts`)
+
+No single bug can re-open it:
+
+1. **`sanitizeKeywordList(input)`** turns any shape into a clean list. A bare string is split on newline, comma, semicolon, never per character. A non-array, non-string value yields an empty list and `malformedContainer: true`. It never throws.
+2. **`findKeywordMatch(haystack, list)`** returns `null` immediately on an empty list, and re-checks each needle's length, so even a hand-built list cannot match on `""`.
+3. **The router and `WatchlistHitBiller`** bill a hit only when step 1 produced at least one keyword **and** step 2 returned a concrete match **and** the event is priced **and** the run is pay-per-event **and** the caps allow it.
+
+### 5.3 Validation criteria per keyword
+
+Applied in this order, per keyword:
+
+| # | Rule |
+|---|---|
+| 1 | must be a string (numbers, objects, `null` are rejected, never coerced) |
+| 2 | Unicode NFKC, then line breaks and tabs become a space, then control, zero-width and bidi characters are removed, whitespace runs collapse to one space, ends trimmed |
+| 3 | length >= **2 code points** after normalisation (one astral-plane letter counts as one) |
+| 4 | length <= 200 code points |
+| 5 | contains at least one letter or digit (`--`, `..`, `()` are rejected) |
+| 6 | de-duplicated case-insensitively, first spelling wins |
+| 7 | at most 500 accepted; the rest are rejected as `over_limit` |
+
+### 5.4 The `clinicaltrials` keyword guard
+
+The corpus names the actor both `actor-24-clinical-trials-delta-engine` (repo) and `clinicaltrials-orange-book-delta` (Apify platform slug). Its README documents **no** keyword, sponsor or watch-list input, only free-text `condition` and `orangeBookQuery`, so how the bug manifested there could not be confirmed. The connector therefore guards every list it accepts: the new `sponsors` and `keywords` lists and the single-value `condition` and `orangeBookQuery`. Proven by test: `['', ' ', 'a']` as the keyword list yields **no filter** (so it neither narrows, widens nor bills), and `['  Pfizer  ']` is normalised to `Pfizer`.
+
+### 5.5 Other hardening (from the adversarial review, section 8)
+
+- Credentials: validated as printable ASCII with a **static** error message (a token pasted with a line break is refused without being echoed); scrubbed centrally (plain, URL-encoded and base64 forms) from logs, warnings and errors; redirect never forwards credential headers across origins or from https to http.
+- SSRF: `ai_crawler_signals` accepts bare public hostnames only, validates every redirect hop, caps bodies at 8 MiB. **Residual, cannot be closed in-process:** DNS rebinding. Deploy behind an egress policy that blocks private ranges.
+- Memory: error bodies of non-2xx responses are read through a 1 KiB preview and cancelled (a hostile host could previously exhaust RAM).
+- Regex safety: linear scans replace exponential and quadratic patterns; robots rule matching uses an iterative wildcard matcher with no regex.
+
+---
+
+## 6. Monetization and pay-per-event
+
+### 6.1 Verified platform facts
+
+Cited in [`master_engines/docs-research/apify-ppe-policy-verification.md`](../master_engines/docs-research/apify-ppe-policy-verification.md), each with URL and verbatim quote.
+
+- **Unregistered events are free and look charged.** `calculateMaxEventChargeCountWithinLimit` returns `Infinity`; `charge()` makes no API call and returns `chargedCount === count`. A typo such as `watchlist_hit` silently bills nothing.
+- **Double billing is real.** With `apify-default-dataset-item` and a custom event both priced, `pushData(item, 'watchlist-hit')` bills both per row (confirmed in source and by experiment). The pricing therefore never prices it, and the router **refuses to run** if the live pricing does.
+- **`apify-actor-start`** covers the first 5 seconds of compute, default $0.00005, charged once up to 1 GB then once per extra GB. The price may be raised or the event deleted.
+- **Notice rule** (§9.4): 14 days, one price-increasing change per month, a pending change cannot be cancelled or edited, no waiting period when the Actor has no paying users.
+- **`charge()` can overcharge by one** at the budget limit, deliberately, so the platform detects and terminates the Actor. The router therefore never spends that extra event on a `watchlist-hit`.
+
+### 6.2 Why per-source events
+
+The legacy Actors are priced very differently. One blended `result` price would over-bill OFAC about 100x or under-bill SEC. Each legacy price is kept as its own event, in one catalog (`pricing/event_catalog.ts`) that feeds both the runtime billing and the PUT payloads.
+
+Basis of each price: **legacy** = quoted from a legacy README (file and line in the catalog); **provisional** = derived from the nearest documented sibling; **operator-stated** = from the brief, uncorroborated.
+
+### 6.3 Event catalog
+
+**`global-regtech-compliance-feed`** (start $0.005, 2 GB, so $0.01 per run)
+
+| Event | Price | Source(s) | Basis |
+|---|---|---|---|
+| `vessel-record` (primary) | $0.0005 | ofac | legacy |
+| `debarment-record` | $0.003 | world_bank_debarred | legacy |
+| `statement-new` / `statement-updated` | $0.02 / $0.01 | uk_modern_slavery | legacy |
+| `enforcement-release` / `enforcement-update` | $0.05 / $0.02 | sec_enforcement | legacy |
+| `crawler-signal` / `crawler-signal-change` | $0.015 / $0.006 | ai_crawler_signals | provisional / legacy |
+| `recall-record` | $0.001 | fda_ema_recalls | legacy |
+| `watchlist-hit` | $0.15 | any | operator-stated |
+
+**`latam-global-tender-intelligence`** (start $0.005, 1 GB)
+
+| Event | Price | Source(s) | Basis |
+|---|---|---|---|
+| `tender-detail` (primary) | $0.003 | ar_santafe, ar_tucuman, ar_entrerios, ar_cordoba, cl_diario_oficial, us_florida | legacy (Cordoba: sibling rate, provisional) |
+| `tender-summary` | $0.001 | ar_santafe, us_florida listing-only rows (record override) | legacy |
+| `notice-record` | $0.001 | world_bank_notices | legacy |
+| `notice-new` / `notice-updated` | $0.02 / $0.01 | eu_ted | legacy |
+| `grant-new` / `grant-updated` | $0.02 / $0.008 | it_lombardia_grants | legacy / provisional |
+| `watchlist-hit` | $0.15 | any | operator-stated |
+
+**`global-corporate-patent-intelligence`** (start $0.005, 1 GB)
+
+| Event | Price | Source(s) | Basis |
+|---|---|---|---|
+| `patent-proceeding` (primary) | $0.002 | uspto_ptab, epo_opposition | legacy |
+| `clinical-record` | $0.002 | clinicaltrials_orange_book | legacy |
+| `uae-entity-new` / `uae-entity-updated` | $0.02 / $0.01 | ae_registers | legacy / provisional |
+| `sg-entity-new` / `sg-entity-updated` | $0.03 / $0.01 | sg_acra | legacy / provisional |
+| `watchlist-hit` | $0.15 | any | operator-stated |
+
+Where a legacy actor distinguished a status change from a content change and the router cannot, the **lower** price is used to avoid over-billing. An unchanged record re-sent by `deltaMode: all` is billed at the lower "updated" event, not at "new".
+
+### 6.4 The guarded `watchlist-hit` charge
+
+`lib/charge_watchlist_hit.ts` is a drop-in for an Actor's own `main.ts`:
+
+```ts
+const chargeHit = createWatchlistHitCharger(Actor);
+if (matchedKeyword !== null) {              // from findKeywordMatch() over a sanitizeKeywordList() list
+    const outcome = await chargeHit();      // 'charged' | 'skipped_not_ppe' | 'skipped_unpriced' | 'skipped_cap' | 'limit_reached'
+    if (outcome === 'limit_reached') break;
+}
+```
+
+It reaches `Actor.charge({ eventName: 'watchlist-hit', count: 1 })` only when the run is pay-per-event, `getPricingInfo().perEventPrices` has an **own, finite, positive** `watchlist-hit`, the per-run hit cap (default 200) and USD cap (default $50, tracked in integer micro-USD) allow it, and a partial or zero-fulfilled charge counts as `limit_reached`. The router calls it only after proving a keyword match.
+
+### 6.5 PUT payloads
+
+Generated by `scripts/generate_pricing_payloads.ts` into `master_engines/pricing/payloads/<engine>.put.json` (the exact body) and `<engine>.notice.json` (the 14-day metadata). Shape, with field names verified against the API reference:
+
+```jsonc
+{ "pricingInfos": [ {
+  "pricingModel": "PAY_PER_EVENT",
+  "pricingPerEvent": { "actorChargeEvents": {
+      "apify-actor-start": { "eventTitle": "...", "eventDescription": "...", "eventPriceUsd": 0.005, "isOneTimeEvent": true },
+      "vessel-record":     { "eventTitle": "...", "eventDescription": "...", "eventPriceUsd": 0.0005, "isPrimaryEvent": true }
+      /* ... one entry per catalog event ... */ } },
+  "minimalMaxTotalChargeUsd": 0.16,
+  "apifyMarginPercentage": 0.2,
+  "createdAt": "2026-10-21T00:00:00.000Z",
+  "startedAt": "2026-11-04T00:00:00.000Z",
+  "reasonForChange": "..." } ] }
+```
+
+The builder **refuses** to emit: a start price outside $0.002-$0.01, any priced `apify-default-dataset-item`, an event a source bills that is not priced, an orphan priced event, zero or two primary events, a non-positive price, or a missing `watchlist-hit`. `minimalMaxTotalChargeUsd` is computed so the smallest allowed run budget still pays the start events plus the dearest event ($0.16 on all three engines).
+
+**Before sending:** regenerate with `--now=<real submission instant>` (`startedAt` is relative to it); pass `--paying-users=false` only if the Actor has none; use `--strict` once provisional and operator-stated prices are confirmed. The generator never calls the API. **UNVERIFIED:** which fields the server requires or overwrites on a new pricing record, and whether a client-supplied `startedAt` is rejected. The installed `apify-client` 2.25.0 types exclude `pricingInfos`, so the body must be sent raw.
+
+### 6.6 Commercial risk
+
+The start event at $0.005 per GB is **100x** the default, charged even when a run delivers nothing. Apify recommends keeping the default "to keep your Actor competitive". The brief asked for this range and it is implemented as asked; the decision belongs to the operator.
+
+---
+
+## 7. Verification evidence
+
+| Area | Result |
+|---|---|
+| Tests | **1,419** passing across 40 files, fixture-driven, no network. Strict typecheck (`noUncheckedIndexedAccess`) clean. |
+| Live upstream checks | Each connector's agent fetched its real endpoint (SEC RSS, OFAC SDN, openFDA, EMA, TED, MFMP, Socrata, data.gov.sg, five real `robots.txt`, ...). Unreachable or key-gated sources are listed in section 3 as not live-verified. |
+| Mutation passes | The OFAC / World Bank / UK agent applied 16 deliberate breakages; every one was caught by a test. |
+| End-to-end local run | Staged `global-regtech-compliance-feed` (`stage`, `npm ci`, `tsc`), run with the real Apify SDK against the live SEC feed: 4 rows emitted; poisoned `watchlistNames: ["", "a", " "]` produced 0 accepted keywords and 0 hits; a second run emitted 0 (delta memory); a held source ended the run FAILED with its reason and wrote no row; a missing mandatory field failed preflight; `stateNamespace` produced `state.team-a.sec_enforcement.json`. |
+| **Not done** | Nothing was run on the Apify platform. No authenticated USPTO or EPO response was ever seen. A valid openFDA key was never exercised. `ar_cordoba` was unreachable. `ae_registers` returned no live rows. Pay-per-event charging was exercised only against the SDK's local charging manager and test doubles, never against real pricing. |
+
+---
+
+## 8. Remediation matrix: adversarial review
+
+Three independent reviewers (billing, data integrity and transport, security and compliance) wrote reproductions; a separate skeptic then tried to **refute** every high or medium finding with its own reproduction. **22 agents; 33 findings; 19 verified; 0 refuted.** Fixed items carry regression tests named by finding id.
+
+| Id | Severity | Finding | Status |
+|---|---|---|---|
+| B1 / DI-2 | high | Delta memory capped at 5,000 while `maxItemsPerSource` allows 10,000: the overflow was re-delivered and re-billed as new on every run (17 of 20 connectors) | **Fixed.** Memory sized to the run; never shrinks; 50k ceiling |
+| B4 / DI-1 | medium | State saved only after a whole source: an exception or kill re-delivered and re-billed rows already pushed | **Fixed.** Checkpoint every 25 rows and in `finally`; residual at most 25 rows on hard kill |
+| B6 | medium | Guard deleted tabs and line breaks, so `Banco\nCentral` never matched `Banco Central` | **Fixed** |
+| B7 / DI-4 | medium | One memory per engine: a second Task consumed the first's "new" records | **Fixed.** `stateNamespace`, default per Task |
+| DI-3 | medium | Overlapping runs overwrote each other's memory (whole-document read-modify-write) | **Fixed.** One record per source |
+| TR-1 / SEC-03 | medium | Non-2xx bodies read unbounded: a hostile host could exhaust the 2 GB run | **Fixed.** Bounded preview, stream cancelled |
+| B2 | low | Extra `watchlist-hit` charge at the budget limit; `minimalMaxTotalChargeUsd` ($0.10) below the hit price ($0.15) | **Fixed** |
+| B3 | low | `deltaMode: all` billed unchanged rows at the "new" price | **Fixed** (lower "updated" event, descriptions corrected) |
+| B5 | low | No runtime check that billed events are priced or that the default-dataset-item event is absent | **Fixed.** Refuses a double-billing pricing; unpriced events recorded on the summary (warn, not fail, because the new events are not live during the 14-day window) |
+| TR-2 / TR-3 | low | Credential headers forwarded across origins and on https to http | **Fixed.** Redirects always in-process |
+| SEC-01 / TR-4 | low | A Socrata token could be echoed into the run log and summary; `redactUrl` gaps | **Fixed.** Central scrubbing, static validation messages |
+| SEC-04 | low | Dockerfile pointed `NODE_EXTRA_CA_CERTS` at a path absent from the image | **Fixed** |
+| SEC-05 | low | `package-lock.json` git-ignored: `stage_actor` crashed on a fresh clone | **Fixed.** Tracked; `npm ci` |
+| SEC-06 | low | `sec_enforcement` accepted a browser User-Agent | **Fixed** |
+| SEC-07 / 09 / 10 | low | Exponential or quadratic regexes (Santa Fe, UK registry, robots rules) | **Fixed** |
+| SEC-02 | low | Active connectors request `robots.txt`-disallowed endpoints | **Part fixed** (ClinicalTrials `Crawl-delay`). **Open decision**, section 10 |
+| SEC-08 | low | Natural persons' contact data in fixtures and emitted by Florida | **Fixed.** Fixtures anonymised; contact opt-in |
+| B8, B10, DI-5, DI-6, DI-8 | low | Float drift in the spend cap, astral-plane length, prototype-named ids, malformed `sourceOptions` swallowed, fingerprint collisions | **Fixed** |
+| B9 | low | Florida bills a degraded listing-only row, then bills the same tender again as detail on recovery | **Accepted** (matches the legacy price structure) |
+| B11 | low | A per-event `watchlist-hit` limit stops the whole run | **Accepted** (conservative: continuing would deliver hits unbilled) |
+| DI-7 | low | One state document for every source grew large | **Resolved by** per-source records |
+
+**Areas the reviewers attacked and found sound** (from their reports): guard bypass attempts (homoglyphs, combining marks, RTL marks, variation selectors, surrogates), the watchlist biller's cap accounting, the delta state machine on duplicate and reordered ids, the router's preflight, the SDK's `pushData` / `charge` semantics versus `sinks.emit`, held-connector fetch isolation, certificate bundle contents (two public certificates, no key), import-to-dependency consistency, and the hand-written CSV and XML parsers on adversarial input.
+
+---
+
+## 9. Known gaps and limitations
+
+- **No removed / DELISTED events.** The router has no "removed" delta class, so OFAC delistings and other disappearances are not reported. Legacy `event_type` vocabularies (`STATUS_CHANGE` vs `UPDATED`, `TERMINATED`, `ALLOWED` / `DISALLOWED`) are replaced by `delta_status`. Fingerprints let a consumer distinguish status from content changes across runs.
+- **No conditional GET.** The UK registry re-downloads each selected year every run (the legacy actor skipped unchanged years with `Content-MD5`).
+- **README-only legacy repos.** For SEC, ACRA, AI crawler, ClinicalTrials, Lombardia the connector is built from the README plus live checks. It is not behaviour-equivalent to the closed-source actor (SEC lacks sanctions and docket fields; ACRA's BYOK business-profile tier is not ported).
+- **Coverage windows.** ADGM (about 18,700 entities) and DIFC are snapshots capped at 10,000 per run; ACRA reads newest registrations first; unfiltered Orange Book walks are newest-approvals-first.
+- **Per-source mismatch.** `ae_registers` is active but currently yields nothing; `ar_cordoba` is probably blocked from the cloud; BYOK sources were not exercised with a real key.
+- **Event-loop cost.** Hostile inputs were measured for the regexes that could be exploited; a 512 KB `robots.txt` is now parsed without per-rule regex compilation.
+- **DNS rebinding** cannot be closed in-process.
+
+---
+
+## 10. Decisions needed
+
+| # | Decision | Recommendation |
+|---|---|---|
+| 1 | `ar_cordoba` active or held? | Hold it unless a residential Argentine proxy is acceptable; its own docs record the same block as `ar_pba`. |
+| 2 | Start-event price ($0.005 per GB) | Confirm, or return to the $0.00005 default. At 2 GB, regtech charges $0.01 for an empty run. |
+| 3 | Confirm the provisional and operator-stated prices | At minimum `watchlist-hit` ($0.15, uncorroborated), `crawler-signal`, `grant-updated`, `uae-entity-updated`, `sg-entity-updated`, and Cordoba's `tender-detail`. Then run the generator with `--strict`. |
+| 4 | robots.txt policy | Apply one rule: hold DIFC and the six non-index Diario Oficial sections, decide explicitly on the ClinicalTrials.gov API (a documented public API under `Disallow: /api/`), and reconsider the IDB hold if the policy is not applied to the others. |
+| 5 | Florida contact details | Keep opt-in (default off). |
+| 6 | Whether and when to retire the legacy Actors | Only after the engines are deployed and pricing is live (section 11). |
+
+---
+
+## 11. Rollout plan
+
+1. **Resolve the decisions in section 10**, then freeze `pricing/event_catalog.ts`.
+2. **Stage and publish each engine:** `npx tsx scripts/stage_actor.ts <engine> --out=<dir>`, then `npm ci && npm run build && apify push` from that directory. Memory is pinned (`minMemoryMbytes == maxMemoryMbytes`) so the per-GB start cost matches the pricing.
+3. **Apply pricing** with `PUT /v2/actors/{id}` using the regenerated body. A brand-new Actor with no paying users takes effect immediately; an existing Actor with paying users takes 14 days and allows one such change per month, so batch the event additions into one submission.
+4. **Smoke test** one source per engine on the platform, then check `RUN_SUMMARY`: `pricing.unpricedEvents` must be empty, and `watchlist.hitsUnpriced` zero.
+5. **Monitor** `sources[].error`, `sources[].warnings` and `stoppedOnChargeLimit` on every scheduled run.
+6. **Retire legacy Actors** only after customers are migrated, and not before the new pricing is in force.
+
+---
+
+## Appendix A. File map
+
+```
+master_engines/
+  lib/            _guards, router_core, charging, charge_watchlist_hit, state, http, secrets,
+                  connector_helpers, apify_adapters, engine_main, types
+  pricing/        event_catalog, apply_billing, build_put_payloads, payloads/
+  scripts/        generate_pricing_payloads, generate_actor_files, stage_actor, actor_files
+  <engine>/       index, main, connectors/, .actor/
+  docs-research/  apify-ppe-policy-verification.md
+  test/           40 test files
+docs/             apify_portfolio_refactor_strategy_2026.md
+```
+
+## Appendix B. Commands
+
+```bash
+cd master_engines
+npm ci
+npm run typecheck && npm test
+npx tsx scripts/generate_actor_files.ts
+npx tsx scripts/generate_pricing_payloads.ts --now=<ISO instant> [--paying-users=false] [--strict]
+npx tsx scripts/stage_actor.ts <engine-slug> [--out=<dir>]
+```
+
+Live smoke runs from behind an egress proxy need `NODE_USE_ENV_PROXY=1`.

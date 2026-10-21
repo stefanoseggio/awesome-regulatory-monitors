@@ -54,6 +54,7 @@ Input (all engines):
   "watchlistNames": ["Acme Corp"],                         // entries < 2 chars / blank / punctuation-only are dropped
   "maxWatchlistHitsPerRun": 200,
   "maxWatchlistSpendUsd": 50,
+  "stateNamespace": "weekly-eu",                           // optional; default one per Task, "default" for ad-hoc runs
   "fdaApiKey": "..."                                       // BYOK credentials are top-level isSecret fields
 }
 ```
@@ -65,8 +66,17 @@ Every dataset row carries `engine`, `source`, `record_id`, `delta_status`, `is_n
 `matched_watchlist_keyword`, `scraped_at` on top of the connector's own fields. A `RUN_SUMMARY` key-value record holds
 per-source counts, `warnings` (non-fatal problems such as one sub-source being down) and watchlist accounting.
 
-A failed preflight (unknown or held source, missing credential, invalid option) ends the run `FAILED` with the full
-list of problems, before any network request or billable event.
+A failed preflight (unknown or held source, missing credential, invalid option, or a pricing that prices
+`apify-default-dataset-item`) ends the run `FAILED` with the full list of problems, before any network request or
+billable event.
+
+**Delta memory** is one key-value record per source, `state.<namespace>.<source>`, in the store `<engine>-delta-state`.
+Separate Tasks get separate memory (`stateNamespace`, default `task-<id>`), so they cannot consume each other's "new"
+records, and overlapping runs cannot overwrite each other. It is checkpointed every 25 emitted rows and in a `finally`:
+delivery is at-least-once, and after a hard kill at most 25 rows can be delivered again.
+
+**Billing.** Every source bills its own event (see `pricing/event_catalog.ts`). `RUN_SUMMARY.pricing.unpricedEvents`
+lists any event this run could bill that has no positive price in the Actor's live pricing (those rows are free).
 
 ## Commands
 
