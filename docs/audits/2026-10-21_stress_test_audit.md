@@ -16,7 +16,7 @@ Everything below was measured or read in this repository on 2026-10-21. A figure
 | Block | Asked | Result |
 |---|---|---|
 | 1 | Forensic audit of the market-traction figures; consolidation check | The 23-of-28 / 82.2 percent / -$2.25 figures are **not in the repository and could not be verified** (no Apify token); 23 / 28 is 82.1 percent, not 82.2. The consolidation (22 repositories absorbed into 3 Actors, source lines down 15 percent while five README-only stubs became real connectors) **is** measured. Section 2 |
-| 2 | Adversarially validate the test suite | **2,323 TypeScript tests in 53 files and 1,810 Python tests (on each of 3.11, 3.12, 3.13) pass; the TypeScript suite also passes on Node 24.22.0, the runtime of the Actor image.** The suite was attacked with mutation testing (87 hand-made mutants over three rounds; 9 survived on the first attempt, each led to a stronger test, none survive now), a reference model written from the specification, exhaustive code point sweeps, a differential fuzz of 144,000 inputs per implementation, a platform parity harness (the real SDK and `apify-client` against a mock of the REST API), four independent reviews of the guard and two of the lease and state code. Sections 3.1, 3.2 |
+| 2 | Adversarially validate the test suite | **2,347 TypeScript tests in 54 files and 1,810 Python tests (on each of 3.11, 3.12, 3.13) pass; the TypeScript suite also passes on Node 24.22.0, the runtime of the Actor image.** The suite was attacked with mutation testing (87 hand-made mutants over three rounds; 9 survived on the first attempt, each led to a stronger test, none survive now), a reference model written from the specification, exhaustive code point sweeps, a differential fuzz of 144,000 inputs per implementation, a platform parity harness (the real SDK and `apify-client` against a mock of the REST API), four independent reviews of the guard and two of the lease and state code. Sections 3.1, 3.2 |
 | 2 | Billing atomicity under platform failures | Fault injection (2,700 seeded scenarios, 1 to 3 coincident faults each, plus directed scenarios and negative controls) and the real Apify SDK in child processes: **a hard kill repeats and re-bills at most the one row in flight** (exact dollar exposure per kill in the exposure table). Two overlapping runs of one namespace are now refused (run lease, best effort); an overtaken run no longer writes over the run that took its lease. A corrupt state record fails its source instead of restarting it. **The review that built the platform parity harness found that every run of every engine would have died on the platform** (the delta memory was listed with a method the platform's client does not have; local storage and every test double had it): fixed (RA-29). Section 3.3 |
 | 2 | ReDoS bounds, `npm run audit:redos` | 219 regex occurrences, 199 distinct, **193 safe, 6 flagged and allowlisted** with a written bound and a named enforcing test each, 7 dynamic `RegExp()` calls none of which takes external input; exit code 0. The gate itself was hardened (RA-16). Section 3.4 |
 | 2 | State checkpointing | Checkpoint every 25 rows and in `finally`, per-row delivery journal, fail-closed corrupt records, run lease. Section 3.5 |
@@ -43,11 +43,11 @@ Detail and evidence are in strategy section 12. Short form:
 
 | Suite | Count | Runtime |
 |---|---:|---|
-| TypeScript, `vitest run` | **2,323 tests in 53 files**, all passing; strict `tsc --noEmit` clean | Node 22.22.0 (also Node 24.22.0, the `apify/actor-node:24` image's runtime: same 2,323 / 53, all passing) |
+| TypeScript, `vitest run` | **2,347 tests in 54 files**, all passing; strict `tsc --noEmit` clean | Node 22.22.0 (also Node 24.22.0, the `apify/actor-node:24` image's runtime: same 2,347 / 54, all passing) |
 | Python, `pytest` in `distribution/python` | **1,810 tests**, all passing, on each of Python 3.11.17, 3.12.3, 3.13.16 | `apify-client` 3.3.0, `pydantic` 2.14.1, `langchain-core` 1.6.12 |
 | Differential fuzz (committed, `distribution/tools/differential_fuzz`) | 12 seeds (401 to 412), 144,000 inputs per implementation, **0 differences** between the TypeScript guard, the Python port on 3.11/3.12/3.13 and the n8n Code nodes on Node 22.22.0; 3 more seeds (421 to 423, 36,000 inputs) each on Node 20.20.0 and Node 21.7.3, also 0 | |
 
-The engagement brief's "1,474+" is the count at an earlier commit (1,474 in 42 files); the suite has grown by 849 tests and 11 files since, mostly the stress suites listed below. Tests are fixture-driven and offline except the scenarios that run the real Apify SDK (`Actor`, `ChargingManager`, local dataset and key-value store) in child processes.
+The engagement brief's "1,474+" is the count at an earlier commit (1,474 in 42 files); the suite has grown by 873 tests and 12 files since, mostly the stress suites listed below. Tests are fixture-driven and offline except the scenarios that run the real Apify SDK (`Actor`, `ChargingManager`, local dataset and key-value store) in child processes.
 
 The suites written for this sprint (all in `master_engines/test/`):
 
@@ -60,6 +60,7 @@ The suites written for this sprint (all in `master_engines/test/`):
 | `audit.unit_economics.test.ts` | The unit-economics script |
 | `core.lease.test.ts` (28), `core.lease_review.test.ts` (39), `apify_sdk.integration.test.ts` (20) | Run leases, in memory and with two real SDK processes; every finding of the two lease reviews has a test that names it (F-01 to F-10, LEASE-01 to LEASE-04, MOCK-03) |
 | `platform_parity.integration.test.ts` (40), `mock_apify_platform.test.ts` (13), `support/mock_apify_platform.ts`, `support/platform_child.ts` | **Platform parity.** One real Actor process "at home" (the real `apify` SDK and the real `apify-client` resource clients) talking HTTP to an in-process mock of the Apify REST API (key-value store with paging and byte bodies, dataset, run status, charge endpoint, fault hooks), around the real router with stub connectors: reading and writing memory, journal and lease as the platform client does, truncated and empty records, run status under every status and error, charges through the real charge endpoint, a listing that lags behind a write |
+| `deployment_runbook.test.ts` (24) | The deployment runbook is executed: its `deploy:` blocks run with bash against a local stand-in for the Apify API (request order, path, token, content type, body byte for byte, 14-day notice, guards for stale bodies, price drift, pricing history, confirmation); 18 faults in its commands all caught (docs/deployment/production_deployment_runbook.md section 8) |
 | `distribution_sync.test.ts` | The generated data files, the Python port's inputs, the three n8n templates (executed in a Node `vm`), the README's claims |
 
 ### 3.2 Was the test suite itself any good? Mutation testing and independent reviews
@@ -157,6 +158,10 @@ Python SDK `regulatory-engines`, LangChain tools and three n8n templates (strate
 
 Strategy section 13.3: deploy and verify on the platform (days 0 to 14), publish the channels and measure (15 to 45), decide on the legacy fleet (46 to 90), each with a gate that can fail. No revenue, run-count or conversion figure is projected, because there is no measured baseline.
 
+### 4.5 Production staging
+
+[`docs/deployment/production_deployment_runbook.md`](../deployment/production_deployment_runbook.md) holds the exact commands (stage, `apify login`, `apify push`, the pricing `PUT /v2/actors/{actorId}` with the 14-day notice of terms section 9.4, read-back, smoke tests), the five decisions that still need an owner (the start price, the operator-stated `watchlist-hit` price, four provisional prices, robots.txt policy, retiring the legacy Actors) and the evidence of 2026-10-21: the three staged packages, `apify validate-schema` clean, zero drift between the generators and the committed `.actor/` files, Docker builds of the three staged contexts with their unchanged Dockerfiles, the three images run against live public sources, a held source refused with no network, two overlapping containers on one namespace (the second refused, the first delivered 300 rows once), and the six pricing bodies valid against Apify's published OpenAPI schema. Nothing was run on the platform.
+
 ---
 
 ## 5. Independent verification
@@ -237,7 +242,7 @@ A review is evidence about the code it read. None of these reviews ran anything 
 cd master_engines
 npm ci
 npx tsc --noEmit
-npx vitest run                                   # 2,323 tests in 53 files
+npx vitest run                                   # 2,347 tests in 54 files
 npm run audit:redos                              # needs: npm install --no-save recheck
 npx tsx scripts/audit_pricing_exposure.ts        # regenerates 2026-10-21_pricing_exposure.md
 npx tsx scripts/audit_unit_economics.ts          # regenerates 2026-10-21_unit_economics.md
