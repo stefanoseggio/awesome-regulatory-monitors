@@ -28,7 +28,7 @@
  *   3. router_core / charging.ts    - only bills when (1) produced >= 1 keyword
  *                                     AND (2) returned a concrete match.
  *
- * VALIDATION CRITERIA (applied per keyword, in this order)
+ * VALIDATION CRITERIA (applied per keyword; the first one that fails gives the rejection reason, in this order)
  * --------------------------------------------------------
  *   - must be a string                       (numbers/objects/null are rejected, never coerced)
  *   - at most {@link MAX_RAW_KEYWORD_UNITS} (4,096) UTF-16 units BEFORE any Unicode work
@@ -36,28 +36,32 @@
  *     seconds, and the 200 code point cap below is only meaningful after normalisation)
  *   - well-formed Unicode: a lone surrogate is rejected as `invalid_unicode` (it would match half
  *     of an astral character, so a hit could be billed for text that does not contain the keyword)
- *   - no run of more than {@link MAX_COMBINING_RUN} (16) consecutive combining marks: NFKC reorders marks by combining
- *     class, which is quadratic in the length of a run (a 4,090-mark run costs 16 ms, so a list of 5,000 of them
- *     would cost 82 s). Real text never has such a run (Vietnamese stacks 3, Hebrew with cantillation 4, Tibetan
- *     about 10). A keyword with one is rejected; a haystack has the run cut to 16 marks.
- *   - NFKC must not expand a text by more than 4x (plus 16 units): the Arabic ligature U+FDFA becomes 18 characters, and
- *     a text made of it costs 12 ms per 4,096 units to clean. Such a text counts as empty.
  *   - cleaned to a FIXED POINT of: NFKC, whitespace controls to a space, removal of every
  *     Default_Ignorable_Code_Point and Bidi_Control character plus the C0/C1 controls (zero-width
  *     characters, soft hyphen, bidi marks, variation selectors, Hangul fillers, tag characters...),
  *     whitespace runs collapsed to one space, ends stripped. Repeating the pass is required: removal
  *     can expose a composable sequence, so one pass is not idempotent. A text that has not settled
- *     after {@link MAX_NORMALISE_PASSES} passes is treated as empty (hostile), never matched.
- *   - length >= {@link MIN_KEYWORD_LENGTH} (2) *after* cleaning, so a keyword made only of U+200B,
- *     or a letter plus an invisible character, cannot pass as "length 2"
- *   - length <= {@link MAX_KEYWORD_LENGTH} (200)
+ *     after {@link MAX_NORMALISE_PASSES} passes is treated as empty (hostile), never matched. Two rules make a text empty
+ *     before NFKC can do harm (a keyword is then `empty_after_normalisation`):
+ *       . no run of more than {@link MAX_COMBINING_RUN} (16) consecutive combining marks (`\p{M}` and the two halfwidth
+ *         sound marks U+FF9E and U+FF9F, which NFKC turns into marks): NFKC reorders marks by combining class, which is
+ *         quadratic in the length of a run (a 4,090-mark run costs 16 ms, so a list of 5,000 of them would cost 82 s).
+ *         Real text never has such a run (Vietnamese stacks 3, Hebrew with cantillation 4, Tibetan about 10). A keyword
+ *         with one is empty; a haystack has the run cut to 16 marks.
+ *       . NFKC must not expand a text by more than 4x (plus 16 units): the Arabic ligature U+FDFA becomes 18 characters,
+ *         so a text made of it would grow 18-fold on every pass. A keyword like that is empty; a haystack is cleaned in
+ *         pieces around the code points that expand that much (see cleanHaystack).
+ *   - length >= {@link MIN_KEYWORD_LENGTH} (2) code points *after* cleaning, so a keyword made only of U+200B,
+ *     or a letter plus an invisible character, cannot pass as "length 2"                               (`too_short`)
+ *   - at least 2 visible code points BEFORE normalisation (one glyph that NFKC expands, such as the circled
+ *     number twenty or the numero sign, is a single character, not a two-character keyword)          (`too_short`)
  *   - contains at least TWO letters or digits (so "--", "..", "()", "c.", "a |", "-0" cannot match everything
  *                                             punctuated: one alphanumeric character padded with punctuation is the
  *                                             one-letter needle of the original bug in disguise; "BP", "GE", "3M" pass)
+ *                                                          (`no_letter_or_digit`, `single_letter_or_digit`)
  *   - at least 2 glyphs (letters, numbers, symbols; not punctuation or marks) BEFORE normalisation, so one expanding
- *     glyph padded with punctuation ("⑳.", "№.") is not a two-character keyword either
- *   - at least 2 visible code points BEFORE normalisation (one glyph that NFKC expands, such as the circled
- *     number twenty or the numero sign, is a single character, not a two-character keyword)
+ *     glyph padded with punctuation ("⑳.", "№.") is not a two-character keyword either               (`too_short`)
+ *   - length <= {@link MAX_KEYWORD_LENGTH} (200) code points after cleaning                           (`too_long`)
  *   - de-duplicated case-insensitively; the first spelling wins
  *   - at most {@link MAX_KEYWORDS} (500) accepted; the rest are rejected as `over_limit`
  *   - at most {@link MAX_CANDIDATES} (5,000) entries are inspected, and the string entries of at most
@@ -152,10 +156,16 @@ const INVISIBLE_ONE = /[\u0000-\u001f\u007f-\u009f\p{Default_Ignorable_Code_Poin
 const WHITE_SPACE_ONE = /\p{White_Space}/u;
 /** What a log line must not carry: controls, the line and paragraph separators (log shippers split on them), invisible characters and lone surrogates. */
 const PREVIEW_UNSAFE = /[\u0000-\u001f\u007f-\u009f\u2028\u2029\p{Default_Ignorable_Code_Point}\p{Surrogate}]/gu;
-/** Marks beyond the {@link MAX_COMBINING_RUN}th of a run (MAX_COMBINING_RUN, written out so the ReDoS gate analyses it). */
-const MARK_RUN_EXCESS = /(\p{M}{16})\p{M}+/gu;
-/** MAX_COMBINING_RUN + 1 consecutive combining marks. A literal (not built from the constant) so the ReDoS gate analyses it. */
-const COMBINING_RUN_TOO_LONG = /\p{M}{17}/u;
+/**
+ * Marks beyond the {@link MAX_COMBINING_RUN}th of a run (MAX_COMBINING_RUN, written out so the ReDoS gate analyses it). A mark is
+ * `\p{M}` or one of the two halfwidth voiced sound marks U+FF9E and U+FF9F: they are letters (Lm) until NFKC turns them into the
+ * combining marks U+3099 and U+309A, so a run of them mixed with higher-class marks is reordered, quadratically, by the NFKC that
+ * follows. They are the only code points that are not marks and whose NFKC form starts with a reordering mark (the test
+ * `stress.guards_fuzz` pins the list for the running Unicode version).
+ */
+const MARK_RUN_EXCESS = /([\p{M}\uFF9E\uFF9F]{16})[\p{M}\uFF9E\uFF9F]+/gu;
+/** MAX_COMBINING_RUN + 1 consecutive combining marks (see MARK_RUN_EXCESS). A literal (not built from the constant) so the ReDoS gate analyses it. */
+const COMBINING_RUN_TOO_LONG = /[\p{M}\uFF9E\uFF9F]{17}/u;
 const WHITE_SPACE_UNIT = /\p{White_Space}/u;
 const HAS_LETTER_OR_DIGIT = /[\p{L}\p{N}]/u;
 /** A glyph a reader counts as a character of its own: a letter, a number or a symbol (not punctuation, not a mark). */
@@ -478,23 +488,33 @@ function isUsableNeedle(needle: unknown): needle is string {
     );
 }
 
-/** The usable needles of a list, found once per list: re-checking 500 needles on every row of a run costs more than matching it. */
-const NEEDLE_CACHE = new WeakMap<readonly unknown[], { length: number; seen: unknown[]; indexes: number[] }>();
+/** A usable needle and where it stands in the list (the keyword at the same index is the one reported). */
+interface UsableNeedle {
+    index: number;
+    needle: string;
+}
 
-function usableNeedleIndexes(needles: readonly unknown[]): number[] {
+/**
+ * The usable needles of a list, found once per list: re-checking 500 needles on every row of a run costs more than matching it.
+ * The strings that were checked are the strings that are matched: the list is never read again after the check, so an
+ * accessor or a Proxy that answers differently the second time cannot swap in a needle the floor would have refused.
+ */
+const NEEDLE_CACHE = new WeakMap<readonly unknown[], { length: number; seen: unknown[]; usable: UsableNeedle[] }>();
+
+function usableNeedles(needles: readonly unknown[]): UsableNeedle[] {
     const cached = NEEDLE_CACHE.get(needles);
     // A list edited in place is checked again: the cache is used only while every needle it read is still the same string.
-    if (cached && cached.length === needles.length && cached.seen.every((needle, i) => needles[i] === needle)) return cached.indexes;
+    if (cached && cached.length === needles.length && cached.seen.every((needle, i) => needles[i] === needle)) return cached.usable;
     const count = Math.min(needles.length, MAX_KEYWORDS);
     const seen: unknown[] = [];
-    const indexes: number[] = [];
+    const usable: UsableNeedle[] = [];
     for (let i = 0; i < count; i += 1) {
         const needle = needles[i];
         seen.push(needle);
-        if (isUsableNeedle(needle)) indexes.push(i);
+        if (isUsableNeedle(needle)) usable.push({ index: i, needle });
     }
-    NEEDLE_CACHE.set(needles, { length: needles.length, seen, indexes });
-    return indexes;
+    NEEDLE_CACHE.set(needles, { length: needles.length, seen, usable });
+    return usable;
 }
 
 function findUnchecked(haystack: unknown, list: SanitizedKeywordList): string | null {
@@ -505,10 +525,9 @@ function findUnchecked(haystack: unknown, list: SanitizedKeywordList): string | 
     const text = cleanHaystack(cutHaystack(haystack)).toLowerCase();
     if (text.length === 0) return null;
 
-    for (const i of usableNeedleIndexes(list.needles)) {
-        const needle = list.needles[i] as string;
+    for (const { index, needle } of usableNeedles(list.needles)) {
         if (text.includes(needle)) {
-            const keyword = list.keywords[i];
+            const keyword = list.keywords[index];
             return typeof keyword === 'string' ? keyword : needle;
         }
     }

@@ -274,7 +274,7 @@ describe('distribution data files', () => {
             for (let start = 0; start < others.length; start += block) {
                 const chunk = others.slice(start, start + block);
                 const text = `${String.fromCharCode(...chunk)}${'q'.repeat(block - chunk.length)}`;
-                expect(/\p{M}{17}/u.test(text), 'a run of marks would hide a hit').toBe(false);
+                expect(/[\p{M}\uFF9E\uFF9F]{17}/u.test(text), 'a run of marks would hide a hit').toBe(false);
                 const haystack = `xx yy${text}${'z'.repeat(8)}`;
                 expect(haystack.length).toBeGreaterThan(MAX_HAYSTACK_UNITS);
                 expect(findKeywordMatch(haystack, list), `block ${blocks}`).toBeNull();
@@ -1218,7 +1218,7 @@ describe('n8n templates', () => {
         // The generator's copy of the removal pattern has no g flag, so compare the character class alone.
         expect(literal(generatorSource, 'REMOVED_BY_THE_GUARD').replace(/\/u$/u, '/gu')).toBe(literal(guardSource, 'INVISIBLE'));
         const constants = { MIN_KEYWORD_LENGTH, MAX_KEYWORD_LENGTH, MAX_KEYWORDS, MAX_RAW_KEYWORD_UNITS, MAX_CANDIDATES, MAX_BARE_STRING_UNITS, MAX_NORMALISE_PASSES, MAX_TOTAL_RAW_UNITS };
-        expect(literal(guardSource, 'COMBINING_RUN_TOO_LONG'), 'the pattern is MAX_COMBINING_RUN + 1 marks').toBe(`/\\p{M}{${MAX_COMBINING_RUN + 1}}/u`);
+        expect(literal(guardSource, 'COMBINING_RUN_TOO_LONG'), 'the pattern is MAX_COMBINING_RUN + 1 marks').toBe(`/[\\p{M}\\uFF9E\\uFF9F]{${MAX_COMBINING_RUN + 1}}/u`);
         for (const file of TEMPLATE_FILES) {
             const code = byName(load(file), 'Build run input').parameters.jsCode as string;
             for (const [name, value] of Object.entries(constants)) expect(code, `${file}: ${name}`).toContain(`const ${name} = ${value};`);

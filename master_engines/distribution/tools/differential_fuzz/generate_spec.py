@@ -50,12 +50,14 @@ ALPHA = {
     'expanding': ['\u2473', '\u2116', '\ufb01', '\u2474', '\u249c', '\u2488', '\ufdfa', '\u00bd', '\u2460', '\u33cc', '\ufb03', '\u3300'],
     'padding_punct': ['.', '-', '(', ')', '|', ',', '/', '_', '&', "'"],
     'thai_marks': cps(0xe31, 0xe3a) + cps(0xe47, 0xe4e),
+    # fourth review round: the halfwidth voiced sound marks, letters that NFKC turns into combining marks of class 8
+    'halfwidth_marks': ['\uff9e', '\uff9f'],
 }
 WEIGHTS = {
     'ascii_letters': 22, 'ascii_digits': 6, 'ascii_punct': 8, 'js_whitespace': 8, 'ws_like': 3, 'controls': 4, 'zero_width': 5, 'bidi': 4,
     'other_invisible': 3, 'variation': 2, 'combining': 3, 'lone_surrogates': 3, 'astral': 4, 'fullwidth': 4, 'digits': 3, 'compat': 5,
     'greek': 4, 'cyrillic': 2, 'cjk': 2, 'rtl': 2, 'indic_thai': 2, 'latin_ext': 3,
-    'expanding': 3, 'padding_punct': 4, 'thai_marks': 2,
+    'expanding': 3, 'padding_punct': 4, 'thai_marks': 2, 'halfwidth_marks': 1,
 }
 NAMES = list(WEIGHTS)
 WEIGHT_LIST = [WEIGHTS[k] for k in NAMES]
@@ -180,6 +182,8 @@ def third_round_candidate():
     if kind == 3:  # runs of the ligature with the expansion cap near its boundary
         return '\ufdfa' * rng.randint(1, 14) + rng.choice(['', 'a', 'ab', 'abcd', ' acme'])
     if kind == 4:  # letters followed by a run of marks near the limit of 16
+        if rng.random() < 0.3:  # a pair that alternates a class-230 mark with a halfwidth mark: the shape NFKC reorders quadratically
+            return letter + rng.choice('abXY') + (rng.choice(ALPHA['combining']) + rng.choice(ALPHA['halfwidth_marks'])) * rng.randint(7, 10)
         return letter + rng.choice('abXY') + rng.choice(ALPHA['thai_marks'] + ALPHA['combining']) * rng.randint(14, 19)
     if kind == 5:  # marks kept apart by invisible characters so that the run only exists after removal
         return 'ab' + (rng.choice(ALPHA['combining']) + rng.choice(['\u200b', '\u2060', '\u00ad'])) * rng.randint(8, 19)
@@ -261,6 +265,8 @@ for _ in range(n_match):
         # a hostile field next to a name: a run of marks (cut, never fatal), glued or after a space, or a run of ligatures
         name = rng.choice(['Acme', 'Pfizer', 'ab', 'Corp'])
         run = rng.choice(ALPHA['thai_marks'] + ALPHA['combining']) * rng.randint(12, 40)
+        if rng.random() < 0.25:
+            run = (rng.choice(ALPHA['combining']) + rng.choice(ALPHA['halfwidth_marks'])) * rng.randint(6, 30)
         field = rng.choice([run, 'x' + run, ' ' + run, '\u200b' + run, ('\u0e31' + '\u200b') * rng.randint(8, 20), '\ufdfa' * rng.randint(1, 12)])
         hay = rng.choice([name + ' ' + field, field + ' | ' + name, name + field, field + name, name + ' x' + field + ' ' + name])
         kws = [name] + kws[:2]

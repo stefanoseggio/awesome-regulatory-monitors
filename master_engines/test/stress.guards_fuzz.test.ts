@@ -385,12 +385,16 @@ function refIsSpaceLike(cp: number): boolean {
 }
 
 const REF_MARK = /^\p{Mark}$/u;
+/** The halfwidth voiced and semi-voiced sound marks: letters (Lm) that NFKC turns into the combining marks U+3099 and U+309A. */
+const REF_HALFWIDTH_SOUND_MARKS = new Set<string>(['\uff9e', '\uff9f']);
+/** A mark for the run limit: General_Category M, or a character whose NFKC form is a combining mark that NFKC then has to reorder. */
+const refIsMark = (ch: string): boolean => REF_MARK.test(ch) || REF_HALFWIDTH_SOUND_MARKS.has(ch);
 
-/** True when the text holds MORE than REF_MAX_COMBINING_RUN consecutive combining marks (General_Category M). */
+/** True when the text holds MORE than REF_MAX_COMBINING_RUN consecutive combining marks (General_Category M, and U+FF9E and U+FF9F). */
 function refHasLongMarkRun(text: string): boolean {
     let run = 0;
     for (const ch of text) {
-        if (REF_MARK.test(ch)) {
+        if (refIsMark(ch)) {
             run += 1;
             if (run > REF_MAX_COMBINING_RUN) return true;
         } else {
@@ -405,7 +409,7 @@ function refCutMarkRuns(text: string): string {
     let out = '';
     let run = 0;
     for (const ch of text) {
-        if (REF_MARK.test(ch)) {
+        if (refIsMark(ch)) {
             run += 1;
             if (run > REF_MAX_COMBINING_RUN) continue;
         } else {
@@ -2184,6 +2188,59 @@ describe('PART 2 regression tests for the guard defects found by this suite (all
             expect(r.value).not.toMatch(/[\u2028\u2029]/u);
             expect(r.value).toContain('\ufffd');
         }
+    });
+
+    it('D29 U+FF9E and U+FF9F count in the run of marks: NFKC makes them combining marks of class 8 and reorders them behind marks of higher classes', () => {
+        const reject = (keyword: string) => sanitizeKeywordList([keyword]).rejected.map((r) => r.reason);
+        const accepted = (keyword: string) => sanitizeKeywordList([keyword]).keywords.length;
+        // 16 marks are fine, 17 are not, whatever mixes the run is made of
+        expect(accepted(`ab${'\u0301\uff9e'.repeat(8)}`), '16').toBe(1);
+        expect(reject(`ab${'\u0301\uff9e'.repeat(8)}\u0301`), '17').toEqual(['empty_after_normalisation']);
+        expect(reject(`ab${'\u0301\uff9e'.repeat(9)}`), '18').toEqual(['empty_after_normalisation']);
+        expect(accepted(`cd${'\uff9f\u0300'.repeat(8)}`), '16, semi-voiced first').toBe(1);
+        expect(reject(`cd${'\uff9f\u0300'.repeat(9)}`), '18, semi-voiced first').toEqual(['empty_after_normalisation']);
+        // the quadratic shape: 4,000 units that NFKC would reorder one step at a time
+        expect(reject(`ab${'\u0301\uff9e'.repeat(2000)}`)).toEqual(['empty_after_normalisation']);
+        // a haystack keeps the first 16 marks of such a run, and the words before and after it are still searched
+        const list = sanitizeKeywordList(['Acme']);
+        expect(findKeywordMatch(`Acme Corp b${'\u0301\uff9e'.repeat(2000)}`, list)).toBe('Acme');
+        expect(findKeywordMatch(`b${'\u0301\uff9e'.repeat(200)} Acme Corp`, list)).toBe('Acme');
+        // and the reference model agrees on all of it
+        for (const text of [`ab${'\u0301\uff9e'.repeat(8)}`, `ab${'\u0301\uff9e'.repeat(9)}`, `x${'\uff9e\u0301'.repeat(20)}y`]) {
+            expect(normaliseKeyword(text, 'reject')).toBe(refClean(text, 'reject'));
+            expect(normaliseKeyword(text, 'cut')).toBe(refClean(text, 'cut'));
+        }
+    });
+
+    it('D30 the code points that are not marks but whose NFKC form starts with a mark are exactly the four the run limit was written for', () => {
+        // If a Unicode update adds one to this list, the run limit has a new way around it: decide, then change `\p{M}` there and here.
+        const found: number[] = [];
+        for (let cp = 0; cp <= 0x10ffff; cp += 1) {
+            if (cp >= 0xd800 && cp <= 0xdfff) continue;
+            const ch = String.fromCodePoint(cp);
+            if (/\p{M}/u.test(ch)) continue;
+            const normalised = ch.normalize('NFKC');
+            if (normalised !== ch && /^\p{M}/u.test(normalised)) found.push(cp);
+        }
+        // U+0E33 and U+0EB3 start with a mark of class 0 (nothing to reorder, and a letter follows it): they are not part of a run
+        expect(found).toEqual([0x0e33, 0x0eb3, 0xff9e, 0xff9f]);
+    });
+
+    it('D31 the needle that was checked is the needle that is matched: a list that answers differently the second time cannot swap one in', () => {
+        const needles: unknown[] = ['placeholder'];
+        let reads = 0;
+        Object.defineProperty(needles, 0, {
+            get: () => {
+                reads += 1;
+                return reads === 1 ? 'pfizer' : 'e';
+            },
+            configurable: true,
+            enumerable: true,
+        });
+        const list = { keywords: ['Pfizer'], needles: needles as string[], rejected: [], malformedContainer: false };
+        // 'e' is one letter, below the floor: it must never be billed. Every outcome but a hit on it is acceptable here.
+        expect(findKeywordMatch('Acme Corp and Roche', list)).toBeNull();
+        expect(findKeywordMatch('Acme Corp and Roche', list)).toBeNull();
     });
 });
 

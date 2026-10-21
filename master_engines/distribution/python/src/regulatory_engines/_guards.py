@@ -167,13 +167,18 @@ def _preview_unchecked(value: Any) -> str:
     return "[object]"
 
 
+def _is_mark(char: str) -> bool:
+    """``/[\\p{M}\\uFF9E\\uFF9F]/u``: a combining mark (Mn, Mc, Me) or a halfwidth voiced sound mark, which NFKC turns into one (see ``_guards.ts``)."""
+    return unicodedata.category(char).startswith("M") or char in "\uff9e\uff9f"
+
+
 def _has_long_combining_run(text: str) -> bool:
-    """``/\\p{M}{17}/u``: more than ``MAX_COMBINING_RUN`` consecutive combining marks (Mn, Mc and Me), counted by code point."""
+    """``/[\\p{M}\\uFF9E\\uFF9F]{17}/u``: more than ``MAX_COMBINING_RUN`` consecutive combining marks (Mn, Mc, Me and U+FF9E/U+FF9F), counted by code point."""
     if text.isascii():
         return False
     run = 0
     for char in text:
-        if unicodedata.category(char).startswith("M"):
+        if _is_mark(char):
             run += 1
             if run > MAX_COMBINING_RUN:
                 return True
@@ -183,11 +188,11 @@ def _has_long_combining_run(text: str) -> bool:
 
 
 def _cut_mark_runs(text: str) -> str:
-    """``text.replace(/(\\p{M}{16})\\p{M}+/gu, '$1')``: every run of combining marks keeps its first ``MAX_COMBINING_RUN`` marks."""
+    """``text.replace(/([\\p{M}\\uFF9E\\uFF9F]{16})[\\p{M}\\uFF9E\\uFF9F]+/gu, '$1')``: every run of combining marks keeps its first ``MAX_COMBINING_RUN`` marks."""
     out: list[str] = []
     run = 0
     for char in text:
-        if unicodedata.category(char).startswith("M"):
+        if _is_mark(char):
             run += 1
             if run > MAX_COMBINING_RUN:
                 continue
@@ -453,20 +458,23 @@ def _clean_haystack(raw: str) -> str:
 
 def _is_usable_needle(needle: Any) -> bool:
     """The sanitiser's floor again for a hand-built list, without anything that could match half of a character or cross a cut."""
+    if not isinstance(needle, str):
+        return False
+    # JavaScript reads two separate surrogate halves that follow each other as the one character they form: so does every check below.
+    seen = to_js_string(needle)
     return (
-        isinstance(needle, str)
-        and utf16_length(needle) <= 2 * MAX_KEYWORD_LENGTH
-        and _PIECE_SEPARATOR not in needle
-        and not has_surrogate(to_js_string(needle))
-        and _code_point_length(needle) >= MIN_KEYWORD_LENGTH
-        and _count_letters_or_digits(needle, 2) >= 2
+        utf16_length(seen) <= 2 * MAX_KEYWORD_LENGTH
+        and _PIECE_SEPARATOR not in seen
+        and not has_surrogate(seen)
+        and _code_point_length(seen) >= MIN_KEYWORD_LENGTH
+        and _count_letters_or_digits(seen, 2) >= 2
     )
 
 
 @functools.lru_cache(maxsize=128)
-def _usable_needle_indexes(needles: tuple[Any, ...]) -> tuple[int, ...]:
-    """Indexes of the usable needles among the first ``MAX_KEYWORDS``, found once per distinct needle tuple (a run asks for every row)."""
-    return tuple(index for index, needle in enumerate(needles[:MAX_KEYWORDS]) if _is_usable_needle(needle))
+def _usable_needle_indexes(needles: tuple[str | None, ...]) -> tuple[int, ...]:
+    """Indexes of the usable needles of a tuple of strings (``None`` stands for an element that is not one), found once per distinct tuple (a run asks for every row)."""
+    return tuple(index for index, needle in enumerate(needles) if needle is not None and _is_usable_needle(needle))
 
 
 def _find_unchecked(haystack: Any, keyword_list: SanitizedKeywordList) -> str | None:
@@ -477,8 +485,11 @@ def _find_unchecked(haystack: Any, keyword_list: SanitizedKeywordList) -> str | 
     text = _clean_haystack(_cut_haystack(haystack)).lower()
     if len(text) == 0:
         return None
-    for index in _usable_needle_indexes(tuple(keyword_list.needles)):
-        needle = keyword_list.needles[index]
+    # One snapshot of the first MAX_KEYWORDS needles: it is what is checked and what is matched, and it is all that is hashed (a list of a million
+    # needles costs no more than one of 500). An element that is not a string cannot be a needle and is never hashed, so it cannot break the cache key.
+    needles = list(keyword_list.needles[:MAX_KEYWORDS])
+    for index in _usable_needle_indexes(tuple(needle if isinstance(needle, str) else None for needle in needles)):
+        needle = needles[index]
         if js_includes(text, needle):
             keyword = keyword_list.keywords[index] if index < len(keyword_list.keywords) else needle
             return keyword if isinstance(keyword, str) else needle

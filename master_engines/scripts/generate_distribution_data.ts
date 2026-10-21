@@ -202,7 +202,7 @@ const INVISIBLE_CHARS = [
 ];
 const UNICODE_LETTERS = ['\u00e9', '\u00df', '\u00f1', '\u00d8', '\u0130', '\u0131', '\u03a3', '\u03c3', '\u03c2', '\u03a9', '\u2126', '\u212a', '\u212b', '\ufb01', '\ufb03', '\u216b', '\u00b2', '\u2460', '\uff21', '\uff71', '\u3300', '\u01c6', '\u01c4', '\u01c8', '\u0149', '\u01f0', '\u1e9e', '\u2116', '\u00bd', '\u6f22\u5b57', '\u041f\u0440\u0438\u0432\u0435\u0442', '\u0645\u0631\u062d\u0628\u0627', '\u0661\u0662\u0663', '\u{1d400}', '\u{1d7cf}', '\u{20bb7}', 'e\u0301', '\u0e01', '\u1c90'];
 const COMPOSING = ['a', 'e', 'A', 'E', '\u0301', '\u0308', '\u0323', '\u0300', '\u0345', '\u1100', '\u1112', '\u1161', '\u1175', '\u11a8', '\u11ab', '\uff9e', '\u3099', '\uff45'];
-const MARK_POOL = ['\u0301', '\u0308', '\u0323', '\u0300', '\u0345', '\u0316', '\u0483', '\u0903', '\u20dd', '\u0488', '\u093c', '\u3099', '\u0951', '\u0e31'];
+const MARK_POOL = ['\u0301', '\u0308', '\u0323', '\u0300', '\u0345', '\u0316', '\u0483', '\u0903', '\u20dd', '\u0488', '\u093c', '\u3099', '\u0951', '\u0e31', '\uff9e', '\uff9f'];
 const EMOJI_AND_SURROGATES = ['\u{1f600}', '\u{1f44d}\u{1f3fd}', '\ud800', '\udc00', '\ud83d'];
 
 /** One random token: a word, digits, punctuation, whitespace, an invisible, a non-ASCII character, a composing sequence part or an emoji or surrogate. */
@@ -482,6 +482,11 @@ const NAMED_SANITIZE_CASES = (): NamedCase[] => {
         { name: 'marks: variation selectors and the combining grapheme joiner are marks, so the run check sees them before they are removed', input: [`ab${repeat('\ufe0f', 17)}`, `ab${repeat('\ufe0f', 16)}`, `Acme${repeat('\u034f', 17)}`, `Acme${repeat('\u034f', 16)}`, `${repeat('\u{e0100}', 17)}ab`, `${repeat('\u{e0100}', 16)}ab`] },
         { name: 'marks: invisible characters that are not marks are removed, whatever their number', input: [`${repeat('\u200b', 17)}ab`, `${repeat('\u200b', 40)}cd`, `ef${repeat('\u2060', 17)}gh`] },
         { name: 'marks: marks that NFKC produces (halfwidth voiced sound marks) are seen on the next pass', input: [`ab${repeat('\uff9e', 17)}`, `ab${repeat('\uff9e', 16)}`, `cd${repeat('\uff9f', 17)}`] },
+        {
+            name: 'marks: U+FF9E and U+FF9F count in the run before NFKC (they become marks of class 8, which NFKC reorders behind higher classes)',
+            input: [`ab${'\u0301\uff9e'.repeat(8)}`, `ab${'\u0301\uff9e'.repeat(9)}`, `ab${'\u0301\uff9e'.repeat(8)}\u0301`, `cd${'\uff9f\u0300'.repeat(9)}`, `cd${'\uff9f\u0300'.repeat(8)}`, 'Acme'],
+        },
+        { name: 'marks: the quadratic shape with U+FF9E (interleaved with a class-230 mark) is empty at once', input: [`ab${'\u0301\uff9e'.repeat(2000)}`, `ab${'\uff9e\u0301'.repeat(1500)}\uff9e`] },
         { name: 'marks: the descending-class attack shape (NFKC must reorder it) is empty at once', input: [`ab${repeat('\u0345', 1365)}${repeat('\u0300', 1365)}${repeat('\u0316', 1364)}`, `cd${repeat('\u0345', 6)}${repeat('\u0300', 5)}${repeat('\u0316', 5)}`] },
         { name: 'marks: runs after an astral base and between astral letters', input: [`\u{1d400}${repeat('\u0301', 17)}`, `x\u{1d400}${repeat('\u0301', 16)}`, `\u{20bb7}${repeat('\u0308', 17)}y`] },
         { name: 'marks: a long run is empty_after_normalisation, not too_long, when the keyword is within the raw cap', input: [`ab${repeat('\u0301', 4000)}`, `ab${repeat('\u0301', 4094)}`] },
@@ -660,6 +665,8 @@ const NAMED_MATCH_CASES = (): MatchCase[] => {
         { name: 'marks: a run beyond the cut is never seen, so the keyword before the cut is found', haystack: `${'z'.repeat(unitsMax - 12)} Acme b${'\u0301'.repeat(17)}`, keywords: ['Acme'] },
         { name: 'marks: a run inside the searched text is cut to 16 marks; the words around it are still searched', haystack: `${'z'.repeat(unitsMax - 40)} b${'\u0301'.repeat(17)} Corp Acme${'z'.repeat(40)}`, keywords: ['zzzz'] },
         { name: 'marks: the descending-class attack shape in a haystack is cut to its first 16 marks at once, the keyword before it is found', haystack: `Acme ${'\u0345'.repeat(1365)}${'\u0300'.repeat(1365)}${'\u0316'.repeat(1364)}`, keywords: ['Acme'] },
+        { name: 'marks: U+FF9E interleaved with a class-230 mark is a run too: cut to 16, the keyword before it is found', haystack: `Acme Corp b${'\u0301\uff9e'.repeat(2000)}`, keywords: ['Acme'] },
+        { name: 'marks: a U+FF9E run in the middle is cut to 16 and the words after it are still searched', haystack: `b${'\u0301\uff9e'.repeat(200)} Acme Corp`, keywords: ['Acme'] },
         { name: 'marks: marks between letters never form a run', haystack: `Acme ${'a\u0301'.repeat(50)}`, keywords: ['Acme'] },
         // the keyword list is read up to 5000 entries, and accepted up to 500
         { name: 'candidates: a keyword at entry 5000 is read', haystack: 'Beta Corp', keywords: [...Array.from({ length: MAX_CANDIDATES - 1 }, () => 'a'), 'Beta Corp'] },
