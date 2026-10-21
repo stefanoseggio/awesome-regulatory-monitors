@@ -40,6 +40,21 @@ export interface SourceDeltaState {
 export interface DeltaState {
     version: 2;
     sources: Record<string, SourceDeltaState>;
+    /**
+     * Sources whose persisted memory record EXISTS but cannot be read (truncated, wrong shape, a non-string
+     * fingerprint...), with the reason. Treating such a record as "empty" would deliver and bill every record of the
+     * source again (up to 10,000 rows per run, on every run if the bad record is rewritten), so the router fails that
+     * source instead. Absent for a store that never reports one.
+     */
+    invalid?: Record<string, string>;
+}
+
+/** A persisted delta-memory or delivery-journal record exists but is not valid. Never thrown for an ABSENT record. */
+export class CorruptDeltaRecordError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'CorruptDeltaRecordError';
+    }
 }
 
 /** Persistence port. The Apify implementation lives in `apify_adapters.ts`; tests use {@link InMemoryDeltaStore}. */
@@ -76,38 +91,52 @@ function isRecordOfStrings(value: unknown): value is Record<string, string> {
     return Object.values(value as Record<string, unknown>).every((v) => typeof v === 'string');
 }
 
-/** Validates a persisted blob. Anything malformed becomes an empty state (never throws, never half-loads). */
-export function parseState(value: unknown): DeltaState {
+/**
+ * Validates a persisted blob (never throws, never half-loads). A per-source record that is ABSENT (null or undefined) is
+ * simply not there; one that is present but malformed is reported in `invalid` (with `describe(source)` as the reason)
+ * so the caller can refuse the source instead of starting it from scratch. A document that is not a version-2 container
+ * becomes an empty state.
+ */
+export function parseState(value: unknown, describe: (source: string) => string = () => 'the record is not a valid delta-memory record'): DeltaState {
     if (!value || typeof value !== 'object') return createEmptyState();
     const candidate = value as { version?: unknown; sources?: unknown };
     if (candidate.version !== 2 || !candidate.sources || typeof candidate.sources !== 'object') return createEmptyState();
 
     const sources: Record<string, SourceDeltaState> = {};
+    const invalid: Record<string, string> = {};
     for (const [source, raw] of Object.entries(candidate.sources as Record<string, unknown>)) {
-        if (!raw || typeof raw !== 'object') continue;
+        if (raw === undefined || raw === null) continue;
         const s = raw as Partial<SourceDeltaState>;
-        if (!Array.isArray(s.seenIds) || !s.seenIds.every((id) => typeof id === 'string')) continue;
-        if (!isRecordOfStrings(s.fingerprints)) continue;
+        if (typeof raw !== 'object' || !Array.isArray(s.seenIds) || !s.seenIds.every((id) => typeof id === 'string') || !isRecordOfStrings(s.fingerprints)) {
+            invalid[source] = describe(source);
+            continue;
+        }
         sources[source] = {
             seenIds: s.seenIds,
             fingerprints: s.fingerprints,
             lastRunAt: typeof s.lastRunAt === 'string' ? s.lastRunAt : '',
         };
     }
-    return { version: 2, sources };
+    return Object.keys(invalid).length > 0 ? { version: 2, sources, invalid } : { version: 2, sources };
 }
 
 /** A journal never holds more than one checkpoint window; anything longer than this on disk is not ours. */
 export const MAX_JOURNAL_ENTRIES = 1000;
 
-/** Validates a persisted journal. Anything malformed is an empty journal (never throws, never half-loads). */
-export function parseJournal(value: unknown): ProcessedRecord[] {
-    if (!Array.isArray(value) || value.length > MAX_JOURNAL_ENTRIES) return [];
+/**
+ * Validates a persisted journal. An ABSENT record (null or undefined) is an empty journal. A record that is present but
+ * malformed (not an array, longer than a checkpoint window, an entry without a non-empty string id and a string
+ * fingerprint) throws {@link CorruptDeltaRecordError}: reading it as "empty" would make the next run deliver and bill
+ * every row since the last checkpoint (up to 25) a second time, so the router fails the source instead.
+ */
+export function parseJournal(value: unknown, describe: string = 'the delivery journal record is not a valid journal'): ProcessedRecord[] {
+    if (value === undefined || value === null) return [];
+    if (!Array.isArray(value) || value.length > MAX_JOURNAL_ENTRIES) throw new CorruptDeltaRecordError(describe);
     const entries: ProcessedRecord[] = [];
     for (const raw of value) {
-        if (!raw || typeof raw !== 'object') return [];
+        if (!raw || typeof raw !== 'object') throw new CorruptDeltaRecordError(describe);
         const { recordId, fingerprint } = raw as { recordId?: unknown; fingerprint?: unknown };
-        if (typeof recordId !== 'string' || recordId === '' || typeof fingerprint !== 'string') return [];
+        if (typeof recordId !== 'string' || recordId === '' || typeof fingerprint !== 'string') throw new CorruptDeltaRecordError(describe);
         entries.push({ recordId, fingerprint });
     }
     return entries;
@@ -165,6 +194,7 @@ export function markProcessed(
     return {
         version: 2,
         sources: { ...state.sources, [source]: { seenIds: merged, fingerprints: pruned, lastRunAt: runAt } },
+        ...(state.invalid ? { invalid: state.invalid } : {}),
     };
 }
 

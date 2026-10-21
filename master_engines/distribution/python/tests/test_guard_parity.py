@@ -77,7 +77,7 @@ def test_corpus_names_every_ghost_billing_input() -> None:
 def test_corpus_exercises_every_rejection_reason_and_both_container_outcomes() -> None:
     reasons = {item["reason"] for case in SANITIZE for item in case["expected"]["rejected"]}
     assert reasons == set(REJECTION_REASONS)
-    assert reasons == {"not_a_string", "empty_after_normalisation", "too_short", "too_long", "invalid_unicode", "no_letter_or_digit", "duplicate", "over_limit"}
+    assert reasons == {"not_a_string", "empty_after_normalisation", "too_short", "too_long", "invalid_unicode", "no_letter_or_digit", "single_letter_or_digit", "duplicate", "over_limit"}
     assert {case["expected"]["malformedContainer"] for case in SANITIZE} == {True, False}
     assert sum(1 for case in SANITIZE if case["expected"]["keywords"]) >= 200
     assert sum(1 for case in MATCH if case["expected"] is not None) >= 50
@@ -86,7 +86,10 @@ def test_corpus_exercises_every_rejection_reason_and_both_container_outcomes() -
 
 def test_corpus_covers_the_hard_unicode_cases() -> None:
     previews = [item["value"] for case in SANITIZE for item in case["expected"]["rejected"]]
-    assert any(any(0xD800 <= ord(ch) <= 0xDFFF for ch in value) for value in previews), "a preview cut through a surrogate pair"
+    assert any("\ufffd" in value for value in previews), "a lone surrogate or a control character shown as U+FFFD"
+    assert any(ord(ch) > 0xFFFF for value in previews for ch in value), "an astral character kept whole by the cut at 57 units"
+    assert not any(0xD800 <= ord(ch) <= 0xDFFF or ord(ch) < 0x20 or 0x7F <= ord(ch) <= 0x9F for value in previews for ch in value), "a preview is log-safe"
+    assert {"[null]", "[array]", "[object]", "[number]", "[boolean]"} <= set(previews), "a non-string is a constant tag"
     keywords = [keyword for case in SANITIZE for keyword in case["expected"]["keywords"]]
     assert "ACME" in keywords, "fullwidth letters are NFKC-normalised"
     assert any("\u0307" in needle for case in SANITIZE for needle in case["expected"]["needles"]), "dotted capital I lowercases to i + combining dot"
@@ -224,14 +227,17 @@ def test_corpus_boundary_cases_test_what_they_claim_to() -> None:
         ("cut: the searched text ends at the LAST whitespace inside the window (a word after it is not)", nothing),
         ("cut: astral characters count two units each (the haystack is exactly 8192 units)", found),
         ("cut: astral characters count two units each (8193 units and no whitespace)", nothing),
-        ("cut: astral characters before the cut count two units each", "z\U0001f600"),
+        ("cut: astral characters before the cut count two units each", "z\U0001f600z"),
         ("cut: a combining accent just beyond the window no longer creates a hit for the unaccented word", nothing),
         ("cut: the accented word inside the window is the accented word", "caf\u00e9"),
         ("marks: 16 marks in a haystack are fine and the keyword before them is found", found),
-        ("marks: 17 marks anywhere in the haystack make the whole haystack unsearchable, even the keyword before them", nothing),
-        ("marks: 17 marks kept apart by zero-width spaces are a run once cleaning removes them", nothing),
+        ("marks: 17 marks in the haystack are cut to 16, so the keyword before them is still found", found),
+        ("marks: 17 marks kept apart by zero-width spaces are a run once cleaning removes them; it is cut, the keyword is found", found),
         ("marks: a run beyond the cut is never seen, so the keyword before the cut is found", found),
-        ("marks: a run inside the searched text, before the last whitespace of the window, hides the haystack", nothing),
+        ("marks: a run inside the searched text is cut to 16 marks; the words around it are still searched", "zzzz"),
+        ("marks: marks glued to the last letter compose with it, so the unaccented keyword is not in the text", nothing),
+        ("marks: marks after a space are cut and the keyword before the space is found", "acme"),
+        ("marks: cutting a run cannot invent a hit: the accent stays on the letter", nothing),
     ]:
         assert by_name[name]["expected"] == expected, name
     assert utf16_length(by_name["cut: a haystack of exactly 8192 units is searched whole"]["haystack"]) == MAX_HAYSTACK_UNITS

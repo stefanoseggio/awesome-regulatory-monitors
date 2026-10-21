@@ -177,11 +177,11 @@ describe('keyword guard (the second victim of the ghost-billing bug)', () => {
         expect(logsAt(logs, 'warning')).toHaveLength(3);
     });
 
-    it('quote characters cannot survive into a phrase, and a keyword that is only quotes is dropped', () => {
+    it('quote characters cannot survive into a phrase, and a keyword that is only quotes or the same name once the quotes go is dropped', () => {
         const { ctx, logs } = makeCtx(createStubHttp({}).http);
-        // '"' and '""' are rejected by the guard itself; '"a"' passes it (3 characters) but is ONE character once the quotes go.
-        expect(resolveTerms(ctx, 'sponsors', ['"', '""', '"a"', 'O"Brien', 'back\\slash'])).toEqual(['O Brien', 'back slash']);
-        expect(logsAt(logs, 'warning').join('\n')).toMatch(/1 keyword\(s\) were empty after removing quote characters/);
+        // '"', '""' and '"a"' are rejected by the guard itself (no letter, no letter, one letter); '"Smith"' passes it as a different string from 'Smith' but is the SAME name once the quotes go.
+        expect(resolveTerms(ctx, 'sponsors', ['"', '""', '"a"', 'O"Brien', 'back\\slash', 'Smith', '"Smith"'])).toEqual(['O Brien', 'back slash', 'Smith']);
+        expect(logsAt(logs, 'warning').join('\n')).toMatch(/1 keyword\(s\) were empty or duplicated after removing quote characters/);
         expect(quotePhrase('say "hi" \\ now')).toBe('"say hi now"');
     });
 

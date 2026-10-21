@@ -335,7 +335,7 @@ function nextShare(remaining: number, partsLeft: number): number {
 
 /**
  * Reads one keyword-ish option through sanitizeKeywordList(). `stripQuoting` removes `"` and `\` (then
- * re-validates, so `"a"` cannot survive as the one-character phrase `a`) for values that are embedded in a
+ * re-validates, so a keyword that is the same name once the quotes go, such as `"Pfizer"` next to `Pfizer`, is counted once) for values that are embedded in a
  * quoted phrase. Returns the clean keywords; an empty array means "no filtering requested".
  */
 export function resolveTerms(ctx: ConnectorContext, field: string, input: unknown, stripQuoting = true): string[] {
@@ -344,7 +344,7 @@ export function resolveTerms(ctx: ConnectorContext, field: string, input: unknow
     if (stripQuoting && first.keywords.length > 0) {
         list = sanitizeKeywordList(first.keywords.map((keyword) => keyword.replace(/["\\]/gu, ' ')));
         if (list.keywords.length < first.keywords.length) {
-            ctx.log.warning(`${LOG_PREFIX} ${field}: ${first.keywords.length - list.keywords.length} keyword(s) were empty after removing quote characters and were dropped.`);
+            ctx.log.warning(`${LOG_PREFIX} ${field}: ${first.keywords.length - list.keywords.length} keyword(s) were empty or duplicated after removing quote characters and were dropped.`);
         }
     }
     const provided = input !== undefined && input !== null;

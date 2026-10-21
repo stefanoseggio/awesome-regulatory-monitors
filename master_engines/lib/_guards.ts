@@ -39,7 +39,9 @@
  *   - no run of more than {@link MAX_COMBINING_RUN} (16) consecutive combining marks: NFKC reorders marks by combining
  *     class, which is quadratic in the length of a run (a 4,090-mark run costs 16 ms, so a list of 5,000 of them
  *     would cost 82 s). Real text never has such a run (Vietnamese stacks 3, Hebrew with cantillation 4, Tibetan
- *     about 10). A text with one is treated as empty: never matched, never billed.
+ *     about 10). A keyword with one is rejected; a haystack has the run cut to 16 marks.
+ *   - NFKC must not expand a text by more than 4x (plus 16 units): the Arabic ligature U+FDFA becomes 18 characters, and
+ *     a text made of it costs 12 ms per 4,096 units to clean. Such a text counts as empty.
  *   - cleaned to a FIXED POINT of: NFKC, whitespace controls to a space, removal of every
  *     Default_Ignorable_Code_Point and Bidi_Control character plus the C0/C1 controls (zero-width
  *     characters, soft hyphen, bidi marks, variation selectors, Hangul fillers, tag characters...),
@@ -49,8 +51,11 @@
  *   - length >= {@link MIN_KEYWORD_LENGTH} (2) *after* cleaning, so a keyword made only of U+200B,
  *     or a letter plus an invisible character, cannot pass as "length 2"
  *   - length <= {@link MAX_KEYWORD_LENGTH} (200)
- *   - contains at least one letter or digit  (so "--", "..", "()" cannot match everything
- *                                             punctuated)
+ *   - contains at least TWO letters or digits (so "--", "..", "()", "c.", "a |", "-0" cannot match everything
+ *                                             punctuated: one alphanumeric character padded with punctuation is the
+ *                                             one-letter needle of the original bug in disguise; "BP", "GE", "3M" pass)
+ *   - at least 2 visible code points BEFORE normalisation (one glyph that NFKC expands, such as the circled
+ *     number twenty or the numero sign, is a single character, not a two-character keyword)
  *   - de-duplicated case-insensitively; the first spelling wins
  *   - at most {@link MAX_KEYWORDS} (500) accepted; the rest are rejected as `over_limit`
  *   - at most {@link MAX_CANDIDATES} (5,000) entries are inspected, and the string entries of at most
@@ -67,7 +72,18 @@
  * window: nothing composes across whitespace, so the searched text is exactly a prefix of what the whole text cleans
  * to (a cut in the middle of a word could drop a combining accent and create a hit the full text would not give).
  *
- * `sanitizeKeywordList` and `findKeywordMatch` never throw, even for a revoked or hostile Proxy.
+ * `sanitizeKeywordList`, `findKeywordMatch`, `matchesAnyKeyword` and `describeSanitization` never throw, even for a revoked
+ * or hostile Proxy or a malformed list; `findKeywordMatch` re-checks every needle (a string with at least 2 code points
+ * and 2 letters or digits) and reads at most {@link MAX_KEYWORDS} of them, so a hand-built list cannot match "..".
+ * `rejected[].value` is a bounded, log-safe preview: a string is cut at 57 units and control, invisible and lone
+ * surrogate characters are replaced by U+FFFD; a non-string is a constant tag such as "[object]" (never serialised).
+ *
+ * Containers: undefined and null give an empty result; an array is read; a string is split; anything else (a number,
+ * boolean, Set, Map, typed array, String object...) is `malformedContainer: true` with no keywords.
+ *
+ * A haystack with a run of more than {@link MAX_COMBINING_RUN} combining marks is searched with that run cut to
+ * {@link MAX_COMBINING_RUN} marks (one hostile field must not hide a whole record), while a KEYWORD with such a run
+ * is rejected.
  */
 
 export const MIN_KEYWORD_LENGTH = 2;
@@ -95,6 +111,7 @@ export type KeywordRejectionReason =
     | 'too_long'
     | 'invalid_unicode'
     | 'no_letter_or_digit'
+    | 'single_letter_or_digit'
     | 'duplicate'
     | 'over_limit';
 
@@ -125,6 +142,13 @@ const WHITESPACE_CONTROLS = /[\t\n\v\f\r\u0085\u2028\u2029]/gu;
  */
 const INVISIBLE = /[\u0000-\u001f\u007f-\u009f\p{Default_Ignorable_Code_Point}\p{Bidi_Control}]/gu;
 const LONE_SURROGATE = /\p{Surrogate}/u;
+/** Non-global twins of INVISIBLE and of White_Space, for testing single code points. */
+const INVISIBLE_ONE = /[\u0000-\u001f\u007f-\u009f\p{Default_Ignorable_Code_Point}\p{Bidi_Control}]/u;
+const WHITE_SPACE_ONE = /\p{White_Space}/u;
+/** What a log line must not carry: controls, invisible characters and lone surrogates. */
+const PREVIEW_UNSAFE = /[\u0000-\u001f\u007f-\u009f\p{Default_Ignorable_Code_Point}\p{Surrogate}]/gu;
+/** Marks beyond the {@link MAX_COMBINING_RUN}th of a run (MAX_COMBINING_RUN, written out so the ReDoS gate analyses it). */
+const MARK_RUN_EXCESS = /(\p{M}{16})\p{M}+/gu;
 /** MAX_COMBINING_RUN + 1 consecutive combining marks. A literal (not built from the constant) so the ReDoS gate analyses it. */
 const COMBINING_RUN_TOO_LONG = /\p{M}{17}/u;
 const WHITE_SPACE_UNIT = /\p{White_Space}/u;
@@ -137,25 +161,57 @@ function codePointLength(text: string): number {
     return n;
 }
 
-/** Truncates a value for safe inclusion in a log line. Never throws, whatever the value is. */
-function preview(value: unknown): string {
-    let text: string;
-    try {
-        text = typeof value === 'string' ? value : JSON.stringify(value) ?? String(value);
-    } catch {
-        try {
-            text = Object.prototype.toString.call(value);
-        } catch {
-            text = '[unreadable value]';
+/** Letters and digits in `text`, counted up to `atLeast` (then it stops). */
+function countLettersOrDigits(text: string, atLeast: number): number {
+    let n = 0;
+    for (const ch of text) {
+        if (HAS_LETTER_OR_DIGIT.test(ch)) {
+            n += 1;
+            if (n >= atLeast) return n;
         }
     }
-    return text.length > 60 ? `${cutUnits(text, 57)}...` : text;
+    return n;
 }
 
-function cleanOnce(text: string): string {
-    // Before normalize: reordering a long run of marks is quadratic, and no real text contains one.
-    if (COMBINING_RUN_TOO_LONG.test(text)) return '';
-    return text.normalize('NFKC').replace(WHITESPACE_CONTROLS, ' ').replace(INVISIBLE, '').replace(WHITESPACE_RUN, ' ').trim();
+/** Code points of `text` that are neither invisible nor whitespace, counted up to `atLeast`: the glyphs a reader sees. */
+function countVisible(text: string, atLeast: number): number {
+    let n = 0;
+    for (const ch of text) {
+        if (INVISIBLE_ONE.test(ch) || WHITE_SPACE_ONE.test(ch)) continue;
+        n += 1;
+        if (n >= atLeast) return n;
+    }
+    return n;
+}
+
+/**
+ * A bounded, log-safe description of a rejected value. Never throws and never serialises: a string is cut at 57 units
+ * (never inside a surrogate pair) and its control, invisible and lone surrogate characters become U+FFFD; anything else
+ * is a constant tag (JSON.stringify of a deeply nested value costs about 7 ms per entry, 9 s for a 9 MB input).
+ */
+function preview(value: unknown): string {
+    try {
+        if (typeof value === 'string') return (value.length > 60 ? `${cutUnits(value, 57)}...` : value).replace(PREVIEW_UNSAFE, '\ufffd');
+        if (value === null) return '[null]';
+        if (Array.isArray(value)) return '[array]';
+        return `[${typeof value}]`;
+    } catch {
+        return '[unreadable value]';
+    }
+}
+
+function cleanOnce(input: string, hostileRuns: 'reject' | 'cut'): string {
+    let text = input;
+    // Before normalize: reordering a long run of marks is quadratic, and no real text contains one. A keyword with one is
+    // empty; a haystack keeps the first MAX_COMBINING_RUN marks of the run, so one hostile field cannot hide a record.
+    if (COMBINING_RUN_TOO_LONG.test(text)) {
+        if (hostileRuns === 'reject') return '';
+        text = text.replace(MARK_RUN_EXCESS, '$1');
+    }
+    const normalised = text.normalize('NFKC');
+    // No real text grows 4x under NFKC; one that does (U+FDFA becomes 18 characters) is made to burn the passes below.
+    if (normalised.length > text.length * 4 + 16) return '';
+    return normalised.replace(WHITESPACE_CONTROLS, ' ').replace(INVISIBLE, '').replace(WHITESPACE_RUN, ' ').trim();
 }
 
 /**
@@ -163,12 +219,14 @@ function cleanOnce(text: string): string {
  * text no longer changes, so `normaliseKeyword(normaliseKeyword(x)) === normaliseKeyword(x)` for every input.
  * Returns '' for a text that does not settle within {@link MAX_NORMALISE_PASSES} passes (never matched, never billed).
  * The caller bounds the length first ({@link MAX_RAW_KEYWORD_UNITS}, {@link MAX_HAYSTACK_UNITS}): normalisation is
- * quadratic in the worst case. Pure; exported for tests.
+ * quadratic in the worst case. `hostileRuns` says what a run of more than {@link MAX_COMBINING_RUN} combining marks
+ * does: `reject` (the default, for keywords) makes the whole text empty, `cut` (for haystacks) keeps the first
+ * {@link MAX_COMBINING_RUN} marks of the run. Pure; exported for tests.
  */
-export function normaliseKeyword(raw: string): string {
+export function normaliseKeyword(raw: string, hostileRuns: 'reject' | 'cut' = 'reject'): string {
     let current = raw;
     for (let pass = 0; pass < MAX_NORMALISE_PASSES; pass += 1) {
-        const next = cleanOnce(current);
+        const next = cleanOnce(current, hostileRuns);
         if (next === current) return next;
         current = next;
     }
@@ -277,12 +335,23 @@ function sanitizeUnchecked(input: unknown): SanitizedKeywordList {
             result.rejected.push({ value: preview(candidate), reason: 'too_short' });
             continue;
         }
-        if (codePointLength(cleaned) > MAX_KEYWORD_LENGTH) {
-            result.rejected.push({ value: preview(candidate), reason: 'too_long' });
+        // One glyph that NFKC expands (a circled number, the numero sign, a ligature) is one character typed, not two.
+        if (countVisible(candidate, MIN_KEYWORD_LENGTH) < MIN_KEYWORD_LENGTH) {
+            result.rejected.push({ value: preview(candidate), reason: 'too_short' });
             continue;
         }
-        if (!HAS_LETTER_OR_DIGIT.test(cleaned)) {
+        const lettersOrDigits = countLettersOrDigits(cleaned, 2);
+        if (lettersOrDigits === 0) {
             result.rejected.push({ value: preview(candidate), reason: 'no_letter_or_digit' });
+            continue;
+        }
+        // One letter or digit padded with punctuation ("c.", "a |", "-0") matches almost everything: the one-letter needle in disguise.
+        if (lettersOrDigits === 1) {
+            result.rejected.push({ value: preview(candidate), reason: 'single_letter_or_digit' });
+            continue;
+        }
+        if (codePointLength(cleaned) > MAX_KEYWORD_LENGTH) {
+            result.rejected.push({ value: preview(candidate), reason: 'too_long' });
             continue;
         }
         const needle = cleaned.toLowerCase();
@@ -321,16 +390,27 @@ function sanitizeUnchecked(input: unknown): SanitizedKeywordList {
  *   - only the first {@link MAX_HAYSTACK_UNITS} UTF-16 units of the haystack are searched (cut at whitespace).
  */
 export function findKeywordMatch(haystack: unknown, list: SanitizedKeywordList): string | null {
+    try {
+        return findUnchecked(haystack, list);
+    } catch {
+        // A malformed or hostile list argument (undefined, a revoked Proxy...) matches nothing and bills nothing.
+        return null;
+    }
+}
+
+function findUnchecked(haystack: unknown, list: SanitizedKeywordList): string | null {
     if (list.needles.length === 0) return null;
     if (typeof haystack !== 'string' || haystack.length === 0) return null;
 
     // Cut before normalising (quadratic in the worst case); text beyond the cut is simply not searched.
-    const text = normaliseKeyword(cutHaystack(haystack)).toLowerCase();
+    const text = normaliseKeyword(cutHaystack(haystack), 'cut').toLowerCase();
     if (text.length === 0) return null;
 
-    for (let i = 0; i < list.needles.length; i += 1) {
+    const count = Math.min(list.needles.length, MAX_KEYWORDS);
+    for (let i = 0; i < count; i += 1) {
         const needle = list.needles[i];
-        if (needle === undefined || codePointLength(needle) < MIN_KEYWORD_LENGTH) continue;
+        // Defence in depth for a hand-built list that bypassed sanitizeKeywordList: the same floor as the sanitiser.
+        if (typeof needle !== 'string' || codePointLength(needle) < MIN_KEYWORD_LENGTH || countLettersOrDigits(needle, 2) < 2) continue;
         if (text.includes(needle)) return list.keywords[i] ?? needle;
     }
     return null;
@@ -343,6 +423,14 @@ export function matchesAnyKeyword(haystack: unknown, list: SanitizedKeywordList)
 
 /** One-line, log-safe description of what the guard did to the caller's list. */
 export function describeSanitization(list: SanitizedKeywordList, fieldName = 'watchlistNames'): string {
+    try {
+        return describeUnchecked(list, fieldName);
+    } catch {
+        return `${fieldName}: unreadable keyword list; watchlist disabled.`;
+    }
+}
+
+function describeUnchecked(list: SanitizedKeywordList, fieldName: string): string {
     if (list.malformedContainer) {
         return `${fieldName}: unsupported value type; watchlist disabled (0 keywords).`;
     }

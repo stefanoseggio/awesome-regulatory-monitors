@@ -13,15 +13,21 @@ Validation, per keyword and in this order:
     must be a string -> at most ``MAX_RAW_KEYWORD_UNITS`` UTF-16 units (checked before any Unicode work, because NFKC is quadratic
     on adversarial combining marks) -> well-formed Unicode (a lone surrogate is ``invalid_unicode``) -> cleaned to a fixed point of
     NFKC, whitespace controls to a space, every invisible character removed, whitespace runs collapsed and ends trimmed (a text with
-    more than ``MAX_COMBINING_RUN`` consecutive combining marks is empty, tested before every pass's NFKC) ->
-    at least ``MIN_KEYWORD_LENGTH`` code points -> at most ``MAX_KEYWORD_LENGTH`` -> at least one letter or number ->
-    case-insensitive de-duplication (first spelling wins) -> at most ``MAX_KEYWORDS`` accepted.
+    more than ``MAX_COMBINING_RUN`` consecutive combining marks is empty, tested before every pass's NFKC, and so is a text that NFKC
+    expands to more than four times its length plus 16 units) -> at least ``MIN_KEYWORD_LENGTH`` code points after cleaning and at least
+    that many visible code points BEFORE it (one glyph that NFKC expands, such as the circled number twenty, is one character) ->
+    at least one letter or number (``no_letter_or_digit``) and at least TWO (``single_letter_or_digit``: ``c.``, ``a |`` and ``-0`` are the
+    one-letter needle in disguise) -> at most ``MAX_KEYWORD_LENGTH`` -> case-insensitive de-duplication (first spelling wins) ->
+    at most ``MAX_KEYWORDS`` accepted.
 At most ``MAX_CANDIDATES`` entries are inspected, and the string entries inspected (those of ``MAX_RAW_KEYWORD_UNITS`` units or fewer;
 a longer one is rejected at once and costs nothing) add up to at most ``MAX_TOTAL_RAW_UNITS`` UTF-16 units; the rest is reported as ONE
 ``over_limit`` entry. A bare string is first cut to ``MAX_BARE_STRING_UNITS`` UTF-16 units (never ending in half of a surrogate pair) and, if
 that cut anything off, its last piece (which the cut may have truncated) is dropped and reported; then it is split on LF, CR, comma and semicolon.
 ``find_keyword_match`` searches a haystack of up to ``MAX_HAYSTACK_UNITS`` UTF-16 units whole; a longer one only up to the last Unicode
-White_Space character inside that window (nothing is searched when the window has none).
+White_Space character inside that window (nothing is searched when the window has none). A haystack with a run of more than ``MAX_COMBINING_RUN``
+combining marks is searched with the run cut to its first ``MAX_COMBINING_RUN`` marks (one hostile field must not hide a record); a KEYWORD with such a
+run is rejected. ``find_keyword_match`` and ``describe_sanitization`` never raise, and ``find_keyword_match`` re-checks every needle (at least
+``MIN_KEYWORD_LENGTH`` code points and two letters or numbers) and reads at most ``MAX_KEYWORDS`` of them.
 
 What "invisible" means is NOT read from ``unicodedata``: JavaScript removes every Default_Ignorable_Code_Point and Bidi_Control
 character plus the C0/C1 controls, and Python's tables can neither list those properties nor be trusted to equal Node's Unicode
@@ -47,7 +53,7 @@ import unicodedata
 from dataclasses import dataclass
 from typing import Any
 
-from ._js import JS_WHITESPACE_CHARS, has_surrogate, js_includes, js_json_stringify, to_js_string, utf16_cut, utf16_length
+from ._js import JS_WHITESPACE_CHARS, has_surrogate, js_includes, to_js_string, utf16_cut, utf16_length
 from .registry import load_registry
 
 MIN_KEYWORD_LENGTH = 2
@@ -68,6 +74,7 @@ REJECTION_REASONS = (
     "too_long",
     "invalid_unicode",
     "no_letter_or_digit",
+    "single_letter_or_digit",
     "duplicate",
     "over_limit",
 )
@@ -89,6 +96,8 @@ _INVISIBLE = _removed_expression(load_registry().limits.removed_ranges)
 # The Unicode White_Space characters (all in the BMP), from engines.json: they cut a haystack longer than MAX_HAYSTACK_UNITS.
 _WHITE_SPACE = frozenset(code for first, last in load_registry().limits.white_space_ranges for code in range(first, last + 1))
 
+# What a log line must not carry: the removed code points above (controls, Default_Ignorable_Code_Point, Bidi_Control) and lone surrogates.
+_PREVIEW_UNSAFE = re.compile(_INVISIBLE.pattern[:-1] + "\ud800-\udfff]")
 _PREVIEW_LIMIT = 60
 _UNREADABLE = "[unreadable value]"
 
@@ -125,13 +134,12 @@ def _code_point_length(text: str) -> int:
 
 
 def _preview(value: Any) -> str:
-    """``preview`` of the TypeScript guard: the value as a string, cut to 57 UTF-16 units (never ending in half of a surrogate pair) plus ``...`` when it
-    is longer than 60. Never raises.
+    """``preview`` of the TypeScript guard: a bounded, log-safe description of a rejected value. Never raises and never serialises.
 
-    Where ``JSON.stringify`` throws (a circular structure), the TypeScript guard falls back to ``Object.prototype.toString``:
-    ``[object Array]`` for an array and ``[object Object]`` for anything else. A structure nested deeper than Python can
-    recurse, a Python value that is not JSON data and an object whose attributes raise take the same fallback; a value that cannot
-    even be classified is ``[unreadable value]``, as for a revoked Proxy in JavaScript.
+    A string is cut to 57 UTF-16 units (never ending in half of a surrogate pair) plus ``...`` when it is longer than 60, and every control,
+    invisible and lone surrogate character in the result becomes U+FFFD. Anything else is a constant tag: ``[null]``, ``[array]``,
+    ``[object]``, ``[number]`` or ``[boolean]`` (JSON.stringify of a deeply nested value cost 7 ms per entry, 9 s for a 9 MB input, so the guard
+    no longer serialises). A value that cannot even be classified is ``[unreadable value]``, as for a revoked Proxy in JavaScript.
     """
     try:
         return _preview_unchecked(value)
@@ -143,16 +151,17 @@ def _preview_unchecked(value: Any) -> str:
     if isinstance(value, str):
         # More than 60 code points is more than 60 units, so only the head decides what is cut (a giant string is never encoded whole).
         text = value[: _PREVIEW_LIMIT + 1]
-        if utf16_length(text) > _PREVIEW_LIMIT:
-            return utf16_cut(text, _PREVIEW_LIMIT - 3) + "..."
-        return value
-    try:
-        text = js_json_stringify(value)
-    except Exception:  # noqa: BLE001 - TypeError (not JSON data), RecursionError (too deep), ValueError (circular) and anything a hostile object raises
-        text = "[object Array]" if isinstance(value, (list, tuple)) else "[object Object]"
-    if utf16_length(text) > _PREVIEW_LIMIT:
-        return utf16_cut(text, _PREVIEW_LIMIT - 3) + "..."
-    return text
+        shown = utf16_cut(text, _PREVIEW_LIMIT - 3) + "..." if utf16_length(text) > _PREVIEW_LIMIT else to_js_string(value)
+        return _PREVIEW_UNSAFE.sub("\ufffd", to_js_string(shown))
+    if value is None:
+        return "[null]"
+    if isinstance(value, (list, tuple)):
+        return "[array]"
+    if isinstance(value, bool):
+        return "[boolean]"
+    if isinstance(value, (int, float)):
+        return "[number]"
+    return "[object]"
 
 
 def _has_long_combining_run(text: str) -> bool:
@@ -170,12 +179,33 @@ def _has_long_combining_run(text: str) -> bool:
     return False
 
 
-def _clean_once(text: str) -> str:
-    # Before NFKC: reordering a long run of marks is quadratic, and no real text contains one.
+def _cut_mark_runs(text: str) -> str:
+    """``text.replace(/(\\p{M}{16})\\p{M}+/gu, '$1')``: every run of combining marks keeps its first ``MAX_COMBINING_RUN`` marks."""
+    out: list[str] = []
+    run = 0
+    for char in text:
+        if unicodedata.category(char).startswith("M"):
+            run += 1
+            if run > MAX_COMBINING_RUN:
+                continue
+        else:
+            run = 0
+        out.append(char)
+    return "".join(out)
+
+
+def _clean_once(text: str, hostile_runs: str) -> str:
+    # Before NFKC: reordering a long run of marks is quadratic, and no real text contains one. A keyword with one is empty; a haystack keeps
+    # the first MAX_COMBINING_RUN marks of the run, so one hostile field cannot hide a record.
     if _has_long_combining_run(text):
+        if hostile_runs == "reject":
+            return ""
+        text = _cut_mark_runs(text)
+    normalised = unicodedata.normalize("NFKC", text)
+    # No real text grows 4x under NFKC; one that does (U+FDFA becomes 18 characters) is made to burn the cleaning passes.
+    if utf16_length(normalised) > utf16_length(text) * 4 + 16:
         return ""
-    text = unicodedata.normalize("NFKC", text)
-    text = _WHITESPACE_CONTROLS.sub(" ", text)
+    text = _WHITESPACE_CONTROLS.sub(" ", normalised)
     text = _INVISIBLE.sub("", text)
     # Removing a character between two lone surrogate halves can make them an adjacent pair, which JavaScript reads as one character.
     text = to_js_string(text)
@@ -183,24 +213,45 @@ def _clean_once(text: str) -> str:
     return text.strip(JS_WHITESPACE_CHARS)
 
 
-def normalise_keyword(raw: str) -> str:
+def normalise_keyword(raw: str, hostile_runs: str = "reject") -> str:
     """Cleans ``raw`` until it stops changing: NFKC, whitespace controls to a space, invisible characters removed, whitespace runs collapsed, ends trimmed.
 
     Idempotent: ``normalise_keyword(normalise_keyword(x)) == normalise_keyword(x)``. A text that has not settled after ``MAX_NORMALISE_PASSES``
     passes (real text settles in at most 3) is hostile and becomes the empty string, which is never matched. The caller bounds the length first
-    (``MAX_RAW_KEYWORD_UNITS``, ``MAX_HAYSTACK_UNITS``): normalisation is quadratic in the worst case.
+    (``MAX_RAW_KEYWORD_UNITS``, ``MAX_HAYSTACK_UNITS``): normalisation is quadratic in the worst case. ``hostile_runs`` says what a run of more
+    than ``MAX_COMBINING_RUN`` combining marks does: ``"reject"`` (keywords) makes the whole text empty, ``"cut"`` (haystacks) keeps the first
+    ``MAX_COMBINING_RUN`` marks of the run.
     """
     current = to_js_string(raw)
     for _ in range(MAX_NORMALISE_PASSES):
-        following = _clean_once(current)
+        following = _clean_once(current, hostile_runs)
         if following == current:
             return following
         current = following
     return ""
 
 
-def _has_letter_or_digit(text: str) -> bool:
-    return any(unicodedata.category(ch)[0] in ("L", "N") for ch in text)
+def _count_letters_or_digits(text: str, at_least: int) -> int:
+    """Letters and numbers (``[\\p{L}\\p{N}]``) in ``text``, counted up to ``at_least`` (then it stops)."""
+    count = 0
+    for ch in text:
+        if unicodedata.category(ch)[0] in ("L", "N"):
+            count += 1
+            if count >= at_least:
+                return count
+    return count
+
+
+def _count_visible(text: str, at_least: int) -> int:
+    """Code points of ``text`` that are neither removed as invisible nor White_Space, counted up to ``at_least``: the glyphs a reader sees."""
+    count = 0
+    for ch in to_js_string(text):
+        if _INVISIBLE.match(ch) or ord(ch) in _WHITE_SPACE:
+            continue
+        count += 1
+        if count >= at_least:
+            return count
+    return count
 
 
 def _is_text(value: Any) -> bool:
@@ -283,11 +334,20 @@ def _sanitize(value: Any) -> SanitizedKeywordList:
         if length < MIN_KEYWORD_LENGTH:
             rejected.append(RejectedKeyword(_preview(candidate), "too_short"))
             continue
+        # One glyph that NFKC expands (a circled number, the numero sign, a ligature) is one character typed, not two.
+        if _count_visible(candidate, MIN_KEYWORD_LENGTH) < MIN_KEYWORD_LENGTH:
+            rejected.append(RejectedKeyword(_preview(candidate), "too_short"))
+            continue
+        letters_or_digits = _count_letters_or_digits(cleaned, 2)
+        if letters_or_digits == 0:
+            rejected.append(RejectedKeyword(_preview(candidate), "no_letter_or_digit"))
+            continue
+        # One letter or digit padded with punctuation ("c.", "a |", "-0") matches almost everything: the one-letter needle in disguise.
+        if letters_or_digits == 1:
+            rejected.append(RejectedKeyword(_preview(candidate), "single_letter_or_digit"))
+            continue
         if length > MAX_KEYWORD_LENGTH:
             rejected.append(RejectedKeyword(_preview(candidate), "too_long"))
-            continue
-        if not _has_letter_or_digit(cleaned):
-            rejected.append(RejectedKeyword(_preview(candidate), "no_letter_or_digit"))
             continue
         needle = cleaned.lower()
         if needle in seen:
@@ -325,22 +385,30 @@ def _cut_haystack(haystack: str) -> str:
 
 
 def find_keyword_match(haystack: Any, keyword_list: SanitizedKeywordList) -> str | None:
-    """The first accepted keyword found in ``haystack`` (case-insensitive, NFKC-normalised substring match over UTF-16 units), or ``None``.
+    """The first accepted keyword found in ``haystack`` (case-insensitive, NFKC-normalised substring match over UTF-16 units), or ``None``. Never raises.
 
-    An empty list never matches, an empty or non-string haystack never matches, and a needle shorter than
-    ``MIN_KEYWORD_LENGTH`` is skipped, exactly as the TypeScript guard does. A haystack of more than ``MAX_HAYSTACK_UNITS`` UTF-16 units is
-    searched only up to the last whitespace character inside that window, cut before cleaning (see ``_cut_haystack``); a haystack with more than
-    ``MAX_COMBINING_RUN`` consecutive combining marks in the searched text is never matched.
+    An empty list never matches, an empty or non-string haystack never matches, and a needle that is not a string with at least ``MIN_KEYWORD_LENGTH``
+    code points and two letters or numbers is skipped (a hand-built list cannot match ``".."``), exactly as the TypeScript guard does. At most
+    ``MAX_KEYWORDS`` needles are read. A haystack of more than ``MAX_HAYSTACK_UNITS`` UTF-16 units is searched only up to the last whitespace
+    character inside that window, cut before cleaning (see ``_cut_haystack``); a run of more than ``MAX_COMBINING_RUN`` combining marks in the
+    searched text is cut to its first ``MAX_COMBINING_RUN`` marks.
     """
+    try:
+        return _find_unchecked(haystack, keyword_list)
+    except Exception:  # noqa: BLE001 - a malformed or hostile list matches nothing and bills nothing
+        return None
+
+
+def _find_unchecked(haystack: Any, keyword_list: SanitizedKeywordList) -> str | None:
     if len(keyword_list.needles) == 0:
         return None
     if not isinstance(haystack, str) or len(haystack) == 0:
         return None
-    text = normalise_keyword(_cut_haystack(haystack)).lower()
+    text = normalise_keyword(_cut_haystack(haystack), "cut").lower()
     if len(text) == 0:
         return None
-    for index, needle in enumerate(keyword_list.needles):
-        if _code_point_length(needle) < MIN_KEYWORD_LENGTH:
+    for index, needle in enumerate(keyword_list.needles[:MAX_KEYWORDS]):
+        if not isinstance(needle, str) or _code_point_length(needle) < MIN_KEYWORD_LENGTH or _count_letters_or_digits(needle, 2) < 2:
             continue
         if js_includes(text, needle):
             return keyword_list.keywords[index] if index < len(keyword_list.keywords) else needle
@@ -348,7 +416,14 @@ def find_keyword_match(haystack: Any, keyword_list: SanitizedKeywordList) -> str
 
 
 def describe_sanitization(keyword_list: SanitizedKeywordList, field_name: str = "watchlistNames") -> str:
-    """One-line, log-safe description of what the guard did to the caller's list."""
+    """One-line, log-safe description of what the guard did to the caller's list. Never raises."""
+    try:
+        return _describe_unchecked(keyword_list, field_name)
+    except Exception:  # noqa: BLE001 - an unreadable list disables the watchlist, it does not stop the run
+        return f"{field_name}: unreadable keyword list; watchlist disabled."
+
+
+def _describe_unchecked(keyword_list: SanitizedKeywordList, field_name: str) -> str:
     if keyword_list.malformed_container:
         return f"{field_name}: unsupported value type; watchlist disabled (0 keywords)."
     if len(keyword_list.rejected) == 0:

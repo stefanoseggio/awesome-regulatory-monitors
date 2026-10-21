@@ -268,6 +268,74 @@ describe('real Apify SDK: retries, kills and platform errors', () => {
     }, 180_000);
 });
 
+describe('real Apify SDK: overlapping runs of the same namespace (run leases)', () => {
+    const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+    const billedRows = (sb: Sandbox) => sb.pushes().filter((p) => p.event === 'doc-new').length;
+    const leased = (extra: Record<string, string>) => ppe({ LEASES: '1', LEASE_SETTLE_MS: '300', ...extra });
+
+    it('a second process started while the first is still delivering is refused before it pushes or bills anything; the first delivers every row exactly once', async () => {
+        const sb = sandbox();
+        const first = child(sb, 'A', leased({ ROWS: '40', ROW_DELAY_MS: '60', RUN_ID: 'run-a' }));
+        await sleep(1_800); // past the lease acquisition and the first rows of A
+        const second = await child(sb, 'B', leased({ ROWS: '40', RUN_ID: 'run-b' }));
+        expect(second.result?.ok).toBe(false);
+        expect(second.result?.fatal).toBe(true);
+        expect(second.result?.error).toMatch(/Another run is already delivering into the same delta memory/);
+        expect(second.result?.error).toMatch(/source "stub" is held by run run-a/);
+        expect(second.result?.pushed).toBe(0);
+        const done = await first;
+        expect(done.result?.ok).toBe(true);
+        expect(sb.pushes('B')).toHaveLength(0);
+        const ids = sb.pushes().map((p) => p.record_id);
+        expect(ids).toHaveLength(40);
+        expect(new Set(ids).size).toBe(40);
+        expect(billedRows(sb)).toBe(40);
+    }, 180_000);
+
+    it('without leases the same overlap delivers and bills the same rows twice (the control that shows what the lease prevents)', async () => {
+        const sb = sandbox();
+        const first = child(sb, 'A', ppe({ ROWS: '40', ROW_DELAY_MS: '60' }));
+        await sleep(1_800);
+        const second = child(sb, 'B', ppe({ ROWS: '40', ROW_DELAY_MS: '60' }));
+        await Promise.all([first, second]);
+        expect(sb.pushes().length).toBeGreaterThan(40);
+        expect(billedRows(sb)).toBeGreaterThan(40);
+    }, 180_000);
+
+    it('the lease is released when the run ends: the next run starts at once and finds nothing new', async () => {
+        const sb = sandbox();
+        const first = await child(sb, 'A', leased({ ROWS: '10', RUN_ID: 'run-a' }));
+        expect(first.result?.ok).toBe(true);
+        const second = await child(sb, 'B', leased({ ROWS: '10', RUN_ID: 'run-b' }));
+        expect(second.result?.ok).toBe(true);
+        expect(second.result?.pushed).toBe(0);
+    }, 180_000);
+
+    it('the lease of a killed run does not block for ever: once its heartbeat is older than the stale limit the next run takes over, recovers the journal and repeats at most the row in flight', async () => {
+        const sb = sandbox();
+        const killed = await child(sb, 'A', leased({ ROWS: '30', KILL_AFTER: '12', RUN_ID: 'run-a', LEASE_STALE_MS: '1500' }));
+        expect(killed.exitCode).toBe(137);
+        const tooSoon = await child(sb, 'B', leased({ ROWS: '30', RUN_ID: 'run-b', LEASE_STALE_MS: '60000' }));
+        expect(tooSoon.result?.error).toMatch(/held by run run-a/);
+        await sleep(1_700);
+        const taken = await child(sb, 'C', leased({ ROWS: '30', RUN_ID: 'run-c', LEASE_STALE_MS: '1500' }));
+        expect(taken.result?.ok).toBe(true);
+        const ids = sb.pushes().map((p) => p.record_id);
+        expect(new Set(ids).size).toBe(30);
+        expect(ids.length - new Set(ids).size).toBeLessThanOrEqual(1);
+    }, 180_000);
+
+    it('different namespaces overlap freely', async () => {
+        const sb = sandbox();
+        const first = child(sb, 'A', leased({ ROWS: '20', ROW_DELAY_MS: '40', RUN_ID: 'run-a', NS: 'team-a' }));
+        await sleep(1_500);
+        const second = await child(sb, 'B', leased({ ROWS: '20', RUN_ID: 'run-b', NS: 'team-b' }));
+        expect(second.result?.ok).toBe(true);
+        expect((await first).result?.ok).toBe(true);
+        expect(sb.pushes()).toHaveLength(40);
+    }, 180_000);
+});
+
 describe('real Apify SDK: run status through runEngineMain', () => {
     const MAIN_CHILD = join(ROOT, 'test', 'support', 'main_child.ts');
 

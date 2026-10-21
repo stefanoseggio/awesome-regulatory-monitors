@@ -11,6 +11,8 @@
  *                       (the row is pushed and billed, but its journal entry is not yet written)
  *   KILL_AFTER_JOURNAL=k  hard-kill right after the k-th delivery-journal write has completed
  *   FAIL_PUSH_AT=k      make the k-th pushData call throw a platform error BEFORE pushing anything
+ *   LEASES=1            take run leases (lib/lease.ts) with RUN_ID, LEASE_STALE_MS and LEASE_SETTLE_MS (default 300 ms)
+ *   ROW_DELAY_MS=n      wait n ms before every push, so that two processes overlap
  * The last stdout line is `RESULT:<json>` with the outcome and the SDK's own charged-event counts.
  */
 import { appendFileSync } from 'node:fs';
@@ -55,6 +57,7 @@ let attempts = 0;
 let pushed = 0;
 (Actor as unknown as { pushData: unknown }).pushData = async (item: Record<string, unknown>, eventName?: string) => {
     attempts += 1;
+    if (env.ROW_DELAY_MS) await new Promise((resolve) => setTimeout(resolve, Number(env.ROW_DELAY_MS)));
     if (env.FAIL_PUSH_AT && attempts === Number(env.FAIL_PUSH_AT)) throw new Error('platform dataset error (HTTP 500)');
     const result = await original(item, eventName);
     pushed += 1;
@@ -83,7 +86,11 @@ if (env.KILL_AFTER_JOURNAL) {
 let outcome: Record<string, unknown>;
 try {
     const summary = await runEngine(engine, JSON.parse(env.INPUT_JSON ?? '{"sources":["stub"]}'), {
-        sinks: createApifySinks(engine.slug, env.NS ?? 'default'),
+        sinks: createApifySinks(
+            engine.slug,
+            env.NS ?? 'default',
+            env.LEASES ? { leases: { runId: env.RUN_ID, settleMs: Number(env.LEASE_SETTLE_MS ?? 300), staleAfterMs: env.LEASE_STALE_MS ? Number(env.LEASE_STALE_MS) : undefined } } : {},
+        ),
         ctx: { http: createHttpClient({ userAgent: 'sdk-integration-test (test@example.com)' }), log: createApifyLogger(), now: () => new Date() },
     });
     outcome = { ok: true, summary };

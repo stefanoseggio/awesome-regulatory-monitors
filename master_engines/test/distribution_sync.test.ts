@@ -345,7 +345,7 @@ describe('distribution data files', () => {
 
         it('exercises every rejection reason of the guard, both container outcomes, and accepted and rejected matches', () => {
             const reasons = new Set(corpus.sanitize.flatMap((c) => c.expected.rejected.map((r) => r.reason)));
-            expect([...reasons].sort()).toEqual(['duplicate', 'empty_after_normalisation', 'invalid_unicode', 'no_letter_or_digit', 'not_a_string', 'over_limit', 'too_long', 'too_short']);
+            expect([...reasons].sort()).toEqual(['duplicate', 'empty_after_normalisation', 'invalid_unicode', 'no_letter_or_digit', 'not_a_string', 'over_limit', 'single_letter_or_digit', 'too_long', 'too_short']);
             expect(new Set(corpus.sanitize.map((c) => c.expected.malformedContainer))).toEqual(new Set([true, false]));
             expect(corpus.match.filter((c) => c.expected !== null).length).toBeGreaterThanOrEqual(80);
             expect(corpus.match.filter((c) => c.expected === null).length).toBeGreaterThanOrEqual(80);
@@ -457,7 +457,7 @@ describe('distribution data files', () => {
             expect(apart.expected.rejected.map((r) => r.reason)).toEqual(['empty_after_normalisation']);
             const composed = sanitizeCase('marks: removal exposes a run on the second pass (the base composes with the first mark, so 16 remain)');
             expect(composed.expected.keywords).toHaveLength(2);
-            expect(composed.expected.keywords[0]?.length, 'a with its acute composed, then 16 marks').toBe(17);
+            expect(composed.expected.keywords[0]?.length, 'b, a with its acute composed, then 16 marks').toBe(18);
             expect(composed.expected.rejected.map((r) => r.reason)).toEqual(['empty_after_normalisation']);
             const attack = sanitizeCase('marks: the descending-class attack shape (NFKC must reorder it) is empty at once');
             expect((attack.input as string[])[0]?.length).toBe(MAX_RAW_KEYWORD_UNITS);
@@ -490,17 +490,31 @@ describe('distribution data files', () => {
                 ['cut: an astral character straddling unit 8192 and no whitespace', null],
                 ['cut: astral characters count two units each (the haystack is exactly 8192 units)', found],
                 ['cut: astral characters count two units each (8193 units and no whitespace)', null],
-                ['cut: astral characters before the cut count two units each', 'z\u{1f600}'],
+                ['cut: astral characters before the cut count two units each', 'z\u{1f600}z'],
                 ['cut: a combining accent just beyond the window no longer creates a hit for the unaccented word', null],
                 ['cut: the accented word inside the window is the accented word', 'caf\u00e9'],
                 ['marks: 16 marks in a haystack are fine and the keyword before them is found', found],
-                ['marks: 17 marks anywhere in the haystack make the whole haystack unsearchable, even the keyword before them', null],
-                ['marks: 17 marks kept apart by zero-width spaces are a run once cleaning removes them', null],
+                ['marks: 17 marks in the haystack are cut to 16, so the keyword before them is still found', found],
+                ['marks: 17 marks kept apart by zero-width spaces are a run once cleaning removes them; it is cut, the keyword is found', found],
                 ['marks: 16 marks kept apart by zero-width spaces are not', found],
                 ['marks: a run beyond the cut is never seen, so the keyword before the cut is found', found],
-                ['marks: a run inside the searched text, before the last whitespace of the window, hides the haystack', null],
-                ['marks: the descending-class attack shape in a haystack is unsearchable at once', null],
+                ['marks: a run inside the searched text is cut to 16 marks; the words around it are still searched', 'zzzz'],
+                ['marks: the descending-class attack shape in a haystack is cut to its first 16 marks at once, the keyword before it is found', found],
                 ['marks: marks between letters never form a run', found],
+                ['marks: 17 Thai marks after a word do not hide the name before them', 'Pfizer'],
+                ['marks: a run at the start does not hide the name after it', 'Pfizer'],
+                ['marks: 9 marks, a zero-width space and 9 more marks make one run of 18 that is cut', 'Pfizer'],
+                ['marks: marks glued to the last letter compose with it, so the unaccented keyword is not in the text', null],
+                ['marks: marks after a space are cut and the keyword before the space is found', 'acme'],
+                ['marks: cutting a run cannot invent a hit: the accent stays on the letter', null],
+                ['marks: runs separated by a letter are separate runs', 'acme'],
+                ['alnum: single-alphanumeric keywords are rejected, so they never match', null],
+                ['alnum: a pasted list with legal-form fragments matches only the names', null],
+                ['glyph: one expanding character is not a keyword, so it never matches its expansion', null],
+                ['glyph: two expanding characters are a keyword that matches their expansion', '2020'],
+                ['expansion: a haystack of U+FDFA ligatures is empty, the keyword after it is not searched', null],
+                ['expansion: a short haystack with a ligature inside the 4x allowance is searched', 'acme'],
+                ['expansion: a haystack past the allowance is empty', null],
             ];
             for (const [name, expected] of expectations) expect(matchCase(name).expected, name).toBe(expected);
             const haystackOf = (name: string): string => matchCase(name).haystack as string;
@@ -1039,18 +1053,19 @@ describe('n8n templates', () => {
             expect(sanitizeKeywordList(['e\u200b\u0301']).keywords).toEqual([]);
             expect(sanitizeKeywordList(['e\u200b\u0301']).rejected.map((item) => item.reason)).toEqual(['too_short']);
             await expect(runCodeNode(workflow, { watchlistNames: ['e\u200b\u0301'] })).rejects.toThrow(/refusing to run unfiltered/u);
-            const result = await runCodeNode(workflow, { watchlistNames: ['e\u200b\u0301', 'a\u200b\u0301\u0301', 'Acme'] });
+            // "ae" + ZWSP + acute settles to "a" + U+00E9 (two letters, accepted); "a" + ZWSP + two acutes settles to U+00E1 + U+0301, which holds ONE letter.
+            const result = await runCodeNode(workflow, { watchlistNames: ['e\u200b\u0301', 'a\u200b\u0301\u0301', 'ae\u200b\u0301', 'Acme'] });
             const sent = result[0].json.input.watchlistNames as string[];
-            expect(sent).toEqual(['\u00e1\u0301', 'Acme']);
+            expect(sent).toEqual(['a\u00e9', 'Acme']);
             expect(sanitizeKeywordList(sent).keywords, 'what is sent is a fixed point of the guard').toEqual(sent);
             expect(sanitizeKeywordList(sent).rejected, 'and a second pass rejects nothing').toEqual([]);
-            expect(result[0].json.watchlist).toEqual({ accepted: 2, rejected: 1, rejectedByReason: { too_short: 1 } });
+            expect(result[0].json.watchlist).toEqual({ accepted: 2, rejected: 2, rejectedByReason: { too_short: 1, single_letter_or_digit: 1 } });
         });
 
         it('has a Code node that gives up on a text that has not settled after 8 cleaning passes (7 changes and one pass that finds nothing is still fine)', async () => {
             // cleanOnce is edited to append an "x" until the text holds K of them: it settles after K changing passes plus one pass that changes nothing.
             const settlesAfter = (changes: number) => (code: string) =>
-                replaceOnce(code, /return (text\.normalize\('NFKC'\)[^\n]*\.trim\(\));/u, `const base = $1;\n    return (base.match(/x/gu) ?? []).length < ${changes} ? base + 'x' : base;`);
+                replaceOnce(code, /return (normalised\.replace\([^\n]*\.trim\(\));/u, `const base = $1;\n    return (base.match(/x/gu) ?? []).length < ${changes} ? base + 'x' : base;`);
             const seven = await runCodeNode(workflow, { watchlistNames: ['ab'] }, settlesAfter(MAX_NORMALISE_PASSES - 1));
             expect(seven[0].json.input.watchlistNames).toEqual(['abxxxxxxx']);
             await expect(runCodeNode(workflow, { watchlistNames: ['ab'] }, settlesAfter(MAX_NORMALISE_PASSES))).rejects.toThrow(/1 entries rejected/u);
@@ -1125,9 +1140,9 @@ describe('n8n templates', () => {
         it('has a Code node that treats a text with more than 16 consecutive combining marks as empty, on every cleaning pass, before normalising it', async () => {
             const marks = (count: number, mark = '\u0301') => mark.repeat(count);
             const result = await runCodeNode(workflow, {
-                watchlistNames: [`b${marks(16)}`, `b${marks(17)}`, `b${'\u0301\u200b'.repeat(17)}`, `a${'\u0301\u200b'.repeat(17)}`, `a${'\u0301\u200b'.repeat(18)}`, `ab${marks(17, '\uff9e')}`, 'Acme'],
+                watchlistNames: [`ab${marks(16)}`, `ab${marks(17)}`, `cb${'\u0301\u200b'.repeat(17)}`, `ba${'\u0301\u200b'.repeat(17)}`, `ba${'\u0301\u200b'.repeat(18)}`, `ab${marks(17, '\uff9e')}`, 'Acme'],
             });
-            expect(result[0].json.input.watchlistNames).toEqual([`b${marks(16)}`, `\u00e1${marks(16)}`, 'Acme']);
+            expect(result[0].json.input.watchlistNames).toEqual([`ab${marks(16)}`, `b\u00e1${marks(16)}`, 'Acme']);
             expect(result[0].json.watchlist).toEqual({ accepted: 3, rejected: 4, rejectedByReason: { empty_after_normalisation: 4 } });
             // the descending-class attack: NFKC would reorder 4094 marks, which is quadratic (about 18 ms each); 48 of them (just under the 200000 unit budget) must cost milliseconds
             const attack = Array.from({ length: 48 }, (_unused, index) => `${String.fromCharCode(97 + (index % 26))}${String.fromCharCode(97 + (Math.floor(index / 26) % 26))}${marks(1365, '\u0345')}${marks(1365, '\u0300')}${marks(1364, '\u0316')}`);
@@ -1189,7 +1204,7 @@ describe('n8n templates', () => {
         for (const file of TEMPLATE_FILES) {
             const code = byName(load(file), 'Build run input').parameters.jsCode as string;
             for (const [name, value] of Object.entries(constants)) expect(code, `${file}: ${name}`).toContain(`const ${name} = ${value};`);
-            for (const name of ['WHITESPACE_CONTROLS', 'INVISIBLE', 'WHITESPACE_RUN', 'LONE_SURROGATE', 'COMBINING_RUN_TOO_LONG', 'HAS_LETTER_OR_DIGIT', 'BARE_STRING_SEPARATORS']) {
+            for (const name of ['WHITESPACE_CONTROLS', 'INVISIBLE', 'INVISIBLE_ONE', 'WHITE_SPACE_ONE', 'WHITESPACE_RUN', 'LONE_SURROGATE', 'COMBINING_RUN_TOO_LONG', 'HAS_LETTER_OR_DIGIT', 'BARE_STRING_SEPARATORS']) {
                 expect(literal(code, name), `${file}: ${name}`).toBe(literal(guardSource, name));
             }
         }
@@ -1233,7 +1248,7 @@ describe('distribution documentation and packaging', () => {
     });
 
     it('documents the guard as it is: every rejection reason, every cap, the removed characters and the Unicode version skew', () => {
-        for (const reason of ['not_a_string', 'empty_after_normalisation', 'too_short', 'too_long', 'invalid_unicode', 'no_letter_or_digit', 'duplicate', 'over_limit']) {
+        for (const reason of ['not_a_string', 'empty_after_normalisation', 'too_short', 'too_long', 'invalid_unicode', 'no_letter_or_digit', 'single_letter_or_digit', 'duplicate', 'over_limit']) {
             expect(readme, reason).toContain(`\`${reason}\``);
         }
         const caps = { 'raw keyword cap': MAX_RAW_KEYWORD_UNITS, 'candidate cap': MAX_CANDIDATES, 'bare-string cut': MAX_BARE_STRING_UNITS, 'haystack window': MAX_HAYSTACK_UNITS, 'cleaning passes': MAX_NORMALISE_PASSES, 'combining marks in a row': MAX_COMBINING_RUN, 'total raw units': MAX_TOTAL_RAW_UNITS };

@@ -22,8 +22,9 @@ import { z } from 'zod';
 
 import { clampInteger, describeSanitization, findKeywordMatch, sanitizeKeywordList } from './_guards.js';
 import { type BillingPort, DEFAULT_DATASET_ITEM_EVENT, DEFAULT_HIT_BILLER_OPTIONS, hasPositivePrice, RESULT_EVENT, WATCHLIST_HIT_EVENT, WatchlistHitBiller } from './charging.js';
+import type { RunLeasePort } from './lease.js';
 import { createScrubber, collectSecrets } from './secrets.js';
-import { classifyRecord, type DeltaStore, effectiveMaxSeenIds, markProcessed, NAMESPACE_PATTERN, type ProcessedRecord } from './state.js';
+import { classifyRecord, CorruptDeltaRecordError, type DeltaStore, effectiveMaxSeenIds, markProcessed, NAMESPACE_PATTERN, type ProcessedRecord } from './state.js';
 import {
     type Connector,
     type ConnectorContext,
@@ -115,6 +116,8 @@ export interface RunSinks {
     billing: BillingPort;
     store: DeltaStore;
     saveSummary(summary: RunSummary): Promise<void>;
+    /** Optional. One live run per (namespace, source): see lib/lease.ts. Without it, overlapping runs are not prevented. */
+    leases?: RunLeasePort;
 }
 
 export interface ResolvedSource {
@@ -279,180 +282,238 @@ export async function runEngine(engine: EngineDefinition, rawInput: unknown, dep
         maxHitSpendUsd: input.maxWatchlistSpendUsd,
     });
 
-    let state = await sinks.store.load();
-    const sourceSummaries: SourceRunSummary[] = [];
-    let totalEmitted = 0;
-    let stoppedOnChargeLimit = false;
+    // Two live runs delivering the same source into the same memory would deliver and bill its records twice (see
+    // lib/lease.ts): take the lease of every selected source before any state is read or any request is made.
+    const leases = sinks.leases;
+    if (leases) await leases.acquire(selected.map(({ connector }) => connector.id));
+    try {
+        let state = await sinks.store.load();
+        const sourceSummaries: SourceRunSummary[] = [];
+        let totalEmitted = 0;
+        let stoppedOnChargeLimit = false;
 
-    for (const { connector, options } of selected) {
-        if (stoppedOnChargeLimit) break;
+        for (const { connector, options } of selected) {
+            if (stoppedOnChargeLimit) break;
 
-        const summary: SourceRunSummary = {
-            source: connector.id,
-            fetched: 0,
-            emitted: 0,
-            firstSeen: 0,
-            updated: 0,
-            unchanged: 0,
-            watchlistHits: 0,
-            warnings: [],
-        };
-        sourceSummaries.push(summary);
+            const summary: SourceRunSummary = {
+                source: connector.id,
+                fetched: 0,
+                emitted: 0,
+                firstSeen: 0,
+                updated: 0,
+                unchanged: 0,
+                watchlistHits: 0,
+                warnings: [],
+            };
+            sourceSummaries.push(summary);
 
-        // Connectors report partial failures through ctx.log.warning; capture them on the summary so a
-        // "one sub-source down" run is machine-visible without every connector learning a new API.
-        const sourceCtx: ConnectorContext = {
-            ...ctx,
-            log: {
-                ...ctx.log,
-                warning(message: string) {
-                    if (summary.warnings.length < 50) summary.warnings.push(scrub(message).slice(0, 500));
-                    ctx.log.warning(message);
+            // Connectors report partial failures through ctx.log.warning; capture them on the summary so a
+            // "one sub-source down" run is machine-visible without every connector learning a new API.
+            const sourceCtx: ConnectorContext = {
+                ...ctx,
+                log: {
+                    ...ctx.log,
+                    warning(message: string) {
+                        if (summary.warnings.length < 50) summary.warnings.push(scrub(message).slice(0, 500));
+                        ctx.log.warning(message);
+                    },
                 },
-            },
-        };
+            };
 
-        // 2. FETCH - isolated per source.
-        let records: SourceRecord[];
-        try {
-            records = await connector.fetch(sourceCtx, options, { maxItemsPerSource: input.maxItemsPerSource });
-        } catch (error) {
-            summary.error = scrub(error instanceof Error ? error.message : String(error));
-            ctx.log.error(`[${connector.id}] fetch failed: ${summary.error}`);
-            continue;
-        }
-        records = dedupeById(records).slice(0, input.maxItemsPerSource);
-        summary.fetched = records.length;
-
-        // 3 + 5. DELTA, EMIT, BILL. Delta memory is checkpointed while the loop runs and once more in `finally`, so a
-        // row that was already pushed and billed is remembered even if a later push throws or the run is killed.
-        const processed: ProcessedRecord[] = [];
-        const memoryCap = effectiveMaxSeenIds(connector.maxSeenIds, input.maxItemsPerSource, state.sources[connector.id]?.seenIds.length ?? 0);
-        const writeState = async (): Promise<void> => {
-            const entry = state.sources[connector.id];
-            if (sinks.store.saveSource && entry) await sinks.store.saveSource(connector.id, entry);
-            else await sinks.store.save(state);
-        };
-        // The delivery journal: every row that was pushed AND billed since the last full checkpoint, rewritten after
-        // each such row. A hard kill cannot run `finally`, so without it the next run would deliver and bill every
-        // row since the last checkpoint (up to CHECKPOINT_EVERY_ROWS) a second time. With it only the row in flight at
-        // the instant of the kill can be repeated. Stores without journal support fall back to checkpoints alone.
-        const journalStore = sinks.store.loadJournal && sinks.store.saveJournal ? { load: sinks.store.loadJournal.bind(sinks.store), save: sinks.store.saveJournal.bind(sinks.store) } : undefined;
-        const journal: ProcessedRecord[] = [];
-        const persist = async (): Promise<void> => {
-            if (processed.length === 0) return;
-            const batch = processed.slice();
-            state = markProcessed(state, connector.id, batch, clock().toISOString(), memoryCap);
-            await writeState();
-            processed.splice(0, batch.length);
-            if (journalStore && journal.length > 0) {
-                await journalStore.save(connector.id, []);
-                journal.length = 0;
+            // A delta-memory record that EXISTS but cannot be read is not "empty": starting the source from scratch would deliver
+            // and bill every record again (up to maxItemsPerSource, on every run). Fail this source, keep the others.
+            const unreadable = state.invalid?.[connector.id];
+            if (unreadable !== undefined) {
+                summary.error = scrub(`${unreadable}. The source is skipped so that its records are not delivered and billed again; delete that record to start the source from scratch.`);
+                ctx.log.error(`[${connector.id}] ${summary.error}`);
+                continue;
             }
-        };
-        if (journalStore) {
-            // An interrupted earlier run left rows that were delivered and billed but not yet in the delta memory.
-            // Fold them in BEFORE classifying anything, so they are not delivered and billed again.
-            const pending = await journalStore.load(connector.id);
-            if (pending.length > 0) {
-                state = markProcessed(state, connector.id, pending, clock().toISOString(), memoryCap);
+
+            // A run that was suspended and overtaken stops here instead of delivering more rows.
+            if (leases) await leases.renewIfDue();
+
+            // 2. FETCH - isolated per source.
+            let records: SourceRecord[];
+            try {
+                records = await connector.fetch(sourceCtx, options, { maxItemsPerSource: input.maxItemsPerSource });
+            } catch (error) {
+                summary.error = scrub(error instanceof Error ? error.message : String(error));
+                ctx.log.error(`[${connector.id}] fetch failed: ${summary.error}`);
+                continue;
+            }
+            // A long fetch is a long time without a heartbeat.
+            if (leases) await leases.renewIfDue();
+            const deduped = dedupeById(records);
+            records = deduped.records.slice(0, input.maxItemsPerSource);
+            summary.fetched = records.length;
+            if (deduped.invalid > 0) {
+                // A record without a usable identity cannot be remembered (an empty id or a non-string fingerprint would make
+                // the persisted memory unreadable and re-deliver and re-bill rows). It is a connector bug: skip and say so.
+                sourceCtx.log.warning(`${deduped.invalid} record(s) skipped: a record id must be a non-empty string and a fingerprint a string.`);
+            }
+
+            // 3 + 5. DELTA, EMIT, BILL. Delta memory is checkpointed while the loop runs and once more in `finally`, so a
+            // row that was already pushed and billed is remembered even if a later push throws or the run is killed.
+            const processed: ProcessedRecord[] = [];
+            const memoryCap = effectiveMaxSeenIds(connector.maxSeenIds, input.maxItemsPerSource, state.sources[connector.id]?.seenIds.length ?? 0);
+            const writeState = async (): Promise<void> => {
+                const entry = state.sources[connector.id];
+                if (sinks.store.saveSource && entry) await sinks.store.saveSource(connector.id, entry);
+                else await sinks.store.save(state);
+            };
+            // The delivery journal: every row that was pushed AND billed since the last full checkpoint, rewritten after
+            // each such row. A hard kill cannot run `finally`, so without it the next run would deliver and bill every
+            // row since the last checkpoint (up to CHECKPOINT_EVERY_ROWS) a second time. With it only the row in flight at
+            // the instant of the kill can be repeated. Stores without journal support fall back to checkpoints alone.
+            const journalStore = sinks.store.loadJournal && sinks.store.saveJournal ? { load: sinks.store.loadJournal.bind(sinks.store), save: sinks.store.saveJournal.bind(sinks.store) } : undefined;
+            const journal: ProcessedRecord[] = [];
+            const persist = async (): Promise<void> => {
+                if (processed.length === 0) return;
+                const batch = processed.slice();
+                state = markProcessed(state, connector.id, batch, clock().toISOString(), memoryCap);
                 await writeState();
-                await journalStore.save(connector.id, []);
-                ctx.log.info(`[${connector.id}] recovered ${pending.length} record(s) from the delivery journal of an interrupted run.`);
-            }
-        }
-        let sinceCheckpoint = 0;
-
-        try {
-            for (const record of records) {
-                const cls = classifyRecord(state, connector.id, record.recordId, record.fingerprint);
-                summary[cls === 'first_seen' ? 'firstSeen' : cls] += 1;
-
-                if (!shouldEmit(input.deltaMode, cls)) {
-                    processed.push({ recordId: record.recordId, fingerprint: record.fingerprint });
+                processed.splice(0, batch.length);
+                if (journalStore && journal.length > 0) {
+                    await journalStore.save(connector.id, []);
+                    journal.length = 0;
+                }
+            };
+            if (journalStore) {
+                // An interrupted earlier run left rows that were delivered and billed but not yet in the delta memory.
+                // Fold them in BEFORE classifying anything, so they are not delivered and billed again.
+                let pending: ProcessedRecord[];
+                try {
+                    pending = await journalStore.load(connector.id);
+                } catch (error) {
+                    if (!(error instanceof CorruptDeltaRecordError)) throw error;
+                    // Present but unreadable: reading it as "no journal" would deliver and bill up to 25 rows again.
+                    summary.error = scrub(`${error.message}. The source is skipped so that its last rows are not delivered and billed again; delete that record to continue.`);
+                    ctx.log.error(`[${connector.id}] ${summary.error}`);
                     continue;
                 }
-
-                const matchedKeyword = findKeywordMatch(record.watchText, watchlist);
-                const row: Record<string, unknown> = {
-                    ...record.payload,
-                    engine: engine.slug,
-                    source: connector.id,
-                    record_id: record.recordId,
-                    delta_status: cls,
-                    is_new: cls === 'first_seen',
-                    is_watchlist_match: matchedKeyword !== null,
-                    matched_watchlist_keyword: matchedKeyword,
-                    scraped_at: clock().toISOString(),
-                };
-
-                const emission = await sinks.emit(row, record.billingEvent ?? billingEventFor(connector, cls));
-                if (!emission.emitted) {
-                    stoppedOnChargeLimit = true;
-                    ctx.log.info(`[${connector.id}] charge limit reached before record ${record.recordId}; stopping.`);
-                    break;
-                }
-                summary.emitted += 1;
-                totalEmitted += 1;
-                const delivered: ProcessedRecord = { recordId: record.recordId, fingerprint: record.fingerprint };
-                processed.push(delivered);
-                if (journalStore) {
-                    // Fail closed: a row whose delivery cannot be remembered must not be followed by more billable rows.
-                    journal.push(delivered);
-                    await journalStore.save(connector.id, journal);
-                }
-
-                if (matchedKeyword !== null) {
-                    summary.watchlistHits += 1;
-                    // At the budget limit the SDK would "overcharge by one" to terminate the Actor: never spend that
-                    // extra event on a hit. The hit stays flagged on the row; it is just not billed.
-                    if (!emission.limitReached) {
-                        const outcome = await biller.chargeHit();
-                        if (outcome === 'limit_reached') {
-                            stoppedOnChargeLimit = true;
-                            ctx.log.info(`[${connector.id}] watchlist-hit charge limit reached; stopping.`);
-                            break;
-                        }
-                    }
-                }
-                if (emission.limitReached) {
-                    stoppedOnChargeLimit = true;
-                    break;
-                }
-                sinceCheckpoint += 1;
-                if (sinceCheckpoint >= CHECKPOINT_EVERY_ROWS) {
-                    sinceCheckpoint = 0;
-                    await persist();
+                if (pending.length > 0) {
+                    state = markProcessed(state, connector.id, pending, clock().toISOString(), memoryCap);
+                    await writeState();
+                    await journalStore.save(connector.id, []);
+                    ctx.log.info(`[${connector.id}] recovered ${pending.length} record(s) from the delivery journal of an interrupted run.`);
                 }
             }
-        } finally {
-            // 6. STATE - whatever was actually processed. A failure to save must not mask the error that got us here.
+            let sinceCheckpoint = 0;
+            let unserialisable = 0;
+
             try {
-                await persist();
-            } catch (saveError) {
-                ctx.log.error(`[${connector.id}] could not persist delta memory: ${scrub(saveError instanceof Error ? saveError.message : String(saveError))}`);
+                for (const record of records) {
+                    const cls = classifyRecord(state, connector.id, record.recordId, record.fingerprint);
+                    summary[cls === 'first_seen' ? 'firstSeen' : cls] += 1;
+
+                    if (!shouldEmit(input.deltaMode, cls)) {
+                        processed.push({ recordId: record.recordId, fingerprint: record.fingerprint });
+                        continue;
+                    }
+
+                    const matchedKeyword = findKeywordMatch(record.watchText, watchlist);
+                    const row: Record<string, unknown> = {
+                        ...record.payload,
+                        engine: engine.slug,
+                        source: connector.id,
+                        record_id: record.recordId,
+                        delta_status: cls,
+                        is_new: cls === 'first_seen',
+                        is_watchlist_match: matchedKeyword !== null,
+                        matched_watchlist_keyword: matchedKeyword,
+                        scraped_at: clock().toISOString(),
+                    };
+
+                    // A row that cannot be serialised (a BigInt, a cycle) would make every push of it throw, on every run, and block
+                    // the rest of the source and every later source. Skip it, leave it unremembered, say so once per source.
+                    if (!isJsonSerialisable(row)) {
+                        unserialisable += 1;
+                        continue;
+                    }
+
+                    const emission = await sinks.emit(row, record.billingEvent ?? billingEventFor(connector, cls));
+                    if (!emission.emitted) {
+                        stoppedOnChargeLimit = true;
+                        ctx.log.info(`[${connector.id}] charge limit reached before record ${record.recordId}; stopping.`);
+                        break;
+                    }
+                    summary.emitted += 1;
+                    totalEmitted += 1;
+                    const delivered: ProcessedRecord = { recordId: record.recordId, fingerprint: record.fingerprint };
+                    processed.push(delivered);
+                    if (journalStore) {
+                        // Fail closed: a row whose delivery cannot be remembered must not be followed by more billable rows.
+                        journal.push(delivered);
+                        await journalStore.save(connector.id, journal);
+                    }
+                    // Keeps the lease alive while rows flow (a cheap clock check except once a minute) and stops this run if
+                    // another one took the lease over.
+                    if (leases) await leases.renewIfDue();
+
+                    if (matchedKeyword !== null) {
+                        summary.watchlistHits += 1;
+                        // At the budget limit the SDK would "overcharge by one" to terminate the Actor: never spend that
+                        // extra event on a hit. The hit stays flagged on the row; it is just not billed.
+                        if (!emission.limitReached) {
+                            const outcome = await biller.chargeHit();
+                            if (outcome === 'limit_reached') {
+                                stoppedOnChargeLimit = true;
+                                ctx.log.info(`[${connector.id}] watchlist-hit charge limit reached; stopping.`);
+                                break;
+                            }
+                        }
+                    }
+                    if (emission.limitReached) {
+                        stoppedOnChargeLimit = true;
+                        break;
+                    }
+                    sinceCheckpoint += 1;
+                    if (sinceCheckpoint >= CHECKPOINT_EVERY_ROWS) {
+                        sinceCheckpoint = 0;
+                        await persist();
+                    }
+                }
+            } finally {
+                // 6. STATE - whatever was actually processed. A failure to save must not mask the error that got us here.
+                try {
+                    await persist();
+                } catch (saveError) {
+                    const reason = scrub(saveError instanceof Error ? saveError.message : String(saveError));
+                    ctx.log.error(`[${connector.id}] could not persist delta memory: ${reason}`);
+                    // Visible to the caller: the run may still end SUCCEEDED because the delivery journal covers the rows.
+                    if (summary.warnings.length < 50) summary.warnings.push(`could not persist delta memory: ${reason}`.slice(0, 500));
+                }
+            }
+            if (unserialisable > 0) sourceCtx.log.warning(`${unserialisable} row(s) skipped: the payload cannot be serialised to JSON (they will be tried again on the next run).`);
+        }
+
+        const summary: RunSummary = {
+            engine: engine.slug,
+            deltaMode: input.deltaMode,
+            startedAt,
+            finishedAt: clock().toISOString(),
+            sources: sourceSummaries,
+            totalEmitted,
+            watchlist: {
+                accepted: watchlist.keywords.length,
+                rejected: watchlist.rejected.length,
+                hitsCharged: biller.charged,
+                hitsUnpriced: biller.hitsUnpriced,
+            },
+            pricing,
+            stoppedOnChargeLimit,
+        };
+        await sinks.saveSummary(summary);
+        return summary;
+    } finally {
+        if (leases) {
+            try {
+                await leases.release();
+            } catch (releaseError) {
+                ctx.log.warning(`could not release the run lease: ${scrub(releaseError instanceof Error ? releaseError.message : String(releaseError))}`);
             }
         }
     }
-
-    const summary: RunSummary = {
-        engine: engine.slug,
-        deltaMode: input.deltaMode,
-        startedAt,
-        finishedAt: clock().toISOString(),
-        sources: sourceSummaries,
-        totalEmitted,
-        watchlist: {
-            accepted: watchlist.keywords.length,
-            rejected: watchlist.rejected.length,
-            hitsCharged: biller.charged,
-            hitsUnpriced: biller.hitsUnpriced,
-        },
-        pricing,
-        stoppedOnChargeLimit,
-    };
-    await sinks.saveSummary(summary);
-    return summary;
 }
 
 /**
@@ -471,13 +532,28 @@ export function describeSourceFailures(summary: RunSummary): string {
     return `All ${failures.length} selected source(s) failed and nothing was delivered. ${failures.join(' | ')}`.slice(0, 2000);
 }
 
-function dedupeById(records: SourceRecord[]): SourceRecord[] {
+/** Drops records without a usable identity and repeats of an id (the first one wins); counts the unusable ones. */
+function dedupeById(records: SourceRecord[]): { records: SourceRecord[]; invalid: number } {
     const seen = new Set<string>();
     const out: SourceRecord[] = [];
+    let invalid = 0;
     for (const record of records) {
+        if (typeof record?.recordId !== 'string' || record.recordId === '' || typeof record.fingerprint !== 'string') {
+            invalid += 1;
+            continue;
+        }
         if (seen.has(record.recordId)) continue;
         seen.add(record.recordId);
         out.push(record);
     }
-    return out;
+    return { records: out, invalid };
+}
+
+function isJsonSerialisable(value: unknown): boolean {
+    try {
+        JSON.stringify(value);
+        return true;
+    } catch {
+        return false;
+    }
 }

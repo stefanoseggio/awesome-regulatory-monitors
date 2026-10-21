@@ -341,8 +341,8 @@ describe('keyword guard', () => {
         expect(resolveEntityNames(ctx, 'a')).toEqual([]);
         expect(resolveEntityNames(ctx, 7)).toEqual([]);
         expect(resolveEntityNames(ctx, [null, {}, 5])).toEqual([]);
-        // "''" is rejected by the guard itself; "'a'" passes it (3 characters) but is ONE character once the apostrophes go.
-        expect(resolveEntityNames(ctx, ["O'Brien", "''", "'a'"])).toEqual(['O Brien']);
+        // "''" and "'a'" are rejected by the guard itself (no letter, one letter); "O Brien" passes it as a different string from "O'Brien" but is the SAME name once the apostrophe goes.
+        expect(resolveEntityNames(ctx, ["O'Brien", 'O Brien', "''", "'a'"])).toEqual(['O Brien']);
         expect(logsAt(logs, 'warning').join('\n')).toMatch(/1 keyword\(s\) were empty or duplicated after apostrophe removal/);
         expect(cleanEntityNameForQuery("O'Brien ’s `x`")).toBe('O Brien s x');
     });

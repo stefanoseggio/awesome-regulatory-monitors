@@ -4,7 +4,8 @@ import { z } from 'zod';
 import { FakeBilling, RESULT_EVENT, WATCHLIST_HIT_EVENT } from '../lib/charging.js';
 import { createHeldConnector } from '../lib/connector_helpers.js';
 import { allSourcesFailed, billingEventFor, describeSourceFailures, type EngineDefinition, mergeCredentialFields, resolveSources, runEngine, type RunSinks, shouldEmit } from '../lib/router_core.js';
-import { type DeltaStore, InMemoryDeltaStore, type ProcessedRecord } from '../lib/state.js';
+import { InMemoryLeaseStorage, LeaseConflictError, LeaseLostError, type RunLeasePort, RunLeases } from '../lib/lease.js';
+import { CorruptDeltaRecordError, type DeltaState, type DeltaStore, InMemoryDeltaStore, type ProcessedRecord } from '../lib/state.js';
 import {
     type Connector,
     type ConnectorContext,
@@ -389,6 +390,313 @@ describe('delivery journal (a hard kill must not make the next run deliver and b
         expect(h.rows).toHaveLength(3);
         expect(inner.peek().sources.ok?.seenIds).toHaveLength(3);
     });
+});
+
+describe('records the memory cannot hold, unreadable persisted records and rows that cannot be pushed', () => {
+    const many = (id: string, n: number): SourceRecord[] => Array.from({ length: n }, (_, i) => rec(`${id}-${i + 1}`, 'a'));
+
+    it('a delta-memory record that exists but is unreadable fails ITS source (no fetch, no row, no charge) and the other sources still run', async () => {
+        let fetched = 0;
+        const guarded = stub('guarded', async () => {
+            fetched += 1;
+            return many('g', 3);
+        });
+        const store = new (class extends InMemoryDeltaStore {
+            override async load(): Promise<DeltaState> {
+                return { ...(await super.load()), invalid: { guarded: 'The delta-memory record "state.default.guarded" in the key-value store "s" exists but cannot be read' } };
+            }
+        })();
+        const h = harness({ store });
+        const summary = await runEngine(engineOf(guarded, stub('other', many('o', 2))), { sources: ['guarded', 'other'] }, { sinks: h.sinks, ctx, clock });
+        expect(fetched).toBe(0);
+        expect(h.rows.map((r) => r.source)).toEqual(['other', 'other']);
+        expect(summary.sources[0]?.error).toContain('"state.default.guarded" in the key-value store "s" exists but cannot be read');
+        expect(summary.sources[0]?.error).toContain('delete that record');
+        expect(allSourcesFailed(summary)).toBe(false);
+        expect(h.billing.totalFor(RESULT_EVENT)).toBe(2);
+    });
+
+    it('when the only selected source has an unreadable memory record the run counts as failed', async () => {
+        const store = new (class extends InMemoryDeltaStore {
+            override async load(): Promise<DeltaState> {
+                return { ...(await super.load()), invalid: { only: 'unreadable' } };
+            }
+        })();
+        const h = harness({ store });
+        const summary = await runEngine(engineOf(stub('only', many('x', 3))), { sources: ['only'] }, { sinks: h.sinks, ctx, clock });
+        expect(h.rows).toEqual([]);
+        expect(allSourcesFailed(summary)).toBe(true);
+    });
+
+    it('a journal that exists but is unreadable fails its source and leaves the journal in place; the other sources still run', async () => {
+        const store = new (class extends InMemoryDeltaStore {
+            override async loadJournal(source: string): Promise<ProcessedRecord[]> {
+                if (source === 'guarded') throw new CorruptDeltaRecordError('The delivery-journal record "journal.default.guarded" in the key-value store "s" exists but cannot be read');
+                return super.loadJournal(source);
+            }
+        })();
+        await store.saveJournal('guarded', [{ recordId: 'g-1', fingerprint: 'a' }]);
+        const h = harness({ store });
+        const summary = await runEngine(engineOf(stub('guarded', many('g', 3)), stub('other', many('o', 2))), { sources: ['guarded', 'other'] }, { sinks: h.sinks, ctx, clock });
+        expect(h.rows.map((r) => r.source)).toEqual(['other', 'other']);
+        expect(summary.sources[0]?.error).toContain('"journal.default.guarded"');
+        expect(summary.sources[0]?.error).toContain('delete that record');
+        expect(store.peekJournal('guarded')).toEqual([{ recordId: 'g-1', fingerprint: 'a' }]);
+        expect(store.peek().sources.guarded).toBeUndefined();
+    });
+
+    it('any other journal read error still aborts the run (a store outage is not a corrupt record)', async () => {
+        const store = new (class extends InMemoryDeltaStore {
+            override async loadJournal(): Promise<ProcessedRecord[]> {
+                throw new Error('kv store unavailable');
+            }
+        })();
+        const h = harness({ store });
+        await expect(runEngine(engineOf(stub('a', many('a', 2))), { sources: ['a'] }, { sinks: h.sinks, ctx, clock })).rejects.toThrow('kv store unavailable');
+        expect(h.rows).toEqual([]);
+    });
+
+    it('records without a usable identity are skipped with a warning and never reach the journal or the memory', async () => {
+        const bad = [
+            { recordId: '', fingerprint: 'a', payload: { n: 0 } },
+            { recordId: 'ok-1', fingerprint: 7 as unknown as string, payload: { n: 1 } },
+            { recordId: undefined as unknown as string, fingerprint: 'a', payload: { n: 2 } },
+            { recordId: 5 as unknown as string, fingerprint: 'a', payload: { n: 3 } },
+            rec('good-1', 'a'),
+            rec('good-2', 'a'),
+        ] as SourceRecord[];
+        const store = new InMemoryDeltaStore();
+        const h = harness({ store });
+        const summary = await runEngine(engineOf(stub('s', bad)), { sources: ['s'] }, { sinks: h.sinks, ctx, clock });
+        expect(h.rows.map((r) => r.record_id)).toEqual(['good-1', 'good-2']);
+        expect(summary.sources[0]?.warnings).toContain('4 record(s) skipped: a record id must be a non-empty string and a fingerprint a string.');
+        expect(summary.sources[0]).toMatchObject({ fetched: 2, emitted: 2 });
+        expect(store.peek().sources.s?.seenIds.sort()).toEqual(['good-1', 'good-2']);
+    });
+
+    it('a row that cannot be serialised is skipped (not remembered, so it is tried again), and neither its source nor later sources are blocked', async () => {
+        const poison: SourceRecord = { recordId: 'poison', fingerprint: 'a', payload: { n: BigInt(1) } };
+        const store = new InMemoryDeltaStore();
+        const h = harness({ store });
+        const summary = await runEngine(engineOf(stub('a', [rec('a-1', 'a'), poison, rec('a-3', 'a')]), stub('b', [rec('b-1', 'a')])), { sources: ['a', 'b'] }, { sinks: h.sinks, ctx, clock });
+        expect(h.rows.map((r) => r.record_id)).toEqual(['a-1', 'a-3', 'b-1']);
+        expect(summary.sources[0]?.warnings).toContain('1 row(s) skipped: the payload cannot be serialised to JSON (they will be tried again on the next run).');
+        expect(store.peek().sources.a?.seenIds.sort()).toEqual(['a-1', 'a-3']);
+        expect(allSourcesFailed(summary)).toBe(false);
+        // the next run delivers nothing new: the poison row is skipped again, the others are remembered
+        const again = await runEngine(engineOf(stub('a', [rec('a-1', 'a'), poison, rec('a-3', 'a')])), { sources: ['a'] }, { sinks: h.sinks, ctx, clock });
+        expect(again.totalEmitted).toBe(0);
+    });
+
+    it('a delta-memory write that fails in the final checkpoint is surfaced on the source summary (the journal still protects the rows)', async () => {
+        const store = new (class extends InMemoryDeltaStore {
+            override async save(): Promise<void> {
+                throw new Error('state write refused');
+            }
+        })();
+        const h = harness({ store });
+        const summary = await runEngine(engineOf(stub('a', many('a', 3))), { sources: ['a'] }, { sinks: h.sinks, ctx, clock });
+        expect(summary.sources[0]?.warnings).toContain('could not persist delta memory: state write refused');
+        expect(summary.totalEmitted).toBe(3);
+        expect(store.peekJournal('a').map((e) => e.recordId)).toEqual(['a-1', 'a-2', 'a-3']);
+    });
+});
+
+describe('a watchlist-hit the remaining budget cannot pay', () => {
+    it('is not attempted: the matching row is delivered and journalled, nothing is charged beyond the budget, and the run stops', async () => {
+        const store = new InMemoryDeltaStore();
+        const h = harness({ store, budgetUsd: 0.12, prices: { [RESULT_EVENT]: 0.05, [WATCHLIST_HIT_EVENT]: 0.1 } });
+        const records = [rec('1', 'a', 'ACME CORP'), rec('2', 'a'), rec('3', 'a')];
+        const summary = await runEngine(engineOf(stub('s', records)), { sources: ['s'], watchlistNames: ['Acme'] }, { sinks: h.sinks, ctx, clock });
+        expect(h.rows.map((r) => r.record_id)).toEqual(['1']);
+        expect(h.rows[0]).toMatchObject({ is_watchlist_match: true });
+        expect(summary.stoppedOnChargeLimit).toBe(true);
+        expect(summary.watchlist.hitsCharged).toBe(0);
+        // the biller never asked the billing port for a hit it could not pay (the SDK would overcharge by one event)
+        expect(h.billing.calls.filter((c) => c.eventName === WATCHLIST_HIT_EVENT)).toEqual([]);
+        expect(h.billing.totalFor(RESULT_EVENT)).toBe(1);
+        // the delivered row is remembered, so the next run does not deliver and bill it again
+        expect(store.peek().sources.s?.seenIds).toEqual(['1']);
+    });
+});
+
+describe('run leases (overlapping runs of the same namespace must not deliver and bill the same records twice)', () => {
+    const many = (id: string, n: number): SourceRecord[] => Array.from({ length: n }, (_, i) => rec(`${id}-${i + 1}`, 'a'));
+
+    /** A lease port that records what the router asks of it. */
+    function spyLeases(overrides: Partial<RunLeasePort> = {}) {
+        const calls: string[] = [];
+        const port: RunLeasePort = {
+            async acquire(sources) {
+                calls.push(`acquire:${[...sources].join(',')}`);
+            },
+            async renewIfDue() {
+                calls.push('renew');
+            },
+            async release() {
+                calls.push('release');
+            },
+            ...overrides,
+        };
+        return { port, calls };
+    }
+
+    it('takes the lease of every selected source BEFORE any state is read or request is made, and releases it when the run ends', async () => {
+        const { port, calls } = spyLeases();
+        const store = new (class extends InMemoryDeltaStore {
+            override async load(): Promise<DeltaState> {
+                calls.push('load');
+                return super.load();
+            }
+        })();
+        const h = harness({ store });
+        h.sinks.leases = port;
+        const fetching = stub('a', async () => {
+            calls.push('fetch');
+            return many('a', 2);
+        });
+        await runEngine(engineOf(fetching, stub('b', many('b', 1))), { sources: ['a', 'b'] }, { sinks: h.sinks, ctx, clock });
+        expect(calls[0]).toBe('acquire:a,b');
+        expect(calls.indexOf('load')).toBeGreaterThan(0);
+        expect(calls.indexOf('fetch')).toBeGreaterThan(calls.indexOf('load'));
+        expect(calls.at(-1)).toBe('release');
+        expect(calls.filter((c) => c === 'release')).toHaveLength(1);
+    });
+
+    it('a conflict ends the run before any fetch, row, charge or state write (LeaseConflictError, a fatal configuration error)', async () => {
+        let fetched = 0;
+        const storage = new InMemoryLeaseStorage();
+        await new RunLeases(storage, { runId: 'run-a', namespace: 'default', settleMs: 0 }).acquire(['a']);
+        const blocked = new RunLeases(storage, { runId: 'run-b', namespace: 'default', settleMs: 0 });
+        const store = new InMemoryDeltaStore();
+        const h = harness({ store });
+        h.sinks.leases = blocked;
+        const error = await runEngine(
+            engineOf(
+                stub('a', async () => {
+                    fetched += 1;
+                    return many('a', 3);
+                }),
+            ),
+            { sources: ['a'] },
+            { sinks: h.sinks, ctx, clock },
+        ).catch((e: unknown) => e);
+        expect(error).toBeInstanceOf(LeaseConflictError);
+        expect(fetched).toBe(0);
+        expect(h.rows).toEqual([]);
+        expect(h.billing.calls).toEqual([]);
+        expect(store.saves).toBe(0);
+        expect(store.journalWrites).toBe(0);
+        expect(h.summaries).toEqual([]);
+    });
+
+    it('releases the lease when the run throws, and when every source fails', async () => {
+        const { port, calls } = spyLeases();
+        const h = harness();
+        h.sinks.leases = port;
+        h.sinks.emit = async () => {
+            throw new Error('platform dataset error');
+        };
+        await expect(runEngine(engineOf(stub('a', many('a', 2))), { sources: ['a'] }, { sinks: h.sinks, ctx, clock })).rejects.toThrow('platform dataset error');
+        expect(calls.filter((c) => c === 'release')).toHaveLength(1);
+
+        const failed = spyLeases();
+        const h2 = harness();
+        h2.sinks.leases = failed.port;
+        const summary = await runEngine(
+            engineOf(
+                stub('a', async () => {
+                    throw new Error('upstream 503');
+                }),
+            ),
+            { sources: ['a'] },
+            { sinks: h2.sinks, ctx, clock },
+        );
+        expect(allSourcesFailed(summary)).toBe(true);
+        expect(failed.calls.at(-1)).toBe('release');
+    });
+
+    it('a failure to release is logged and never masks the run result', async () => {
+        const warnings: string[] = [];
+        const { port } = spyLeases({
+            async release() {
+                throw new Error('kv store unavailable');
+            },
+        });
+        const h = harness();
+        h.sinks.leases = port;
+        const summary = await runEngine(engineOf(stub('a', many('a', 2))), { sources: ['a'] }, { sinks: h.sinks, ctx: { ...ctx, log: { ...silentLog, warning: (m: string) => warnings.push(m) } }, clock });
+        expect(summary.totalEmitted).toBe(2);
+        expect(warnings.some((w) => w.includes('could not release the run lease: kv store unavailable'))).toBe(true);
+    });
+
+    it('renews the lease before each fetch and after each delivered row', async () => {
+        const { port, calls } = spyLeases();
+        const h = harness();
+        h.sinks.leases = port;
+        await runEngine(engineOf(stub('a', many('a', 3)), stub('b', many('b', 2))), { sources: ['a', 'b'] }, { sinks: h.sinks, ctx, clock });
+        // per source: before the fetch, after the fetch, and after every delivered row
+        expect(calls.filter((c) => c === 'renew')).toHaveLength(2 * 2 + 3 + 2);
+    });
+
+    it('a run whose lease was taken over stops at the next renewal, remembers the rows it already delivered, and releases', async () => {
+        let renewals = 0;
+        const { port, calls } = spyLeases({
+            async renewIfDue() {
+                renewals += 1;
+                // calls 1 and 2 are the renewals around the fetch; call 3 follows the first row, call 4 the second row
+                if (renewals === 4) throw new LeaseLostError('a', 'run-b');
+            },
+        });
+        const store = new InMemoryDeltaStore();
+        const h = harness({ store });
+        h.sinks.leases = port;
+        await expect(runEngine(engineOf(stub('a', many('a', 10))), { sources: ['a'] }, { sinks: h.sinks, ctx, clock })).rejects.toBeInstanceOf(LeaseLostError);
+        expect(h.rows.map((r) => r.record_id)).toEqual(['a-1', 'a-2']);
+        expect(store.peek().sources.a?.seenIds.sort()).toEqual(['a-1', 'a-2']);
+        expect(calls.at(-1)).toBe('release');
+    });
+
+    it('two runs of one namespace that overlap: with leases the second one is refused and every record is delivered and billed exactly once; without leases the overlap delivers and bills the same records twice', async () => {
+        const rows = 20;
+        const run = async (withLeases: boolean) => {
+            const store = new InMemoryDeltaStore();
+            const storage = new InMemoryLeaseStorage();
+            const shared = { rows: [] as Array<Record<string, unknown>>, billing: new FakeBilling(true, { [RESULT_EVENT]: 0.002, [WATCHLIST_HIT_EVENT]: 0.05 }) };
+            const slowFetch = async (): Promise<SourceRecord[]> => {
+                await new Promise((resolve) => setTimeout(resolve, 5));
+                return many('a', rows);
+            };
+            const sinksFor = (runId: string): RunSinks => ({
+                async emit(row, eventName = RESULT_EVENT) {
+                    await new Promise((resolve) => setTimeout(resolve, 1)); // a row takes time, so the two runs interleave
+                    const charge = await shared.billing.charge(eventName, 1);
+                    if (charge.chargedCount < 1) return { emitted: false, limitReached: true };
+                    shared.rows.push(row);
+                    return { emitted: true, limitReached: false };
+                },
+                billing: shared.billing,
+                store,
+                async saveSummary() {},
+                ...(withLeases
+                    ? { leases: new RunLeases(storage, { runId, namespace: 'default', settleMs: 10, sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)), staleAfterMs: 60_000 }) }
+                    : {}),
+            });
+            const results = await Promise.allSettled(['run-a', 'run-b'].map((runId) => runEngine(engineOf(stub('a', slowFetch)), { sources: ['a'] }, { sinks: sinksFor(runId), ctx, clock })));
+            return { results, delivered: shared.rows.map((r) => r.record_id as string), billed: shared.billing.totalFor(RESULT_EVENT) };
+        };
+
+        const guarded = await run(true);
+        expect(guarded.results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+        expect((guarded.results.find((r) => r.status === 'rejected') as PromiseRejectedResult).reason).toBeInstanceOf(LeaseConflictError);
+        expect(guarded.delivered).toHaveLength(rows);
+        expect(new Set(guarded.delivered).size).toBe(rows);
+        expect(guarded.billed).toBe(rows);
+
+        const unguarded = await run(false);
+        expect(unguarded.delivered.length).toBeGreaterThan(rows);
+        expect(unguarded.billed).toBeGreaterThan(rows);
+    }, 30_000);
 });
 
 describe('a run in which every source failed', () => {

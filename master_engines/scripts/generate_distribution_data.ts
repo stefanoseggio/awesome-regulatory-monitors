@@ -330,11 +330,11 @@ const NAMED_SANITIZE_CASES = (): NamedCase[] => {
         { name: 'elements: empty nested containers', input: [[], [[]], {}, { a: {} }] },
         { name: 'elements: a non-string is rejected before its content is looked at', input: [['\ud800'], { k: '\ud800' }, '\ud800', ['Acme Corp']] },
         { name: 'elements: objects and nested arrays', input: [{ b: 1, 2: 2, 1: 3, a: [1, { c: null }] }, ['x', ['y']], {}] },
-        { name: 'elements: number formatting', input: [1e21, 1e-7, 0.000001, 123456789012345680000, 1.5, 100, 12345.6789, -3, -0.5] },
-        { name: 'elements: long object is previewed truncated', input: [{ description: 'x'.repeat(120), tags: ['alpha', 'beta', 'gamma'] }] },
-        { name: 'elements: control characters in a previewed object', input: [{ k: 'a\b\f\n\r\t\u0001\u001f\u007f' }] },
-        { name: 'elements: a previewed object cut inside a surrogate pair', input: [{ k: `${'x'.repeat(50)}\u{1f600}tail` }] },
-        { name: 'elements: object with unicode and quotes', input: [{ 'k"ey': 'line\nbreak \u2028 \u007f "quoted" \\ back', emoji: '\u{1f600}', lone: '\ud800' }] },
+        { name: 'elements: numbers are previewed as [number], whatever their digits', input: [1e21, 1e-7, 0.000001, 123456789012345680000, 1.5, 100, 12345.6789, -3, -0.5] },
+        { name: 'elements: a long object is previewed as the constant tag [object]', input: [{ description: 'x'.repeat(120), tags: ['alpha', 'beta', 'gamma'] }] },
+        { name: 'elements: an object with control characters is previewed as [object]', input: [{ k: 'a\b\f\n\r\t\u0001\u001f\u007f' }] },
+        { name: 'elements: an object with an astral character is previewed as [object]', input: [{ k: `${'x'.repeat(50)}\u{1f600}tail` }] },
+        { name: 'elements: an object with unicode, quotes and a lone surrogate is previewed as [object]', input: [{ 'k"ey': 'line\nbreak \u2028 \u007f "quoted" \\ back', emoji: '\u{1f600}', lone: '\ud800' }] },
         // separators of a bare string
         { name: 'string: comma, semicolon, newline, CRLF separated', input: 'Acme Corp,Beta Ltd;Gamma\nDelta\r\nEpsilon' },
         { name: 'string: only separators', input: ',,;;\n\r' },
@@ -470,16 +470,16 @@ const NAMED_SANITIZE_CASES = (): NamedCase[] => {
             input: `${repeat(' ', MAX_BARE_STRING_UNITS - 17)},Alpha Corp,Beta\u{1f600},Gamma Corp`,
         },
         // MAX_COMBINING_RUN: a text with more than 16 consecutive combining marks (\p{M}) is empty, checked on every cleaning pass BEFORE normalising
-        { name: 'marks: 16 consecutive combining marks are fine, 17 make the keyword empty', input: [`a${repeat('\u0301', 16)}`, `b${repeat('\u0323', 16)}`, `a${repeat('\u0301', 17)}`, `b${repeat('\u0323', 17)}`, 'Acme'] },
+        { name: 'marks: 16 consecutive combining marks are fine, 17 make the keyword empty', input: [`ab${repeat('\u0301', 16)}`, `cd${repeat('\u0323', 16)}`, `ab${repeat('\u0301', 17)}`, `cd${repeat('\u0323', 17)}`, 'Acme'] },
         { name: 'marks: 15, 16 and 17 marks in the middle of a word', input: [`Ac${repeat('\u0301', 15)}me`, `Ac${repeat('\u0308', 16)}me`, `Ac${repeat('\u0300', 17)}me`] },
         {
             name: 'marks: 17 different marks (Mn, Mc and Me) count together, 16 do not',
-            input: [`a${MARKS_17}`, `a${MARKS_17.slice(0, -1)}`, `b${repeat('\u0903', 17)}`, `b${repeat('\u20dd', 17)}`, `b${repeat('\u0903', 16)}`],
+            input: [`ab${MARKS_17}`, `ab${MARKS_17.slice(0, -1)}`, `cd${repeat('\u0903', 17)}`, `cd${repeat('\u20dd', 17)}`, `cd${repeat('\u0903', 16)}`],
         },
         { name: 'marks: marks kept apart by letters never form a run', input: [`${'a\u0301'.repeat(40)}`, `a${repeat('\u0301', 10)}b${repeat('\u0301', 10)}`] },
-        { name: 'marks: removal exposes a run on the second pass (the base does not compose with the first mark)', input: [`b${'\u0301\u200b'.repeat(17)}`, `b${'\u0301\u200b'.repeat(16)}`, 'Acme'] },
-        { name: 'marks: removal exposes a run on the second pass (the base composes with the first mark, so 16 remain)', input: [`a${'\u0301\u200b'.repeat(17)}`, `a${'\u0301\u200b'.repeat(18)}`, 'Acme'] },
-        { name: 'marks: variation selectors and the combining grapheme joiner are marks, so the run check sees them before they are removed', input: [`a${repeat('\ufe0f', 17)}`, `a${repeat('\ufe0f', 16)}`, `Acme${repeat('\u034f', 17)}`, `Acme${repeat('\u034f', 16)}`, `${repeat('\u{e0100}', 17)}ab`, `${repeat('\u{e0100}', 16)}ab`] },
+        { name: 'marks: removal exposes a run on the second pass (the base does not compose with the first mark)', input: [`cb${'\u0301\u200b'.repeat(17)}`, `cb${'\u0301\u200b'.repeat(16)}`, 'Acme'] },
+        { name: 'marks: removal exposes a run on the second pass (the base composes with the first mark, so 16 remain)', input: [`ba${'\u0301\u200b'.repeat(17)}`, `ba${'\u0301\u200b'.repeat(18)}`, 'Acme'] },
+        { name: 'marks: variation selectors and the combining grapheme joiner are marks, so the run check sees them before they are removed', input: [`ab${repeat('\ufe0f', 17)}`, `ab${repeat('\ufe0f', 16)}`, `Acme${repeat('\u034f', 17)}`, `Acme${repeat('\u034f', 16)}`, `${repeat('\u{e0100}', 17)}ab`, `${repeat('\u{e0100}', 16)}ab`] },
         { name: 'marks: invisible characters that are not marks are removed, whatever their number', input: [`${repeat('\u200b', 17)}ab`, `${repeat('\u200b', 40)}cd`, `ef${repeat('\u2060', 17)}gh`] },
         { name: 'marks: marks that NFKC produces (halfwidth voiced sound marks) are seen on the next pass', input: [`ab${repeat('\uff9e', 17)}`, `ab${repeat('\uff9e', 16)}`, `cd${repeat('\uff9f', 17)}`] },
         { name: 'marks: the descending-class attack shape (NFKC must reorder it) is empty at once', input: [`ab${repeat('\u0345', 1365)}${repeat('\u0300', 1365)}${repeat('\u0316', 1364)}`, `cd${repeat('\u0345', 6)}${repeat('\u0300', 5)}${repeat('\u0316', 5)}`] },
@@ -497,7 +497,7 @@ const NAMED_SANITIZE_CASES = (): NamedCase[] => {
             input: [`${repeat('-', 56)}\u{1f600}${repeat('-', 5)}`, `${repeat('-', 55)}\u{1f600}${repeat('-', 6)}`, `${repeat('-', 57)}\u{1f600}`, `${repeat('-', 58)}\u{1f600}`, `${repeat('-', 59)}\u{1f600}`, `${repeat('-', 56)}\u{1f600}\u{1f600}\u{1f600}`],
         },
         { name: 'preview: a lone high surrogate on unit 57 is dropped as well', input: [`${repeat('-', 56)}\ud83d${repeat('-', 5)}`, `${repeat('a', 56)}\udc00${repeat('a', 5)}`] },
-        { name: 'preview: an object whose text is cut inside a surrogate pair', input: [{ k: `${repeat('x', 49)}\u{1f600}${repeat('y', 10)}` }, { k: `${repeat('x', 50)}\u{1f600}${repeat('y', 10)}` }] },
+        { name: 'preview: objects are never serialised, so nothing is cut inside a surrogate pair', input: [{ k: `${repeat('x', 49)}\u{1f600}${repeat('y', 10)}` }, { k: `${repeat('x', 50)}\u{1f600}${repeat('y', 10)}` }] },
         // MAX_TOTAL_RAW_UNITS: the strings of one list that proceed to Unicode work (4096 units or fewer) may add up to 200000 units; later entries are not inspected
         {
             name: 'total: strings adding up to exactly 200000 units are all inspected, a one-unit entry after them is not (one marker)',
@@ -508,6 +508,24 @@ const NAMED_SANITIZE_CASES = (): NamedCase[] => {
             name: 'total: entries that are not strings add nothing, nothing after the crossing entry is inspected (not even a later non-string)',
             input: [null, 1, { k: 1 }, repeat('c', raw + 904), ...Array.from({ length: 48 }, () => repeat('a', raw)), [1, 2], repeat('d', MAX_TOTAL_RAW_UNITS - 48 * raw), 7, 'Acme', 'Beta Corp', null],
         },
+        // at least two letters or numbers: one alphanumeric character padded with punctuation is the one-letter needle in disguise
+        { name: 'alnum: one letter or digit padded with punctuation is single_letter_or_digit', input: ['c.', 'd.', 'a.', '(a)', 'a |', '-0', '.0', '1)', 'A-', '(1)', '..a'] },
+        { name: 'alnum: two letters or digits are enough, wherever the punctuation sits', input: ['BP', 'GE', '3M', 'a.b', 'a-1', '(ab)', '1.2', 'S.A.'] },
+        { name: 'alnum: a pasted company list drops the legal-form fragments and keeps the names', input: 'Smith, J.\nBrown, A.; Acme Corp' },
+        { name: 'alnum: no letter or digit at all stays no_letter_or_digit, and the order of the checks is length first', input: ['--', '..', '()', '-'.repeat(201), '!!!!'] },
+        { name: 'alnum: a letter plus a combining mark is one alphanumeric character', input: ['q\u0307', 'a\u0345', 'a\u0345\u0345', 'ab\u0345'] },
+        // one visible glyph that NFKC expands is one character, not a two-character keyword
+        { name: 'glyph: one expanding compatibility character is too_short', input: ['\u2473', '\u2116', '\ufb01', '\u2474', '\u249c', '\u2488', '\ufdfa', '\u00bd', '\u2460'] },
+        { name: 'glyph: two expanding characters are two characters', input: ['\u2473\u2473', '\u2116\u2116', '\ufb01\ufb01', '\u2460\u2461'] },
+        { name: 'glyph: a visible character plus an invisible one is still one character', input: ['\u2473\u200b', '\u200b\u2116', '\ufb01\u00ad'] },
+        // the NFKC expansion cap: a text that grows to more than 4x its length plus 16 units is empty
+        { name: 'expansion: the Arabic ligature U+FDFA at several lengths', input: [repeat('\ufdfa', 2), repeat('\ufdfa', 3), repeat('\ufdfa', 11), repeat('\ufdfa', 12), repeat('\ufdfa', 40), `${repeat('\ufdfa', 3)}abcd`, `${'\ufdfa'}${repeat('a', 30)}`] },
+        // preview(): a string is cut at 57 units and its control, invisible and lone surrogate characters become U+FFFD; anything else is a constant tag
+        { name: 'preview: control characters, escape sequences and bidi controls in a rejected string become U+FFFD', input: ['\u001b[31mred', '\u202eevil\u0000', 'x\u0007y', '\u0085\u2028', '\u200b\u200b'] },
+        { name: 'preview: a lone surrogate inside a rejected string becomes U+FFFD', input: ['\ud800\u001b[31m\nFAKE', 'ab\udc00', '\ud83d'] },
+        { name: 'preview: a long rejected string with controls is cut at 57 units, then cleaned', input: [`\u001b${repeat('x', 100)}`, `${repeat('-', 55)}\u0000\u0001\u0002${repeat('-', 20)}`] },
+        { name: 'preview: nested and wide values are constant tags', input: [[], [[[[[[[[[[1]]]]]]]]]], { a: { b: { c: {} } } }, Array.from({ length: 300 }, (_unused, index) => [index]), 12345, 0.5, true, false, null] },
+        { name: 'preview: a deeply nested array is a constant tag', input: [Array.from({ length: 200 }).reduce<unknown>((inner) => [inner], [])] },
     ];
 };
 
@@ -610,7 +628,7 @@ const NAMED_MATCH_CASES = (): MatchCase[] => {
         { name: 'cut: an astral character straddling unit 8192 and no whitespace', haystack: `${'z'.repeat(unitsMax - 1)}\u{1f600}Acme`, keywords: ['zzz', 'Acme'] },
         { name: 'cut: astral characters count two units each (the haystack is exactly 8192 units)', haystack: `${'z'.repeat(unitsMax - 4 - 200)}${'\u{1f600}'.repeat(100)}Acme`, keywords: ['Acme'] },
         { name: 'cut: astral characters count two units each (8193 units and no whitespace)', haystack: `${'z'.repeat(unitsMax - 4 - 200 + 1)}${'\u{1f600}'.repeat(100)}Acme`, keywords: ['Acme'] },
-        { name: 'cut: astral characters before the cut count two units each', haystack: `${'z\u{1f600}'.repeat(2730)} Acme${'z'.repeat(25)}`, keywords: ['Acme', 'z\u{1f600}'] },
+        { name: 'cut: astral characters before the cut count two units each', haystack: `${'z\u{1f600}'.repeat(2730)} Acme${'z'.repeat(25)}`, keywords: ['Acme', 'z\u{1f600}z'] },
         { name: 'cut: a combining accent just beyond the window no longer creates a hit for the unaccented word', haystack: `${'z'.repeat(unitsMax - 5)} cafe\u0301 Paris`, keywords: ['cafe'] },
         { name: 'cut: the accented word inside the window is the accented word', haystack: `${'z'.repeat(unitsMax - 20)} cafe\u0301 Paris${'z'.repeat(30)}`, keywords: ['cafe', 'caf\u00e9'] },
         ...[
@@ -632,14 +650,14 @@ const NAMED_MATCH_CASES = (): MatchCase[] => {
             ['word joiner', '\u2060'],
             ['soft hyphen', '\u00ad'],
         ].map(([label, ch]) => ({ name: `cut: ${label} as the only whitespace in a long haystack`, haystack: `Acme${ch}${'z'.repeat(unitsMax - 2)}`, keywords: ['Acme'] })),
-        // MAX_COMBINING_RUN: a haystack with 17 or more consecutive combining marks anywhere in the searched text is never matched
+        // MAX_COMBINING_RUN: a haystack run of 17 or more consecutive combining marks is cut to its first 16 marks (a KEYWORD with such a run is rejected)
         { name: 'marks: 16 marks in a haystack are fine and the keyword before them is found', haystack: `Acme Corp b${'\u0301'.repeat(16)}`, keywords: ['Acme'] },
-        { name: 'marks: 17 marks anywhere in the haystack make the whole haystack unsearchable, even the keyword before them', haystack: `Acme Corp b${'\u0301'.repeat(17)}`, keywords: ['Acme'] },
-        { name: 'marks: 17 marks kept apart by zero-width spaces are a run once cleaning removes them', haystack: `Acme Corp b${'\u0301\u200b'.repeat(17)}`, keywords: ['Acme'] },
+        { name: 'marks: 17 marks in the haystack are cut to 16, so the keyword before them is still found', haystack: `Acme Corp b${'\u0301'.repeat(17)}`, keywords: ['Acme'] },
+        { name: 'marks: 17 marks kept apart by zero-width spaces are a run once cleaning removes them; it is cut, the keyword is found', haystack: `Acme Corp b${'\u0301\u200b'.repeat(17)}`, keywords: ['Acme'] },
         { name: 'marks: 16 marks kept apart by zero-width spaces are not', haystack: `Acme Corp b${'\u0301\u200b'.repeat(16)}`, keywords: ['Acme'] },
         { name: 'marks: a run beyond the cut is never seen, so the keyword before the cut is found', haystack: `${'z'.repeat(unitsMax - 12)} Acme b${'\u0301'.repeat(17)}`, keywords: ['Acme'] },
-        { name: 'marks: a run inside the searched text, before the last whitespace of the window, hides the haystack', haystack: `${'z'.repeat(unitsMax - 40)} b${'\u0301'.repeat(17)} Corp Acme${'z'.repeat(40)}`, keywords: ['zzzz'] },
-        { name: 'marks: the descending-class attack shape in a haystack is unsearchable at once', haystack: `Acme ${'\u0345'.repeat(1365)}${'\u0300'.repeat(1365)}${'\u0316'.repeat(1364)}`, keywords: ['Acme'] },
+        { name: 'marks: a run inside the searched text is cut to 16 marks; the words around it are still searched', haystack: `${'z'.repeat(unitsMax - 40)} b${'\u0301'.repeat(17)} Corp Acme${'z'.repeat(40)}`, keywords: ['zzzz'] },
+        { name: 'marks: the descending-class attack shape in a haystack is cut to its first 16 marks at once, the keyword before it is found', haystack: `Acme ${'\u0345'.repeat(1365)}${'\u0300'.repeat(1365)}${'\u0316'.repeat(1364)}`, keywords: ['Acme'] },
         { name: 'marks: marks between letters never form a run', haystack: `Acme ${'a\u0301'.repeat(50)}`, keywords: ['Acme'] },
         // the keyword list is read up to 5000 entries, and accepted up to 500
         { name: 'candidates: a keyword at entry 5000 is read', haystack: 'Beta Corp', keywords: [...Array.from({ length: MAX_CANDIDATES - 1 }, () => 'a'), 'Beta Corp'] },
@@ -647,6 +665,23 @@ const NAMED_MATCH_CASES = (): MatchCase[] => {
         { name: 'size: the 500th keyword matches', haystack: 'Zeta Corp', keywords: [...Array.from({ length: MAX_KEYWORDS - 1 }, (_unused, index) => `kw${String(index).padStart(4, '0')}`), 'Zeta Corp'] },
         { name: 'size: the 501st keyword never matches', haystack: 'Zeta Corp', keywords: [...Array.from({ length: MAX_KEYWORDS }, (_unused, index) => `kw${String(index).padStart(4, '0')}`), 'Zeta Corp'] },
         { name: 'raw cap: a keyword over 4096 units never matches, even when its cleaned form would', haystack: 'Acme Corp', keywords: [`${'\u200b'.repeat(MAX_RAW_KEYWORD_UNITS)}acme`] },
+        // one hostile field must not hide a watchlisted name in another: a run of marks is cut, not fatal
+        { name: 'marks: 17 Thai marks after a word do not hide the name before them', haystack: `Pfizer Inc x${'\u0e31'.repeat(17)}`, keywords: ['Pfizer'] },
+        { name: 'marks: a run at the start does not hide the name after it', haystack: `${'\u0e31'.repeat(17)} | Pfizer Inc`, keywords: ['Pfizer'] },
+        { name: 'marks: 9 marks, a zero-width space and 9 more marks make one run of 18 that is cut', haystack: `Pfizer Inc x${'\u0e31'.repeat(9)}\u200b${'\u0e31'.repeat(9)}`, keywords: ['Pfizer'] },
+        { name: 'marks: marks glued to the last letter compose with it, so the unaccented keyword is not in the text', haystack: `acme${'\u200b'.repeat(3)}${'\u0301'.repeat(9)}\u200b${'\u0301'.repeat(9)}`, keywords: ['acme'] },
+        { name: 'marks: marks after a space are cut and the keyword before the space is found', haystack: `acme ${'\u200b'.repeat(3)}${'\u0301'.repeat(9)}\u200b${'\u0301'.repeat(9)}`, keywords: ['acme'] },
+        { name: 'marks: cutting a run cannot invent a hit: the accent stays on the letter', haystack: `cafe${'\u0301'.repeat(30)}`, keywords: ['cafe'] },
+        { name: 'marks: runs separated by a letter are separate runs', haystack: `acme ${`x${'\u0301'.repeat(16)}`.repeat(50)}`, keywords: ['acme'] },
+        // the one-letter needle in disguise never matches, whatever the text
+        { name: 'alnum: single-alphanumeric keywords are rejected, so they never match', haystack: 'Pfizer Inc. | Acme Ltd. | S.A. 2024-01-02', keywords: ['c.', 'd.', 'a |', '-0', '(a)', '1)'] },
+        { name: 'alnum: a pasted list with legal-form fragments matches only the names', haystack: 'Banco Santander S.A.', keywords: ['Smith', 'J.', 'A.'] },
+        { name: 'glyph: one expanding character is not a keyword, so it never matches its expansion', haystack: 'Annual report 2020', keywords: ['\u2473', '\u2116'] },
+        { name: 'glyph: two expanding characters are a keyword that matches their expansion', haystack: 'Annual report 2020', keywords: ['\u2473\u2473'] },
+        // the NFKC expansion cap applies to a haystack too
+        { name: 'expansion: a haystack of U+FDFA ligatures is empty, the keyword after it is not searched', haystack: `${'\ufdfa'.repeat(8188)} acme`, keywords: ['acme'] },
+        { name: 'expansion: a short haystack with a ligature inside the 4x allowance is searched', haystack: `${'\ufdfa'.repeat(3)} acme corp`, keywords: ['acme'] },
+        { name: 'expansion: a haystack past the allowance is empty', haystack: `${'\ufdfa'.repeat(8)} acme corp`, keywords: ['acme'] },
     ];
 };
 

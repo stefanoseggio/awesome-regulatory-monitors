@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { classifyRecord, createEmptyState, InMemoryDeltaStore, markProcessed, MAX_JOURNAL_ENTRIES, parseJournal, parseState } from '../lib/state.js';
+import { classifyRecord, CorruptDeltaRecordError, createEmptyState, InMemoryDeltaStore, markProcessed, MAX_JOURNAL_ENTRIES, parseJournal, parseState } from '../lib/state.js';
 
 describe('delta state', () => {
     it('classifies first_seen / unchanged / updated', () => {
@@ -88,12 +88,17 @@ describe('parseJournal', () => {
         expect(parseJournal([])).toEqual([]);
     });
 
+    it('treats an ABSENT record (null or undefined) as an empty journal', () => {
+        expect(parseJournal(null)).toEqual([]);
+        expect(parseJournal(undefined)).toEqual([]);
+    });
+
     it.each([
-        ['null', null],
-        ['undefined', undefined],
-        ['a string', 'abc'],
+        ['a string (a record the store could not parse)', 'abc'],
+        ['a truncated JSON text', '[{"recordId":"a","fingerprint":"f"'],
         ['an object', { recordId: 'a', fingerprint: 'f' }],
         ['a number', 7],
+        ['a boolean', false],
         ['an entry that is not an object', ['x']],
         ['a null entry', [null]],
         ['an empty record id', [{ recordId: '', fingerprint: 'f' }]],
@@ -101,13 +106,17 @@ describe('parseJournal', () => {
         ['a missing fingerprint', [{ recordId: 'a' }]],
         ['a numeric fingerprint', [{ recordId: 'a', fingerprint: 3 }]],
         ['one bad entry among good ones (all-or-nothing)', [{ recordId: 'a', fingerprint: 'f' }, { recordId: 2, fingerprint: 'f' }]],
-    ])('treats %s as an empty journal, never throwing', (_label, value) => {
-        expect(parseJournal(value)).toEqual([]);
+    ])('throws CorruptDeltaRecordError for %s: a PRESENT record that cannot be read must not be read as "no journal"', (_label, value) => {
+        expect(() => parseJournal(value)).toThrow(CorruptDeltaRecordError);
+    });
+
+    it('carries the caller description in the error message', () => {
+        expect(() => parseJournal('x', 'journal record "journal.ns.ofac" is unreadable')).toThrow('journal record "journal.ns.ofac" is unreadable');
     });
 
     it('refuses a journal longer than one checkpoint window could ever produce', () => {
         const entries = Array.from({ length: MAX_JOURNAL_ENTRIES + 1 }, (_, i) => ({ recordId: String(i), fingerprint: 'f' }));
-        expect(parseJournal(entries)).toEqual([]);
+        expect(() => parseJournal(entries)).toThrow(CorruptDeltaRecordError);
         expect(parseJournal(entries.slice(0, MAX_JOURNAL_ENTRIES))).toHaveLength(MAX_JOURNAL_ENTRIES);
     });
 
@@ -116,6 +125,43 @@ describe('parseJournal', () => {
             { recordId: '__proto__', fingerprint: 'f' },
             { recordId: 'constructor', fingerprint: 'g' },
         ]);
+    });
+});
+
+describe('parseState reports a present-but-unreadable per-source record instead of dropping it', () => {
+    const good = { seenIds: ['a'], fingerprints: { a: 'f' }, lastRunAt: 't' };
+
+    it('keeps valid records and lists no invalid source when everything is well formed', () => {
+        const state = parseState({ version: 2, sources: { ofac: good } });
+        expect(Object.keys(state.sources)).toEqual(['ofac']);
+        expect(state.invalid).toBeUndefined();
+    });
+
+    it('treats a null or undefined record as absent, not invalid', () => {
+        const state = parseState({ version: 2, sources: { ofac: null, sec: undefined, eu: good } });
+        expect(Object.keys(state.sources)).toEqual(['eu']);
+        expect(state.invalid).toBeUndefined();
+    });
+
+    it.each([
+        ['a string (corrupt JSON)', 'not json'],
+        ['a number', 5],
+        ['an array', [1]],
+        ['a missing seenIds', { fingerprints: {} }],
+        ['a non-string id', { seenIds: [1], fingerprints: {} }],
+        ['a non-string fingerprint', { seenIds: ['a'], fingerprints: { a: 1 } }],
+        ['fingerprints that are not an object', { seenIds: ['a'], fingerprints: 'x' }],
+    ])('lists a source whose record is %s as invalid, with the caller reason, and keeps the others', (_label, bad) => {
+        const state = parseState({ version: 2, sources: { ofac: bad, eu: good } }, (source) => `record for ${source} is unreadable`);
+        expect(Object.keys(state.sources)).toEqual(['eu']);
+        expect(state.invalid).toEqual({ ofac: 'record for ofac is unreadable' });
+    });
+
+    it('keeps the invalid list when a source is processed (markProcessed)', () => {
+        const state = parseState({ version: 2, sources: { ofac: 'bad', eu: good } });
+        const next = markProcessed(state, 'eu', [{ recordId: 'b', fingerprint: 'g' }], 't2');
+        expect(next.invalid).toEqual(state.invalid);
+        expect(Object.keys(next.invalid ?? {})).toEqual(['ofac']);
     });
 });
 

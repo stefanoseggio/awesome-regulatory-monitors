@@ -303,7 +303,7 @@ describe('options validation (through the real router preflight)', () => {
     it('lists entries that are not epodoc publication numbers instead of silently dropping them', () => {
         expect(() => resolve({ ...creds, epWatchlist: ['not a number'] })).toThrow(/not accepted: not a number/);
         expect(() => resolve({ ...creds, epWatchlist: ['EP3000000', 'EP300../0000'] })).toThrow(/not accepted: EP300\.\.\/0000/);
-        expect(() => resolve({ ...creds, epWatchlist: ['EP3000000', 5] })).toThrow(/not accepted: 5/);
+        expect(() => resolve({ ...creds, epWatchlist: ['EP3000000', 5] })).toThrow(/not accepted: \[number\]/); // a non-string entry is shown as a constant tag, never serialised
         expect(() => resolve({ ...creds, epWatchlist: ['E'] })).toThrow(/not accepted/);
         expect(() => resolve({ ...creds, epWatchlist: ['EP.1000000.A1'] })).toThrow(/not accepted/); // docdb format, not epodoc
     });

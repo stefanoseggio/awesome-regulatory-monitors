@@ -24,7 +24,7 @@ export async function runEngineMain(engine: EngineDefinition, userAgent: string)
             throw new FatalConfigError(error instanceof Error ? error.message : String(error));
         }
         const summary = await runEngine(engine, input ?? {}, {
-            sinks: createApifySinks(engine.slug, namespace),
+            sinks: createApifySinks(engine.slug, namespace, { leases: {} }),
             ctx: { http: createHttpClient({ userAgent, log }), log, now: () => new Date() },
         });
         if (allSourcesFailed(summary)) {

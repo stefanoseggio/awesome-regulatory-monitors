@@ -303,7 +303,7 @@ def test_a_keyword_that_settles_to_one_character_is_rejected_at_once_and_what_is
         build_run_request(REGTECH, owner="o", **run_kwargs(watchlist_names=lone, strict_watchlist=True))
     prepared = build_run_request(REGTECH, owner="o", **run_kwargs(watchlist_names=[*lone, "a\u200b\u0301\u0301", "Acme"]))
     sent = prepared.run_input["watchlistNames"]
-    assert sent == ["\u00e1\u0301", "Acme"]
+    assert sent == ["Acme"], "U+00E1 + U+0301 holds one letter: single_letter_or_digit"
     again = sanitize_keyword_list(sent)
     assert again.keywords == tuple(sent) and again.rejected == ()
     assert prepared.watchlist.keywords == tuple(sent)

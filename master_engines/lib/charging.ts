@@ -43,6 +43,13 @@ export interface BillingPort {
     isPayPerEvent(): boolean;
     perEventPrices(): Readonly<Record<string, number>>;
     charge(eventName: string, count: number): Promise<PortChargeResult>;
+    /**
+     * Optional. How many more events of this type the run's remaining budget can pay (Infinity when the run has no
+     * budget or the event is free). The SDK deliberately "overcharges by one" at the budget limit, so a charge that is
+     * attempted when this is below 1 would exceed the customer's maximum by up to one event; the watchlist-hit biller
+     * asks first and stops instead. A port without it is treated as unbounded.
+     */
+    affordableCount?(eventName: string): number;
 }
 
 export interface PriceValidation {
@@ -132,6 +139,11 @@ export class WatchlistHitBiller {
             return 'skipped_cap';
         }
 
+        // Do not even try when the budget cannot pay one more hit: the SDK would overcharge by one event (up to the hit
+        // price, $0.15) past the customer's maximum. The row was already delivered; its hit stays unbilled and the run stops.
+        const affordable = this.billing.affordableCount?.(WATCHLIST_HIT_EVENT);
+        if (affordable !== undefined && affordable < 1) return 'limit_reached';
+
         const result = await this.billing.charge(WATCHLIST_HIT_EVENT, 1);
         if (result.chargedCount < 1) return 'limit_reached';
 
@@ -160,6 +172,11 @@ export class FakeBilling implements BillingPort {
 
     perEventPrices(): Readonly<Record<string, number>> {
         return this.prices;
+    }
+
+    affordableCount(eventName: string): number {
+        const unit = this.prices[eventName] ?? 0;
+        return unit === 0 ? Number.POSITIVE_INFINITY : Math.floor(this.remainingBudgetUsd / unit);
     }
 
     async charge(eventName: string, count: number): Promise<PortChargeResult> {

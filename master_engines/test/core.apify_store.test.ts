@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { ApifyDeltaStore, type KeyValueLike } from '../lib/apify_adapters.js';
-import { createEmptyState, markProcessed, resolveStateNamespace } from '../lib/state.js';
+import { CorruptDeltaRecordError, createEmptyState, markProcessed, resolveStateNamespace } from '../lib/state.js';
 
 class FakeKv implements KeyValueLike {
     readonly data = new Map<string, unknown>();
@@ -129,13 +129,26 @@ describe('ApifyDeltaStore delivery journal', () => {
         expect(await b.loadJournal('ofac')).toEqual([]);
     });
 
-    it('treats a corrupted journal record as empty rather than failing the run', async () => {
+    it('refuses a corrupted journal record (present but unreadable) with the key and the store in the message, and still reads an absent one as empty', async () => {
         const kv = new FakeKv();
-        const store = new ApifyDeltaStore('s', 'default', async () => kv);
+        const store = new ApifyDeltaStore('my-store', 'default', async () => kv);
+        expect(await store.loadJournal('ofac')).toEqual([]);
         kv.data.set('journal.default.ofac', { not: 'an array' });
-        expect(await store.loadJournal('ofac')).toEqual([]);
+        await expect(store.loadJournal('ofac')).rejects.toThrow(/"journal\.default\.ofac" in the key-value store "my-store" exists but cannot be read/);
         kv.data.set('journal.default.ofac', [{ recordId: 5 }]);
-        expect(await store.loadJournal('ofac')).toEqual([]);
+        await expect(store.loadJournal('ofac')).rejects.toBeInstanceOf(CorruptDeltaRecordError);
+        kv.data.set('journal.default.ofac', '[{"recordId":"a","fingerprint":"f"');
+        await expect(store.loadJournal('ofac')).rejects.toBeInstanceOf(CorruptDeltaRecordError);
+    });
+
+    it('reports an unreadable delta-memory record as invalid (with the key and the store) instead of starting that source from scratch', async () => {
+        const kv = new FakeKv();
+        kv.data.set('state.default.ofac', 'truncated json');
+        kv.data.set('state.default.sec', { seenIds: ['x'], fingerprints: { x: 'f' }, lastRunAt: 't' });
+        const store = new ApifyDeltaStore('my-store', 'default', async () => kv);
+        const state = await store.load();
+        expect(Object.keys(state.sources)).toEqual(['sec']);
+        expect(state.invalid?.ofac).toMatch(/"state\.default\.ofac" in the key-value store "my-store" exists but cannot be read/);
     });
 
     it('writes only recordId and fingerprint, and opens the key-value store once however many rows are journalled', async () => {

@@ -80,10 +80,13 @@ describe('sanitizeKeywordList - normalisation and limits', () => {
         expect(sanitizeKeywordList(['  ab  ']).keywords).toEqual(['ab']);
     });
 
-    it('requires a letter or digit', () => {
+    it('requires at least two letters or digits', () => {
         expect(sanitizeKeywordList(['--']).rejected[0]?.reason).toBe('no_letter_or_digit');
-        expect(sanitizeKeywordList(['A-']).keywords).toEqual(['A-']);
+        // one letter or digit padded with punctuation is the one-letter needle of the original bug in disguise
+        for (const padded of ['A-', 'c.', 'a |', '-0', '(a)', '1)']) expect(sanitizeKeywordList([padded]).rejected[0]?.reason, padded).toBe('single_letter_or_digit');
+        // short but real names stay valid
         expect(sanitizeKeywordList(['42']).keywords).toEqual(['42']);
+        expect(sanitizeKeywordList(['BP', 'GE', '3M', 'AT&T']).keywords).toEqual(['BP', 'GE', '3M', 'AT&T']);
         expect(sanitizeKeywordList(['中文']).keywords).toEqual(['中文']);
     });
 

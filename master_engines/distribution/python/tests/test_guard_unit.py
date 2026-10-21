@@ -99,7 +99,7 @@ def test_non_strings_are_rejected_not_coerced() -> None:
     result = sanitize_keyword_list([1, None, True, ["x"], {"k": "v"}, "Acme"])
     assert result.keywords == ("Acme",)
     assert [item.reason for item in result.rejected] == ["not_a_string"] * 5
-    assert [item.value for item in result.rejected] == ["1", "null", "true", '["x"]', '{"k":"v"}']
+    assert [item.value for item in result.rejected] == ["[number]", "[null]", "[boolean]", "[array]", "[object]"]
 
 
 def test_length_is_counted_in_code_points_after_normalisation() -> None:
@@ -114,9 +114,9 @@ def test_length_is_counted_in_code_points_after_normalisation() -> None:
 
 def test_a_keyword_needs_a_letter_or_a_digit() -> None:
     result = sanitize_keyword_list(["--", "..", "()", "__", "-1-", "\u00bd", "\u0663\u0663"])
-    assert [item.value for item in result.rejected] == ["--", "..", "()", "__"]
-    assert all(item.reason == "no_letter_or_digit" for item in result.rejected)
-    assert len(result.keywords) == 3
+    assert [item.value for item in result.rejected] == ["--", "..", "()", "__", "-1-", "\u00bd"]
+    assert [item.reason for item in result.rejected] == ["no_letter_or_digit"] * 4 + ["single_letter_or_digit", "too_short"]
+    assert result.keywords == ("\u0663\u0663",), "two Arabic-Indic digits are two digits"
 
 
 def test_duplicates_are_removed_case_insensitively_first_spelling_wins() -> None:
@@ -246,10 +246,10 @@ def test_surrogate_halves_held_as_separate_code_points_are_read_as_one_character
     assert sanitize_keyword_list(halves + "," + halves + halves).keywords == ("AA",)
 
 
-def test_a_long_keyword_without_a_letter_is_too_long_before_it_is_letterless() -> None:
-    # The order of the checks is part of the contract: lib/_guards.ts tests both length bounds before the letter-or-number rule.
-    result = sanitize_keyword_list(["-" * (MAX_KEYWORD_LENGTH + 1), "-" * MAX_KEYWORD_LENGTH, "-"])
-    assert [item.reason for item in result.rejected] == ["too_long", "no_letter_or_digit", "too_short"]
+def test_a_long_keyword_without_a_letter_is_letterless_before_it_is_too_long() -> None:
+    # The order of the checks is part of the contract: lib/_guards.ts tests the letter-or-number rules before the upper length bound.
+    result = sanitize_keyword_list(["-" * (MAX_KEYWORD_LENGTH + 1), "-" * MAX_KEYWORD_LENGTH, "-", "a" + "-" * MAX_KEYWORD_LENGTH, "ab" + "-" * (MAX_KEYWORD_LENGTH - 1)])
+    assert [item.reason for item in result.rejected] == ["no_letter_or_digit", "no_letter_or_digit", "too_short", "single_letter_or_digit", "too_long"]
 
 
 def test_a_hand_built_list_with_a_blank_or_one_character_needle_never_matches() -> None:
@@ -261,13 +261,15 @@ def test_a_hand_built_list_with_a_blank_or_one_character_needle_never_matches() 
     assert find_keyword_match("anything", SanitizedKeywordList((), (), (), False)) is None
 
 
-def test_control_characters_in_a_previewed_value_are_escaped_like_json_stringify() -> None:
+def test_control_characters_in_a_previewed_value_are_replaced_and_an_object_is_never_serialised() -> None:
     assert js_json_stringify("\b\f\n\r\t\u0001\u001f") == '"\\b\\f\\n\\r\\t\\u0001\\u001f"'
-    assert sanitize_keyword_list([{"k": "a\b\f"}]).rejected[0].value == '{"k":"a\\b\\f"}'
+    assert sanitize_keyword_list([{"k": "a\b\f"}]).rejected[0].value == "[object]"
+    shown = [item.value for item in sanitize_keyword_list(["\x1b\x07", "\u202e\u0000", "\x1b" + "-" * 100]).rejected]
+    assert shown == ["\ufffd\ufffd", "\ufffd\ufffd", "\ufffd" + "-" * 56 + "..."]
 
 
-def test_a_circular_or_absurdly_deep_value_gets_the_javascript_fallback_preview_and_never_raises() -> None:
-    # JSON.stringify throws on a cycle and on a nesting deeper than the stack; lib/_guards.ts then uses Object.prototype.toString.
+def test_a_circular_or_absurdly_deep_value_is_a_constant_tag_and_never_raises() -> None:
+    # A rejected non-string is never serialised (JSON.stringify of a deeply nested value cost 7 ms per entry): a cycle and a 20,000-deep nesting are tags.
     circular_list: list[Any] = []
     circular_list.append(circular_list)
     circular_dict: dict[str, Any] = {}
@@ -281,18 +283,18 @@ def test_a_circular_or_absurdly_deep_value_gets_the_javascript_fallback_preview_
     result = sanitize_keyword_list([circular_list, circular_dict, {"wrapped": [circular_dict]}, deep, "Acme"])
     assert result.keywords == ("Acme",)
     assert [(item.value, item.reason) for item in result.rejected] == [
-        ("[object Array]", "not_a_string"),
-        ("[object Object]", "not_a_string"),
-        ("[object Object]", "not_a_string"),
-        ("[object Array]", "not_a_string"),
+        ("[array]", "not_a_string"),
+        ("[object]", "not_a_string"),
+        ("[object]", "not_a_string"),
+        ("[array]", "not_a_string"),
     ]
-    assert sanitize_keyword_list(circular_list).rejected[0].value == "[object Array]"
+    assert sanitize_keyword_list(circular_list).rejected[0].value == "[array]"
     assert sanitize_keyword_list(circular_dict).malformed_container is True
 
 
-def test_a_value_that_is_not_json_data_gets_the_object_fallback_preview() -> None:
-    assert sanitize_keyword_list([object(), b"bytes", {1, 2}]).rejected[0].value == "[object Object]"
-    assert [item.value for item in sanitize_keyword_list([b"bytes", {1, 2}]).rejected] == ["[object Object]", "[object Object]"]
+def test_a_value_that_is_not_json_data_is_the_object_tag() -> None:
+    assert sanitize_keyword_list([object(), b"bytes", {1, 2}]).rejected[0].value == "[object]"
+    assert [item.value for item in sanitize_keyword_list([b"bytes", {1, 2}]).rejected] == ["[object]", "[object]"]
 
 
 def test_a_needle_with_a_lone_surrogate_cannot_come_out_of_the_sanitiser_so_matching_never_finds_half_a_character() -> None:
@@ -307,12 +309,16 @@ def test_a_needle_with_a_lone_surrogate_cannot_come_out_of_the_sanitiser_so_matc
 
 def test_matching_runs_over_utf16_units_like_javascript_includes_for_a_list_that_bypassed_the_sanitiser() -> None:
     # lib/_guards.ts uses text.includes(needle): a hand-built needle that ends in a lone high surrogate is found in the first half of an astral character.
-    forged = SanitizedKeywordList(keywords=("a\ud83d", "\ude00b"), needles=("a\ud83d", "\ude00b"), rejected=(), malformed_container=False)
-    assert find_keyword_match("xa\U0001f600y", forged) == "a\ud83d"
-    assert find_keyword_match("x\U0001f600by", forged) == "\ude00b"
-    assert find_keyword_match("xa\ud83d\ude00y", forged) == "a\ud83d", "the same text with the halves held as two code points"
+    # The needles carry two letters each, so they pass the sanitiser's floor that find_keyword_match applies again.
+    forged = SanitizedKeywordList(keywords=("ab\ud83d", "\ude00bc"), needles=("ab\ud83d", "\ude00bc"), rejected=(), malformed_container=False)
+    assert find_keyword_match("xab\U0001f600y", forged) == "ab\ud83d"
+    assert find_keyword_match("x\U0001f600bcy", forged) == "\ude00bc"
+    assert find_keyword_match("xab\ud83d\ude00y", forged) == "ab\ud83d", "the same text with the halves held as two code points"
     assert find_keyword_match("zz\U00010000\U00010000", forged) is None
-    assert find_keyword_match("a\u200b\ud83d", forged) == "a\ud83d", "removing the invisible character leaves the half itself"
+    assert find_keyword_match("ab\u200b\ud83d", forged) == "ab\ud83d", "removing the invisible character leaves the half itself"
+    # one letter and a half is below the floor: it can no longer match inside an astral character
+    one_letter = SanitizedKeywordList(keywords=("a\ud83d",), needles=("a\ud83d",), rejected=(), malformed_container=False)
+    assert find_keyword_match("xa\U0001f600y", one_letter) is None
 
 
 def test_js_includes_is_aligned_to_utf16_units_and_treats_pairs_and_halves_alike() -> None:

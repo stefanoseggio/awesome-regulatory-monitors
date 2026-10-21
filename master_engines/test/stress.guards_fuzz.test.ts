@@ -306,17 +306,22 @@ function dress(rng: Rng, text: string, pools: WeightedPools): string {
 //   4  cleaned to a FIXED POINT of: NFKC, line breaks and tabs become a space, removal of the C0/C1 controls and of every
 //      Default_Ignorable_Code_Point and Bidi_Control character, whitespace runs collapse to one space, ends trimmed;
 //      a text that has not settled after 8 passes counts as empty; a text with a run of MORE than 16 consecutive
-//      combining marks (before any pass) counts as empty (NFKC reordering is quadratic in the length of a run)
-//   5  length >= 2 code points after cleaning
-//   6  length <= 200 code points
-//   7  contains at least one letter or number
+//      combining marks counts as empty for a keyword (NFKC reordering is quadratic in the length of a run) while a
+//      haystack keeps the first 16 marks of such a run; a text that NFKC grows by more than 4x plus 16 units counts as empty
+//   5  length >= 2 code points after cleaning, and at least 2 VISIBLE code points (neither invisible nor White_Space)
+//      in the raw text: one glyph that NFKC expands is not a two-character keyword
+//   6  at least TWO letters or numbers (none: no_letter_or_digit, exactly one: single_letter_or_digit)
+//   7  length <= 200 code points
 //   8  de-duplicated case-insensitively, first spelling wins
 //   9  at most 500 accepted, the rest rejected as over_limit
 //  10  at most 5,000 entries inspected, and the string entries of at most 4,096 units that are inspected add up to at most
 //      200,000 UTF-16 units (a longer entry costs nothing: it is rejected at once); the remainder is reported as ONE over_limit entry
 //   a bare string is cut to 200,000 units and split on LF, CR, comma and semicolon (ASCII only); when it WAS cut, the last
 //   piece (possibly truncated) is dropped and one over_limit entry is appended after the 'further entries' one;
-//   a non-array, non-string value is a malformed container. A haystack longer than 8,192 units is searched only up to
+//   a non-array, non-string value is a malformed container. A rejected value is previewed: a string cut at 57 units with
+//   control, invisible and lone surrogate characters replaced by U+FFFD, anything else as a constant tag such as [object].
+//   A needle is only matched if it has at least 2 code points and 2 letters or numbers; at most 500 needles are read.
+//   A haystack longer than 8,192 units is searched only up to
 //   the last White_Space character inside the window (none: not searched), then cleaned.
 
 const REF_MIN_CODE_POINTS = 2;
@@ -389,12 +394,34 @@ function refHasLongMarkRun(text: string): boolean {
     return false;
 }
 
-/** One cleaning pass. */
-function refCleanOnce(raw: string): string {
-    if (refHasLongMarkRun(raw)) return '';
+/** The text with every run of combining marks cut to its first REF_MAX_COMBINING_RUN marks. */
+function refCutMarkRuns(text: string): string {
+    let out = '';
+    let run = 0;
+    for (const ch of text) {
+        if (REF_MARK.test(ch)) {
+            run += 1;
+            if (run > REF_MAX_COMBINING_RUN) continue;
+        } else {
+            run = 0;
+        }
+        out += ch;
+    }
+    return out;
+}
+
+/** One cleaning pass. `hostileRuns` says what a run of more than 16 combining marks does: empty the text, or cut the run. */
+function refCleanOnce(input: string, hostileRuns: 'reject' | 'cut'): string {
+    let raw = input;
+    if (refHasLongMarkRun(raw)) {
+        if (hostileRuns === 'reject') return '';
+        raw = refCutMarkRuns(raw);
+    }
+    const nfkc = raw.normalize('NFKC');
+    if (nfkc.length > raw.length * 4 + 16) return '';
     let out = '';
     let gap = false;
-    for (const ch of raw.normalize('NFKC')) {
+    for (const ch of nfkc) {
         const cp = ch.codePointAt(0) as number;
         // Printable ASCII other than the space is never whitespace and never removed: skip the table lookups.
         if (cp > 0x20 && cp < 0x7f) {
@@ -416,10 +443,10 @@ function refCleanOnce(raw: string): string {
 }
 
 /** Cleaning repeated until the text stops changing; a text that never settles is treated as empty. */
-function refClean(raw: string): string {
+function refClean(raw: string, hostileRuns: 'reject' | 'cut' = 'reject'): string {
     let current = raw;
     for (let pass = 0; pass < REF_MAX_PASSES; pass += 1) {
-        const next = refCleanOnce(current);
+        const next = refCleanOnce(current, hostileRuns);
         if (next === current) return next;
         current = next;
     }
@@ -458,8 +485,21 @@ function refHasLoneSurrogate(text: string): boolean {
 
 const REF_LETTER_OR_NUMBER = /[\p{Letter}\p{Number}]/u;
 
-function refHasLetterOrNumber(text: string): boolean {
-    return REF_LETTER_OR_NUMBER.test(text);
+function refCountLettersOrNumbers(text: string): number {
+    let n = 0;
+    for (const ch of text) if (REF_LETTER_OR_NUMBER.test(ch)) n += 1;
+    return n;
+}
+
+/** Code points that are neither removed (invisible) nor White_Space: the glyphs a reader sees. */
+function refVisibleCodePoints(text: string): number {
+    let n = 0;
+    for (const ch of text) {
+        const cp = ch.codePointAt(0) as number;
+        if (refIsRemoved(cp) || refIsSpaceLike(cp)) continue;
+        n += 1;
+    }
+    return n;
 }
 
 function refSplit(text: string): string[] {
@@ -548,10 +588,14 @@ function refSanitize(input: unknown): RefResult {
             out.reasons.push('empty_after_normalisation');
         } else if (points < REF_MIN_CODE_POINTS) {
             out.reasons.push('too_short');
+        } else if (refVisibleCodePoints(candidate) < REF_MIN_CODE_POINTS) {
+            out.reasons.push('too_short');
+        } else if (refCountLettersOrNumbers(cleaned) === 0) {
+            out.reasons.push('no_letter_or_digit');
+        } else if (refCountLettersOrNumbers(cleaned) === 1) {
+            out.reasons.push('single_letter_or_digit');
         } else if (points > REF_MAX_CODE_POINTS) {
             out.reasons.push('too_long');
-        } else if (!refHasLetterOrNumber(cleaned)) {
-            out.reasons.push('no_letter_or_digit');
         } else {
             const key = cleaned.toLowerCase();
             if (!out.firstValid.has(key)) out.firstValid.set(key, cleaned);
@@ -574,9 +618,11 @@ function refSanitize(input: unknown): RefResult {
 function refFind(haystack: unknown, ref: RefResult): string | null {
     if (ref.needles.length === 0) return null;
     if (typeof haystack !== 'string') return null;
-    const text = refClean(refCutHaystack(haystack)).toLowerCase();
-    for (let i = 0; i < ref.needles.length; i += 1) {
-        if (text.includes(ref.needles[i] as string)) return ref.keywords[i] as string;
+    const text = refClean(refCutHaystack(haystack), 'cut').toLowerCase();
+    for (let i = 0; i < Math.min(ref.needles.length, REF_MAX_ACCEPTED); i += 1) {
+        const needle = ref.needles[i] as string;
+        if (codePoints(needle) < REF_MIN_CODE_POINTS || refCountLettersOrNumbers(needle) < 2) continue;
+        if (text.includes(needle)) return ref.keywords[i] as string;
     }
     return null;
 }
@@ -647,7 +693,29 @@ afterAll(() => {
 // ---------------------------------------------------------------------------------------------------------------
 
 type Rejection = { value: string; reason: KeywordRejectionReason };
-const R = (value: string, reason: KeywordRejectionReason): Rejection => ({ value, reason });
+/** The reference preview of a rejected STRING: cut at 57 units (never inside a pair) with '...', controls, invisible and lone surrogate characters replaced by U+FFFD. */
+function refPreview(value: string): string {
+    const clipped = value.length > 60 ? `${refCut(value, 57)}...` : value;
+    let out = '';
+    for (let i = 0; i < clipped.length; i += 1) {
+        const unit = clipped.charCodeAt(i);
+        if (unit >= 0xd800 && unit <= 0xdbff && clipped.charCodeAt(i + 1) >= 0xdc00 && clipped.charCodeAt(i + 1) <= 0xdfff) {
+            const cp = clipped.codePointAt(i) as number;
+            out += refIsRemoved(cp) ? '\ufffd' : clipped.slice(i, i + 2);
+            i += 1;
+        } else if (unit >= 0xd800 && unit <= 0xdfff) {
+            out += '\ufffd';
+        } else {
+            out += refIsRemoved(unit) ? '\ufffd' : clipped[i];
+        }
+    }
+    return out;
+}
+
+/** A rejection of the STRING entry `value`: its expected preview is computed by the reference. */
+const R = (value: string, reason: KeywordRejectionReason): Rejection => ({ value: refPreview(value), reason });
+/** A rejection of a NON-string entry: the preview is a constant tag. */
+const RT = (tag: string, reason: KeywordRejectionReason = 'not_a_string'): Rejection => ({ value: tag, reason });
 
 function expectNeverMatches(list: SanitizedKeywordList): void {
     for (const haystack of HAYSTACK_BATTERY) {
@@ -714,27 +782,27 @@ describe('PART 1 named cases: empty, blank and punctuation-only entries', () => 
 
 describe('PART 1 named cases: non-string entries are rejected, never coerced', () => {
     it('[null] is rejected as not_a_string', () => {
-        expectExact([null], { keywords: [], rejected: [R('null', 'not_a_string')] });
+        expectExact([null], { keywords: [], rejected: [RT('[null]')] });
     });
 
     it('[undefined] is rejected as not_a_string', () => {
-        expectExact([undefined], { keywords: [], rejected: [R('undefined', 'not_a_string')] });
+        expectExact([undefined], { keywords: [], rejected: [RT('[undefined]')] });
     });
 
     it('[[]] is rejected as not_a_string', () => {
-        expectExact([[]], { keywords: [], rejected: [R('[]', 'not_a_string')] });
+        expectExact([[]], { keywords: [], rejected: [RT('[array]')] });
     });
 
     it('[{}] is rejected as not_a_string', () => {
-        expectExact([{}], { keywords: [], rejected: [R('{}', 'not_a_string')] });
+        expectExact([{}], { keywords: [], rejected: [RT('[object]')] });
     });
 
     it('[0] is rejected as not_a_string', () => {
-        expectExact([0], { keywords: [], rejected: [R('0', 'not_a_string')] });
+        expectExact([0], { keywords: [], rejected: [RT('[number]')] });
     });
 
     it('[false] is rejected as not_a_string', () => {
-        expectExact([false], { keywords: [], rejected: [R('false', 'not_a_string')] });
+        expectExact([false], { keywords: [], rejected: [RT('[boolean]')] });
     });
 });
 
@@ -961,12 +1029,12 @@ describe('PART 1 named cases: mixed arrays, duplicates and prototype-polluting s
             rejected: [
                 R('', 'empty_after_normalisation'),
                 R('a', 'too_short'),
-                R('null', 'not_a_string'),
-                R('42', 'not_a_string'),
+                RT('[null]'),
+                RT('[number]'),
                 R('--', 'no_letter_or_digit'),
                 R('acme', 'duplicate'),
                 R('\u200b', 'empty_after_normalisation'),
-                R('{}', 'not_a_string'),
+                RT('[object]'),
                 R('ACME', 'duplicate'),
             ],
         });
@@ -1316,7 +1384,7 @@ describe('PART 2 reference implementation self-checks', () => {
             if (r.prod.keywords.length > 0) nonEmpty += 1;
             else empty += 1;
         }
-        expect([...reasons].sort()).toEqual(['duplicate', 'empty_after_normalisation', 'invalid_unicode', 'no_letter_or_digit', 'not_a_string', 'over_limit', 'too_long', 'too_short']);
+        expect([...reasons].sort()).toEqual(['duplicate', 'empty_after_normalisation', 'invalid_unicode', 'no_letter_or_digit', 'not_a_string', 'over_limit', 'single_letter_or_digit', 'too_long', 'too_short']);
         expect(malformed).toBeGreaterThan(1_000);
         expect(capped).toBeGreaterThan(100);
         expect(nonEmpty).toBeGreaterThan(8_000);
@@ -1724,7 +1792,7 @@ describe('PART 2 regression tests for the guard defects found by this suite (all
         }
     });
 
-    it('D11 a run of more than 16 consecutive combining marks makes a text empty, exactly at the boundary, for a keyword and for a haystack', () => {
+    it('D11 a run of more than 16 consecutive combining marks: a KEYWORD with one is rejected, a HAYSTACK keeps the first 16 marks of the run (one hostile field must not hide a whole record), exactly at the boundary', () => {
         const marks = (n: number): string => '\u0301'.repeat(n);
         expect(sanitizeKeywordList([`ab${marks(16)}`]).keywords).toEqual([`ab${marks(16)}`]);
         const over = sanitizeKeywordList([`ab${marks(17)}`]);
@@ -1732,11 +1800,18 @@ describe('PART 2 regression tests for the guard defects found by this suite (all
         expect(over.rejected.map((r) => r.reason)).toEqual(['empty_after_normalisation']);
         const acme = sanitizeKeywordList(['acme']);
         expect(findKeywordMatch(`acme ${marks(16)}`, acme)).toBe('acme');
-        // fail closed: a haystack with a hostile run is never matched, even where the keyword stands outside the run
-        expect(findKeywordMatch(`acme ${marks(17)}`, acme)).toBeNull();
-        expect(findKeywordMatch(`${marks(17)} acme`, acme)).toBeNull();
+        // the run is cut, the name beside it is still found, in either order and with the run in the middle
+        expect(findKeywordMatch(`acme ${marks(17)}`, acme)).toBe('acme');
+        expect(findKeywordMatch(`${marks(500)} acme`, acme)).toBe('acme');
+        expect(findKeywordMatch(`ac${marks(40)}me acme`, acme)).toBe('acme');
+        // two runs of 9 marks that only join once the invisible character between them is removed make one run of 18
+        expect(findKeywordMatch(`acme ${'\u200b'.repeat(3)}${marks(9)}\u200b${marks(9)}`, acme)).toBe('acme');
+        // glued to the last letter the marks compose with it ('e' + U+0301 is 'é'), so the keyword is not in the text
+        expect(findKeywordMatch(`acme${'\u200b'.repeat(3)}${marks(9)}\u200b${marks(9)}`, acme)).toBeNull();
         // runs separated by a letter are separate runs
         expect(findKeywordMatch(`acme ${`x${marks(16)}`.repeat(50)}`, acme)).toBe('acme');
+        // cutting a run cannot invent a hit: the accent stays on the letter, so 'cafe' is not in 'cafe' + marks
+        expect(findKeywordMatch(`cafe${marks(30)}`, sanitizeKeywordList(['cafe']))).toBeNull();
     });
 
     it('D11b the quadratic-reordering attack costs milliseconds: 5,000 entries of two letters and 4,090 marks of descending combining class', () => {
@@ -1845,6 +1920,140 @@ describe('PART 2 regression tests for the guard defects found by this suite (all
         sanitizeKeywordList(Array.from({ length: 5_000 }, () => entry));
         expect(performance.now() - started).toBeLessThan(1_000);
     });
+
+    // ---- guard review, third round (each test reproduces one finding of the independent adversarial review) ----
+
+    it('D16 a deeply nested non-string entry costs constant time: 5,000 entries of 8,000-deep arrays are rejected as [array] without being serialised', () => {
+        let deep: unknown[] = [];
+        for (let i = 0; i < 8_000; i += 1) deep = [deep];
+        const started = performance.now();
+        const list = sanitizeKeywordList(Array.from({ length: 5_000 }, () => deep));
+        expect(list.keywords).toEqual([]);
+        expect(list.rejected).toHaveLength(5_000);
+        expect(list.rejected.every((r) => r.reason === 'not_a_string' && r.value === '[array]')).toBe(true);
+        const shared = new Array<number>(100_000).fill(1);
+        sanitizeKeywordList(Array.from({ length: 5_000 }, () => shared));
+        expect(performance.now() - started, 'JSON.stringify of these costs seconds and about 1 GB').toBeLessThan(500);
+    });
+
+    it('D17 one letter or digit padded with punctuation is the one-letter needle in disguise: "c." never matches "Pfizer Inc."', () => {
+        for (const padded of ['c.', 'd.', 'a.', '(a)', 'a |', '-0', '.0', '1)', '\u2460']) {
+            const list = sanitizeKeywordList([padded]);
+            expect(list.keywords, padded).toEqual([]);
+            expect(findKeywordMatch('Pfizer Inc. | Acme Ltd. | S.A. 2024-01-02', list), padded).toBeNull();
+        }
+        // the comma split of a pasted company list produces such pieces: they are dropped, the names survive
+        const pasted = sanitizeKeywordList('Smith, J.\nBrown, A.; Acme Corp');
+        expect(pasted.keywords).toEqual(['Smith', 'Brown', 'Acme Corp']);
+        expect(pasted.rejected.map((r) => r.reason)).toEqual(['single_letter_or_digit', 'single_letter_or_digit']);
+        expect(findKeywordMatch('Banco Santander S.A.', pasted)).toBeNull();
+        // two letters or digits are enough, wherever the punctuation sits
+        for (const kept of ['BP', 'GE', '3M', 'a.b', 'a-1', '(ab)']) expect(sanitizeKeywordList([kept]).keywords, kept).toEqual([kept]);
+    });
+
+    it('D18 one visible glyph that NFKC expands is one character, not a two-character keyword: the circled twenty and the numero sign are rejected', () => {
+        for (const glyph of ['\u2473', '\u2116', '\ufb01', '\u33cc', '\u2474', '\u249c', '\u2488', '\ufdfa']) {
+            const list = sanitizeKeywordList([glyph]);
+            expect(list.keywords, glyph.codePointAt(0)?.toString(16)).toEqual([]);
+            expect(list.rejected.map((r) => r.reason)).toEqual(['too_short']);
+        }
+        expect(findKeywordMatch('Annual report 2020', sanitizeKeywordList(['\u2473']))).toBeNull();
+        // two glyphs that expand are two characters
+        expect(sanitizeKeywordList(['\u2473\u2473']).keywords).toEqual(['2020']);
+    });
+
+    it('D19 the NFKC expansion cap and the mark-run cap keep a hostile list under a second: the worst compatibility character, at every shape', () => {
+        const fdfa = '\ufdfa';
+        const started = performance.now();
+        const shapes = [
+            Array.from({ length: 48 }, () => `${fdfa.repeat(4_092)}e\u200b\u0301`),
+            Array.from({ length: 5_000 }, () => `${fdfa.repeat(39)}e\u200b\u0301`),
+            Array.from({ length: 48 }, () => fdfa.repeat(4_096)),
+        ];
+        for (const list of shapes) {
+            const result = sanitizeKeywordList(list);
+            expect(result.keywords).toEqual([]);
+            expect(result.rejected.every((r) => ['empty_after_normalisation', 'over_limit', 'too_long'].includes(r.reason))).toBe(true);
+        }
+        expect(performance.now() - started, 'three hostile lists at the raw caps').toBeLessThan(1_000);
+        // a haystack of the same shape counts as empty rather than being cleaned three times over 73,000 characters
+        const acme = sanitizeKeywordList(['acme']);
+        expect(findKeywordMatch(`${fdfa.repeat(8_188)} acme`, acme)).toBeNull();
+        expect(performance.now() - started).toBeLessThan(1_500);
+    });
+
+    it('D20 findKeywordMatch, matchesAnyKeyword and describeSanitization never throw, whatever list they are given', () => {
+        const revoked = (() => {
+            const { proxy, revoke } = Proxy.revocable({ needles: ['acme'], keywords: ['acme'] }, {});
+            revoke();
+            return proxy;
+        })();
+        const hostile: unknown[] = [
+            undefined,
+            null,
+            0,
+            'acme',
+            [],
+            {},
+            { needles: null },
+            { needles: 'acme' },
+            { needles: [null], keywords: [] },
+            { needles: [5, {}, Symbol('x')], keywords: [] },
+            { needles: ['acme corp'], keywords: undefined },
+            { needles: ['acme corp'], keywords: 'x' },
+            revoked,
+            { get needles(): string[] { throw new Error('boom'); } },
+        ];
+        for (const list of hostile) {
+            expect(() => findKeywordMatch('Acme Corp', list as never)).not.toThrow();
+            expect(() => matchesAnyKeyword('Acme Corp', list as never)).not.toThrow();
+            expect(() => describeSanitization(list as never)).not.toThrow();
+            expect(typeof describeSanitization(list as never)).toBe('string');
+        }
+        expect(findKeywordMatch('Acme Corp', undefined as never)).toBeNull();
+        expect(findKeywordMatch('Acme Corp', revoked as never)).toBeNull();
+        // a list without a keywords array is malformed: it matches nothing (fail closed) instead of throwing mid-match
+        expect(findKeywordMatch('Acme Corp', { needles: ['acme corp'], keywords: undefined } as never)).toBeNull();
+    });
+
+    it('D21 a hand-built list gets the sanitiser floor again: punctuation, padded and one-alphanumeric needles never match, and only 500 needles are read', () => {
+        const build = (needles: string[]): never => ({ keywords: needles, needles, rejected: [], malformedContainer: false }) as never;
+        for (const needle of ['..', ' a', 'a ', 'a.', '-0', '()', '  ']) expect(findKeywordMatch('Wait.. a. -0 () a b', build([needle])), needle).toBeNull();
+        expect(findKeywordMatch('Wait.. acme', build(['..', 'acme']))).toBe('acme');
+        const many = Array.from({ length: 1_000 }, (_, i) => `zz${i}`);
+        many[700] = 'acme';
+        expect(findKeywordMatch('Acme Corp', build(many)), 'needle 701 is never read').toBeNull();
+        many[400] = 'acme';
+        expect(findKeywordMatch('Acme Corp', build(many))).toBe('acme');
+        const started = performance.now();
+        findKeywordMatch('Acme Corp', build(new Array<string>(100_000_000) as string[]));
+        expect(performance.now() - started, 'a sparse array of 1e8 holes is not walked').toBeLessThan(200);
+    });
+
+    it('D22 one hostile field cannot hide a watchlisted name in another: a run of marks is cut, never makes the record empty', () => {
+        const pfizer = sanitizeKeywordList(['Pfizer']);
+        const run = '\u0e31'.repeat(17);
+        expect(findKeywordMatch(`Pfizer Inc x${run}`, pfizer)).toBe('Pfizer');
+        expect(findKeywordMatch(`${run} | Pfizer Inc`, pfizer)).toBe('Pfizer');
+        expect(findKeywordMatch(`Pfizer Inc x${'\u0e31'.repeat(9)}\u200b${'\u0e31'.repeat(9)}`, pfizer)).toBe('Pfizer');
+        expect(findKeywordMatch(`Pfizer Inc x${'\u0e31'.repeat(16)}`, pfizer)).toBe('Pfizer');
+        // a haystack longer than the window is searched up to the last whitespace; a name in the cut part is not found
+        expect(findKeywordMatch(`${'word '.repeat(1_700)}Pfizer`, pfizer)).toBeNull();
+        expect(findKeywordMatch(`Pfizer ${'word '.repeat(1_700)}`, pfizer)).toBe('Pfizer');
+    });
+
+    it('D23 a rejected value is a log-safe preview: control characters, escapes, bidi controls and lone surrogates never reach a log line', () => {
+        const list = sanitizeKeywordList(['\ud800\u001b[31m\nFAKE', '\u202eevil\u0000', '\u001b[2Jx']);
+        for (const r of list.rejected) {
+            // eslint-disable-next-line no-control-regex
+            expect(r.value, r.reason).not.toMatch(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\ud800-\udfff]/u);
+            expect(r.value.length).toBeLessThanOrEqual(60);
+        }
+        expect(list.rejected[0]).toEqual({ value: '\ufffd\ufffd[31m\ufffdFAKE', reason: 'invalid_unicode' });
+        const long = sanitizeKeywordList([`\u001b${'x'.repeat(100)}\ud83d`.repeat(40)]);
+        expect(long.rejected).toHaveLength(1);
+        expect(long.rejected[0]?.value.length).toBeLessThanOrEqual(60);
+    });
 });
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -1889,7 +2098,8 @@ addHostile('ab + U+FFFF', ['ab\u{ffff}'], ['ab\u{ffff}']);
 addHostile('FFFF FFFE only', ['\u{ffff}\u{fffe}'], [], ['no_letter_or_digit']);
 addHostile('FDD0 FDEF only', ['\u{fdd0}\u{fdef}'], [], ['no_letter_or_digit']);
 addHostile('1FFFE 10FFFF only', ['\u{1fffe}\u{10ffff}'], [], ['no_letter_or_digit']);
-addHostile('a + U+FFFE', ['a\u{fffe}'], ['a\u{fffe}'], undefined, { grey: 'one visible letter plus a noncharacter passes the 2 code point minimum' });
+addHostile('a + U+FFFE: one letter and one noncharacter is one alphanumeric character', ['a\u{fffe}'], [], ['single_letter_or_digit']);
+addHostile('ab + U+FFFE', ['ab\u{fffe}'], ['ab\u{fffe}'], undefined, { grey: 'a noncharacter is kept (neither invisible nor whitespace)' });
 addHostile('U+10FFFF alone', ['\u{10ffff}'], [], ['too_short']);
 section('Mongolian free variation selectors and vowel separator');
 addHostile('mongolian FVS1-3 only', ['\u{180b}\u{180c}\u{180d}'], [], ['empty_after_normalisation']);
@@ -1899,50 +2109,81 @@ addHostile('ab + MVS + cd', ['ab\u{180e}cd'], ['abcd']);
 addHostile('mongolian FVS4 x2', ['\u{180f}\u{180f}'], [], ['empty_after_normalisation']);
 addHostile('mongolian letter A x2', ['\u{1820}\u{1820}'], ['\u{1820}\u{1820}']);
 section('NFKC expansion and composition');
-addHostile('fi ligature', ['\u{fb01}'], ['fi']);
-addHostile('ff ligature', ['\u{fb00}'], ['ff']);
-addHostile('ffi ligature', ['\u{fb03}'], ['ffi']);
-addHostile('ffl ligature', ['\u{fb04}'], ['ffl']);
-addHostile('long s t', ['\u{fb05}'], ['st']);
-addHostile('st ligature', ['\u{fb06}'], ['st']);
-addHostile('IJ', ['\u{132}'], ['IJ']);
-addHostile('ij', ['\u{133}'], ['ij']);
-addHostile('DZ caron capital', ['\u{1c4}'], ['D\u{17d}']);
-addHostile('dz caron small', ['\u{1c6}'], ['d\u{17e}']);
-addHostile('lj small', ['\u{1c9}'], ['lj']);
-addHostile('n preceded by apostrophe', ['\u{149}'], ['\u{2bc}n']);
+addHostile('fi ligature (one glyph is one character)', ['\u{fb01}'], [], ['too_short']);
+addHostile('fi ligature, twice', ['\u{fb01}'.repeat(2)], ['fi'.repeat(2)]);
+addHostile('ff ligature (one glyph is one character)', ['\u{fb00}'], [], ['too_short']);
+addHostile('ff ligature, twice', ['\u{fb00}'.repeat(2)], ['ff'.repeat(2)]);
+addHostile('ffi ligature (one glyph is one character)', ['\u{fb03}'], [], ['too_short']);
+addHostile('ffi ligature, twice', ['\u{fb03}'.repeat(2)], ['ffi'.repeat(2)]);
+addHostile('ffl ligature (one glyph is one character)', ['\u{fb04}'], [], ['too_short']);
+addHostile('ffl ligature, twice', ['\u{fb04}'.repeat(2)], ['ffl'.repeat(2)]);
+addHostile('long s t (one glyph is one character)', ['\u{fb05}'], [], ['too_short']);
+addHostile('long s t, twice', ['\u{fb05}'.repeat(2)], ['st'.repeat(2)]);
+addHostile('st ligature (one glyph is one character)', ['\u{fb06}'], [], ['too_short']);
+addHostile('st ligature, twice', ['\u{fb06}'.repeat(2)], ['st'.repeat(2)]);
+addHostile('IJ (one glyph is one character)', ['\u{132}'], [], ['too_short']);
+addHostile('IJ, twice', ['\u{132}'.repeat(2)], ['IJ'.repeat(2)]);
+addHostile('ij (one glyph is one character)', ['\u{133}'], [], ['too_short']);
+addHostile('ij, twice', ['\u{133}'.repeat(2)], ['ij'.repeat(2)]);
+addHostile('DZ caron capital (one glyph is one character)', ['\u{1c4}'], [], ['too_short']);
+addHostile('DZ caron capital, twice', ['\u{1c4}'.repeat(2)], ['D\u{17d}'.repeat(2)]);
+addHostile('dz caron small (one glyph is one character)', ['\u{1c6}'], [], ['too_short']);
+addHostile('dz caron small, twice', ['\u{1c6}'.repeat(2)], ['d\u{17e}'.repeat(2)]);
+addHostile('lj small (one glyph is one character)', ['\u{1c9}'], [], ['too_short']);
+addHostile('lj small, twice', ['\u{1c9}'.repeat(2)], ['lj'.repeat(2)]);
+addHostile('n preceded by apostrophe (one glyph is one character)', ['\u{149}'], [], ['too_short']);
+addHostile('n preceded by apostrophe, twice', ['\u{149}'.repeat(2)], ['\u{2bc}n'.repeat(2)]);
 addHostile('long s dot above', ['\u{1e9b}'], [], ['too_short']);
-addHostile('arabic ligature allah', ['\u{fdf2}'], ['\u{627}\u{644}\u{644}\u{647}']);
-addHostile('arabic ligature salla (18 cp)', ['\u{fdfa}'], ['\u{635}\u{644}\u{649} \u{627}\u{644}\u{644}\u{647} \u{639}\u{644}\u{64a}\u{647} \u{648}\u{633}\u{644}\u{645}']);
-addHostile('11 x FDFA = 198 cp', ['\u{fdfa}'.repeat(11)], ['\u{635}\u{644}\u{649} \u{627}\u{644}\u{644}\u{647} \u{639}\u{644}\u{64a}\u{647} \u{648}\u{633}\u{644}\u{645}'.repeat(11)]);
-addHostile('12 x FDFA = 216 cp', ['\u{fdfa}'.repeat(12)], [], ['too_long']);
-addHostile('11 x FDFA + ab = 200 cp', ['\u{fdfa}'.repeat(11) + 'ab'], ['\u{635}\u{644}\u{649} \u{627}\u{644}\u{644}\u{647} \u{639}\u{644}\u{64a}\u{647} \u{648}\u{633}\u{644}\u{645}'.repeat(11) + 'ab']);
-addHostile('11 x FDFA + abc = 201 cp', ['\u{fdfa}'.repeat(11) + 'abc'], [], ['too_long']);
-addHostile('square MHz', ['\u{3392}'], ['MHz']);
-addHostile('square gal', ['\u{33ff}'], ['gal']);
-addHostile('degree celsius', ['\u{2103}'], ['\u{b0}C']);
-addHostile('telephone sign', ['\u{2121}'], ['TEL']);
-addHostile('numero sign', ['\u{2116}'], ['No']);
-addHostile('trade mark sign', ['\u{2122}'], ['TM']);
-addHostile('vulgar half', ['\u{bd}'], ['1\u{2044}2']);
-addHostile('vulgar third', ['\u{2153}'], ['1\u{2044}3']);
-addHostile('partnership sign', ['\u{3250}'], ['PTE']);
-addHostile('square ltd', ['\u{32cf}'], ['LTD']);
-addHostile('digit zero full stop', ['\u{1f100}'], ['0.']);
-addHostile('parenthesized 1', ['\u{2474}'], ['(1)']);
-addHostile('digit one full stop', ['\u{2488}'], ['1.']);
+addHostile('arabic ligature allah (one glyph is one character)', ['\u{fdf2}'], [], ['too_short']);
+addHostile('arabic ligature allah, twice', ['\u{fdf2}'.repeat(2)], ['\u{627}\u{644}\u{644}\u{647}'.repeat(2)]);
+addHostile('arabic ligature salla (18 cp): one glyph is one character, whatever it expands to', ['\u{fdfa}'], [], ['too_short']);
+addHostile('11 x FDFA grows 18x under NFKC: more than 4x plus 16 units, so the text counts as empty', ['\u{fdfa}'.repeat(11)], [], ['empty_after_normalisation']);
+addHostile('12 x FDFA: the same', ['\u{fdfa}'.repeat(12)], [], ['empty_after_normalisation']);
+addHostile('11 x FDFA + ab: still more than 4x plus 16', ['\u{fdfa}'.repeat(11) + 'ab'], [], ['empty_after_normalisation']);
+addHostile('one FDFA among 30 letters grows 48/31 times: an ordinary text that happens to hold the ligature is fine', ['\u{fdfa}' + 'a'.repeat(30)], ['\u{635}\u{644}\u{649} \u{627}\u{644}\u{644}\u{647} \u{639}\u{644}\u{64a}\u{647} \u{648}\u{633}\u{644}\u{645}' + 'a'.repeat(30)]);
+addHostile('FDFA + 4 letters is still dominated by the expansion', ['\u{fdfa}'.repeat(3) + 'abcd'], [], ['empty_after_normalisation']);
+addHostile('square MHz (one glyph is one character)', ['\u{3392}'], [], ['too_short']);
+addHostile('square MHz, twice', ['\u{3392}'.repeat(2)], ['MHz'.repeat(2)]);
+addHostile('square gal (one glyph is one character)', ['\u{33ff}'], [], ['too_short']);
+addHostile('square gal, twice', ['\u{33ff}'.repeat(2)], ['gal'.repeat(2)]);
+addHostile('degree celsius (one glyph is one character)', ['\u{2103}'], [], ['too_short']);
+addHostile('degree celsius, twice', ['\u{2103}'.repeat(2)], ['\u{b0}C'.repeat(2)]);
+addHostile('telephone sign (one glyph is one character)', ['\u{2121}'], [], ['too_short']);
+addHostile('telephone sign, twice', ['\u{2121}'.repeat(2)], ['TEL'.repeat(2)]);
+addHostile('numero sign (one glyph is one character)', ['\u{2116}'], [], ['too_short']);
+addHostile('numero sign, twice', ['\u{2116}'.repeat(2)], ['No'.repeat(2)]);
+addHostile('trade mark sign (one glyph is one character)', ['\u{2122}'], [], ['too_short']);
+addHostile('trade mark sign, twice', ['\u{2122}'.repeat(2)], ['TM'.repeat(2)]);
+addHostile('vulgar half (one glyph is one character)', ['\u{bd}'], [], ['too_short']);
+addHostile('vulgar half, twice', ['\u{bd}'.repeat(2)], ['1\u{2044}2'.repeat(2)]);
+addHostile('vulgar third (one glyph is one character)', ['\u{2153}'], [], ['too_short']);
+addHostile('vulgar third, twice', ['\u{2153}'.repeat(2)], ['1\u{2044}3'.repeat(2)]);
+addHostile('partnership sign (one glyph is one character)', ['\u{3250}'], [], ['too_short']);
+addHostile('partnership sign, twice', ['\u{3250}'.repeat(2)], ['PTE'.repeat(2)]);
+addHostile('square ltd (one glyph is one character)', ['\u{32cf}'], [], ['too_short']);
+addHostile('square ltd, twice', ['\u{32cf}'.repeat(2)], ['LTD'.repeat(2)]);
+addHostile('digit zero full stop (one glyph is one character)', ['\u{1f100}'], [], ['too_short']);
+addHostile('digit zero full stop, twice', ['\u{1f100}'.repeat(2)], ['0.'.repeat(2)]);
+addHostile('parenthesized 1 (one glyph is one character)', ['\u{2474}'], [], ['too_short']);
+addHostile('parenthesized 1, twice', ['\u{2474}'.repeat(2)], ['(1)'.repeat(2)]);
+addHostile('digit one full stop (one glyph is one character)', ['\u{2488}'], [], ['too_short']);
+addHostile('digit one full stop, twice', ['\u{2488}'.repeat(2)], ['1.'.repeat(2)]);
 addHostile('circled 1', ['\u{2460}'], [], ['too_short']);
 addHostile('circled 1 2', ['\u{2460}\u{2461}'], ['12']);
 addHostile('circled 0', ['\u{24ea}'], [], ['too_short']);
 addHostile('circled 8', ['\u{2467}'], [], ['too_short']);
-addHostile('circled 20', ['\u{2473}'], ['20']);
+addHostile('circled 20 (one glyph is one character)', ['\u{2473}'], [], ['too_short']);
+addHostile('circled 20, twice', ['\u{2473}'.repeat(2)], ['20'.repeat(2)]);
 addHostile('negative circled zero x2', ['\u{24ff}\u{24ff}'], ['\u{24ff}\u{24ff}']);
 addHostile('roman I', ['\u{2160}'], [], ['too_short']);
-addHostile('roman II', ['\u{2161}'], ['II']);
-addHostile('roman VIII', ['\u{2167}'], ['VIII']);
+addHostile('roman II (one glyph is one character)', ['\u{2161}'], [], ['too_short']);
+addHostile('roman II, twice', ['\u{2161}'.repeat(2)], ['II'.repeat(2)]);
+addHostile('roman VIII (one glyph is one character)', ['\u{2167}'], [], ['too_short']);
+addHostile('roman VIII, twice', ['\u{2167}'.repeat(2)], ['VIII'.repeat(2)]);
 addHostile('roman M', ['\u{216f}'], [], ['too_short']);
 addHostile('small roman i', ['\u{2170}'], [], ['too_short']);
-addHostile('small roman viii', ['\u{2177}'], ['viii']);
+addHostile('small roman viii (one glyph is one character)', ['\u{2177}'], [], ['too_short']);
+addHostile('small roman viii, twice', ['\u{2177}'.repeat(2)], ['viii'.repeat(2)]);
 addHostile('superscript 2', ['\u{b2}'], [], ['too_short']);
 addHostile('superscript 2 3', ['\u{b2}\u{b3}'], ['23']);
 addHostile('superscript zero', ['\u{2070}'], [], ['too_short']);
@@ -1957,13 +2198,14 @@ addHostile('math bold A', ['\u{1d400}'], [], ['too_short']);
 addHostile('feminine ordinal alone', ['\u{aa}'], [], ['too_short']);
 addHostile('feminine + masculine ordinal', ['\u{aa}\u{ba}'], ['ao']);
 addHostile('one dot leader x2', ['\u{2024}\u{2024}'], [], ['no_letter_or_digit']);
-addHostile('two dot leader', ['\u{2025}'], [], ['no_letter_or_digit']);
-addHostile('horizontal ellipsis', ['\u{2026}'], [], ['no_letter_or_digit']);
-addHostile('vertical ellipsis form', ['\u{fe19}'], [], ['no_letter_or_digit']);
+addHostile('two dot leader', ['\u{2025}'], [], ['too_short']);
+addHostile('horizontal ellipsis', ['\u{2026}'], [], ['too_short']);
+addHostile('vertical ellipsis form', ['\u{fe19}'], [], ['too_short']);
 addHostile('ideographic full stops', ['\u{3002}\u{3002}'], [], ['no_letter_or_digit']);
 addHostile('kangxi radical single', ['\u{2fd5}'], [], ['too_short']);
 addHostile('kangxi radicals two', ['\u{2f00}\u{2f01}'], ['\u{4e00}\u{4e28}']);
-addHostile('square apaato', ['\u{3300}'], ['\u{30a2}\u{30d1}\u{30fc}\u{30c8}']);
+addHostile('square apaato (one glyph is one character)', ['\u{3300}'], [], ['too_short']);
+addHostile('square apaato, twice', ['\u{3300}'.repeat(2)], ['\u{30a2}\u{30d1}\u{30fc}\u{30c8}'.repeat(2)]);
 addHostile('halfwidth ka + dakuten', ['\u{ff76}\u{ff9e}'], [], ['too_short']);
 addHostile('halfwidth ka dakuten ka', ['\u{ff76}\u{ff9e}\u{ff76}'], ['\u{30ac}\u{30ab}']);
 addHostile('jamo g + a', ['\u{1100}\u{1161}'], [], ['too_short']);
@@ -1971,8 +2213,10 @@ addHostile('jamo g a k', ['\u{1100}\u{1161}\u{11a8}'], [], ['too_short']);
 addHostile('hangul syllable ga', ['\u{ac00}'], [], ['too_short']);
 addHostile('hangul ga gak', ['\u{ac00}\u{ac01}'], ['\u{ac00}\u{ac01}']);
 addHostile('e acute twice (decomposed)', ['e\u{301}e\u{301}'], ['\u{e9}\u{e9}']);
-addHostile('q + dot above (no precomposed)', ['q\u{307}'], ['q\u{307}']);
-addHostile('a + ypogegrammeni', ['a\u{345}'], ['a\u{345}']);
+addHostile('q + dot above (no precomposed): one letter and one mark is one alphanumeric character', ['q\u{307}'], [], ['single_letter_or_digit']);
+addHostile('q + dot above (no precomposed), twice', ['q\u{307}'.repeat(2)], ['q\u{307}'.repeat(2)]);
+addHostile('a + ypogegrammeni: one letter and one mark is one alphanumeric character', ['a\u{345}'], [], ['single_letter_or_digit']);
+addHostile('a + ypogegrammeni, twice', ['a\u{345}'.repeat(2)], ['a\u{345}'.repeat(2)]);
 addHostile('A + ring above', ['A\u{30a}'], [], ['too_short']);
 addHostile('angstrom sign', ['\u{212b}'], [], ['too_short']);
 addHostile('ohm sign twice', ['\u{2126}\u{2126}'], ['\u{3a9}\u{3a9}']);
@@ -2023,7 +2267,7 @@ for (const [name, ch] of [['ZWSP', '\u{200b}'], ['ZWNJ', '\u{200c}'], ['ZWJ', '\
 addHostile('all six zero-width only', ['\u{200b}\u{200c}\u{200d}\u{2060}\u{feff}\u{ad}'], [], ['empty_after_normalisation']);
 addHostile('family emoji ZWJ sequence', ['\u{1f468}\u{200d}\u{1f469}\u{200d}\u{1f467}'], [], ['no_letter_or_digit']);
 addHostile('heart VS16 (the selector is removed, one symbol is left)', ['\u{2764}\u{fe0f}'], [], ['too_short']);
-addHostile('keycap 1 (digit + VS16 + enclosing keycap)', ['1\u{fe0f}\u{20e3}'], ['1\u{20e3}'], undefined, { grey: 'a digit plus the combining enclosing keycap is two code points, so it passes the minimum' });
+addHostile('keycap 1 (digit + VS16 + enclosing keycap): one digit and one mark is one alphanumeric character', ['1\u{fe0f}\u{20e3}'], [], ['single_letter_or_digit']);
 addHostile('keycap #', ['#\u{fe0f}\u{20e3}'], [], ['no_letter_or_digit']);
 addHostile('flag US (regional indicators)', ['\u{1f1fa}\u{1f1f8}'], [], ['no_letter_or_digit']);
 section('Length boundaries');
@@ -2039,13 +2283,14 @@ addHostile('ab + 4,094 ZWSP is exactly 4,096 units', [`ab${'\u{200b}'.repeat(409
 addHostile('ab + 4,095 ZWSP is 4,097 units', [`ab${'\u{200b}'.repeat(4095)}`], [], ['too_long']);
 addHostile('a + 1000 LF + b', [`a${'\n'.repeat(1000)}b`], ['a b']);
 addHostile('100 x (a + grave) composes to 100 cp', ['a\u{300}'.repeat(100)], ['\u{e0}'.repeat(100)]);
-addHostile('a + 16 ypogegrammeni (the longest run of combining marks that is allowed)', [`a${'\u{345}'.repeat(16)}`], [`a${'\u{345}'.repeat(16)}`]);
-addHostile('a + 17 ypogegrammeni (one mark too many: the text counts as empty)', [`a${'\u{345}'.repeat(17)}`], [], ['empty_after_normalisation']);
+addHostile('ab + 16 ypogegrammeni (the longest run of combining marks that is allowed)', [`ab${'\u{345}'.repeat(16)}`], [`ab${'\u{345}'.repeat(16)}`]);
+addHostile('a + 16 ypogegrammeni is still one alphanumeric character', [`a${'\u{345}'.repeat(16)}`], [], ['single_letter_or_digit']);
+addHostile('ab + 17 ypogegrammeni (one mark too many: the keyword counts as empty)', [`ab${'\u{345}'.repeat(17)}`], [], ['empty_after_normalisation']);
 addHostile('three groups of a + 16 marks are separate runs', [`${`a${'\u{345}'.repeat(16)}`.repeat(3)}`], [`${`a${'\u{345}'.repeat(16)}`.repeat(3)}`]);
 addHostile('a + 150 ypogegrammeni is a hostile run, not a too_long keyword', [`a${'\u{345}'.repeat(150)}`], [], ['empty_after_normalisation']);
 addHostile('a + 250 ypogegrammeni is a hostile run, not a too_long keyword', [`a${'\u{345}'.repeat(250)}`], [], ['empty_after_normalisation']);
-addHostile('a + 17 marks separated by ZWSP: removal in pass 1 makes the run, and pass 2 refuses it', [`a${'\u{345}\u{200b}'.repeat(17)}`], [], ['empty_after_normalisation']);
-addHostile('a + 16 marks separated by ZWSP: the run after removal is still allowed', [`a${'\u{345}\u{200b}'.repeat(16)}`], [`a${'\u{345}'.repeat(16)}`]);
+addHostile('ab + 17 marks separated by ZWSP: removal in pass 1 makes the run, and pass 2 refuses it', [`ab${'\u{345}\u{200b}'.repeat(17)}`], [], ['empty_after_normalisation']);
+addHostile('ab + 16 marks separated by ZWSP: the run after removal is still allowed', [`ab${'\u{345}\u{200b}'.repeat(16)}`], [`ab${'\u{345}'.repeat(16)}`]);
 section('Bare-string separators');
 addHostile('bare ab,cd', 'ab,cd', ['ab', 'cd']);
 addHostile('bare ab;cd', 'ab;cd', ['ab', 'cd']);
@@ -2090,7 +2335,7 @@ addHostile('ss vs sharp s are not folded (grey)', ['STRASSE', 'Stra\u{df}e', 'st
 addHostile('fullwidth + ascii + mixed duplicate', ['\u{ff21}\u{ff22}', 'ab', 'Ab'], ['AB'], ['duplicate', 'duplicate']);
 addHostile('fi ligature duplicates fi', ['\u{fb01}le', 'FILE', 'file'], ['file'], ['duplicate', 'duplicate']);
 addHostile('kelvin duplicates k', ['\u{212a}elvin', 'kelvin'], ['Kelvin'], ['duplicate']);
-addHostile('roman viii duplicates', ['\u{2167}', '\u{2177}', 'viii'], ['VIII'], ['duplicate', 'duplicate']);
+addHostile('roman viii duplicates', ['\u{2167}\u{2167}', '\u{2177}\u{2177}', 'viiiviii'], ['VIIIVIII'], ['duplicate', 'duplicate']);
 addHostile('dz caron case pair', ['\u{1c5}\u{1c5}', '\u{1c6}\u{1c6}'], ['D\u{17e}D\u{17e}'], ['duplicate']);
 
 const HOSTILE_FINDS: Array<[string, string[], unknown, string | null, string?]> = [

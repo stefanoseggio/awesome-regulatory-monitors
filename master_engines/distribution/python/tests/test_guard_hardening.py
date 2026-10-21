@@ -62,6 +62,7 @@ def test_invalid_unicode_is_a_rejection_reason_between_too_long_and_no_letter_or
         "too_long",
         "invalid_unicode",
         "no_letter_or_digit",
+        "single_letter_or_digit",
         "duplicate",
         "over_limit",
     )
@@ -74,7 +75,9 @@ LONE_SURROGATE_KEYWORDS = ["\ud800", "\udc00", "\ud800Acme", "Ac\ud800me", "Acme
 def test_a_lone_surrogate_in_any_position_rejects_the_keyword_as_invalid_unicode(keyword: str) -> None:
     result = sanitize_keyword_list(["Acme Corp", keyword])
     assert result.keywords == ("Acme Corp",)
-    assert [(item.value, item.reason) for item in result.rejected] == [(keyword, "invalid_unicode")]
+    # The rejected value is a log-safe preview: every lone surrogate in it is shown as U+FFFD.
+    shown = "".join("\ufffd" if has_surrogate(char) else char for char in to_js_string(keyword))
+    assert [(item.value, item.reason) for item in result.rejected] == [(shown, "invalid_unicode")]
 
 
 def test_a_well_formed_pair_is_not_a_lone_surrogate_however_it_is_held() -> None:
@@ -105,7 +108,7 @@ def test_invalid_unicode_is_decided_before_the_cleaning_rules_and_after_the_raw_
 def test_a_lone_surrogate_in_a_bare_string_rejects_only_its_own_piece() -> None:
     result = sanitize_keyword_list("Acme,Be\ud800ta;Gamma")
     assert result.keywords == ("Acme", "Gamma")
-    assert [(item.value, item.reason) for item in result.rejected] == [("Be\ud800ta", "invalid_unicode")]
+    assert [(item.value, item.reason) for item in result.rejected] == [("Be\ufffdta", "invalid_unicode")]
     assert reasons(sanitize_keyword_list("\ud800")) == ["invalid_unicode"]
 
 
@@ -125,7 +128,8 @@ def test_a_raw_keyword_over_4096_units_is_too_long_even_when_its_cleaned_form_wo
     assert (utf16_length(fits), utf16_length(over)) == (4096, 4097)
     result = sanitize_keyword_list([fits, over])
     assert result.keywords == ("ab",)
-    assert [(item.value, item.reason) for item in result.rejected] == [(ZERO_WIDTH * 57 + "...", "too_long")]
+    # The preview is cut at 57 units and its invisible characters are shown as U+FFFD.
+    assert [(item.value, item.reason) for item in result.rejected] == [("\ufffd" * 57 + "...", "too_long")]
 
 
 def test_the_raw_cap_counts_utf16_units_not_code_points() -> None:
@@ -234,9 +238,10 @@ def test_cleaning_runs_until_nothing_changes() -> None:
 
 def test_a_keyword_that_a_second_pass_shortens_is_judged_as_its_settled_text_at_once() -> None:
     result = sanitize_keyword_list(["e" + ZERO_WIDTH + "\u0301", "a" + ZERO_WIDTH + "\u0301\u0301", "Acme"])
-    assert result.keywords == ("\u00e1\u0301", "Acme")
-    assert [(item.value, item.reason) for item in result.rejected] == [("e" + ZERO_WIDTH + "\u0301", "too_short")]
-    assert describe_sanitization(result) == "watchlistNames: 2 accepted, 1 rejected (too_short=1)."
+    # "e" + ZWSP + acute settles to the one character U+00E9; "a" + ZWSP + two acutes to U+00E1 + U+0301, which holds ONE letter.
+    assert result.keywords == ("Acme",)
+    assert [(item.value, item.reason) for item in result.rejected] == [("e\ufffd\u0301", "too_short"), ("a\ufffd\u0301\u0301", "single_letter_or_digit")]
+    assert describe_sanitization(result) == "watchlistNames: 1 accepted, 2 rejected (too_short=1, single_letter_or_digit=1)."
 
 
 def test_sanitising_what_a_sanitise_returned_accepts_all_of_it_and_rejects_nothing() -> None:
@@ -262,7 +267,7 @@ def test_a_text_that_has_not_settled_after_eight_passes_becomes_empty(monkeypatc
 
     def settles_after(changes: int) -> Any:
         # appends an "x" until the text holds `changes` of them: it settles after that many changing passes plus one pass that changes nothing
-        return lambda text: (lambda base: base + "x" if base.count("x") < changes else base)(original(text))
+        return lambda text, hostile_runs: (lambda base: base + "x" if base.count("x") < changes else base)(original(text, hostile_runs))
 
     monkeypatch.setattr(_guards, "_clean_once", settles_after(MAX_NORMALISE_PASSES - 1))
     assert normalise_keyword("ab") == "ab" + "x" * 7
@@ -281,7 +286,7 @@ def test_the_client_sends_the_settled_keywords_without_a_second_cleaning_pass() 
     watchlist = ["e" + ZERO_WIDTH + "\u0301", "a" + ZERO_WIDTH + "\u0301\u0301", "Acme"]
     prepared = build_run_request(REGTECH, owner="o", sources=["ofac"], max_total_charge_usd=1, watchlist_names=watchlist)
     sent = prepared.run_input["watchlistNames"]
-    assert sent == ["\u00e1\u0301", "Acme"]
+    assert sent == ["Acme"], "U+00E1 + U+0301 holds one letter: single_letter_or_digit"
     assert sanitize_keyword_list(sent).keywords == tuple(sent)
     assert prepared.watchlist.keywords == tuple(sent)
     assert not hasattr(_guards, "settle_keyword_list")
@@ -407,8 +412,8 @@ def test_a_haystack_of_up_to_8192_units_is_searched_whole_a_longer_one_up_to_its
     assert utf16_length(fits) == MAX_HAYSTACK_UNITS
     assert find_keyword_match(fits, watchlist) == "Acme"
     assert find_keyword_match("z" + fits, watchlist) is None, "the window is counted in UTF-16 units, not code points"
-    both = sanitize_keyword_list(["Acme", "z" + EMOJI])
-    assert find_keyword_match(("z" + EMOJI) * 2730 + " Acme" + "z" * 25, both) == "z" + EMOJI
+    both = sanitize_keyword_list(["Acme", "z" + EMOJI + "z"])
+    assert find_keyword_match(("z" + EMOJI) * 2730 + " Acme" + "z" * 25, both) == "z" + EMOJI + "z"
 
 
 def test_only_the_unicode_white_space_characters_cut_a_long_haystack() -> None:
@@ -454,17 +459,24 @@ def test_a_combining_accent_just_past_the_window_no_longer_creates_a_hit_for_the
     assert find_keyword_match(inside, sanitize_keyword_list(["cafe", "caf\u00e9"])) == "caf\u00e9"
 
 
-def test_a_haystack_with_more_than_16_consecutive_marks_in_the_searched_text_is_never_matched() -> None:
+def test_a_haystack_run_of_more_than_16_marks_is_cut_to_16_and_never_hides_the_rest_of_the_record() -> None:
     watchlist = sanitize_keyword_list(["Acme"])
     assert find_keyword_match("Acme Corp b" + ACUTE * 16, watchlist) == "Acme"
-    assert find_keyword_match("Acme Corp b" + ACUTE * 17, watchlist) is None, "even the keyword before the run is lost: the whole text is empty"
-    assert find_keyword_match("Acme Corp b" + (ACUTE + ZERO_WIDTH) * 17, watchlist) is None, "a run that only exists after removal"
+    assert find_keyword_match("Acme Corp b" + ACUTE * 17, watchlist) == "Acme", "the run is cut; the keyword before it is still found"
+    assert find_keyword_match(ACUTE * 500 + " Acme", watchlist) == "Acme", "and so is the keyword after it"
+    assert find_keyword_match("Acme Corp b" + (ACUTE + ZERO_WIDTH) * 17, watchlist) == "Acme", "a run that only exists after removal is cut too"
     assert find_keyword_match("Acme Corp b" + (ACUTE + ZERO_WIDTH) * 16, watchlist) == "Acme"
-    assert find_keyword_match("Acme " + "\u0345" * 1365 + "\u0300" * 1365 + "\u0316" * 1364, watchlist) is None
+    assert find_keyword_match("Acme " + "\u0345" * 1365 + "\u0300" * 1365 + "\u0316" * 1364, watchlist) == "Acme"
     assert find_keyword_match("Acme " + ("a" + ACUTE) * 50, watchlist) == "Acme", "marks between letters never form a run"
-    # a run beyond the cut is never seen; one inside the searched text hides it
+    assert find_keyword_match("Ac" + ACUTE * 40 + "me Acme", watchlist) == "Acme"
+    # glued to the last letter the marks compose with it, so cutting a run cannot invent a hit
+    assert find_keyword_match("Acme" + ACUTE * 30, watchlist) is None
+    assert find_keyword_match("cafe" + ACUTE * 30, sanitize_keyword_list(["cafe"])) is None
+    # a run beyond the cut is never seen; one inside the searched text is cut like any other
     assert find_keyword_match("z" * (MAX_HAYSTACK_UNITS - 12) + " Acme b" + ACUTE * 17, watchlist) == "Acme"
-    assert find_keyword_match("z" * (MAX_HAYSTACK_UNITS - 40) + " b" + ACUTE * 17 + " Corp Acme" + "z" * 40, sanitize_keyword_list(["zzzz"])) is None
+    assert find_keyword_match("z" * (MAX_HAYSTACK_UNITS - 40) + " b" + ACUTE * 17 + " Corp Acme" + "z" * 40, sanitize_keyword_list(["zzzz"])) == "zzzz"
+    # a KEYWORD with such a run is still rejected
+    assert sanitize_keyword_list(["Acme" + ACUTE * 17]).keywords == ()
 
 
 def test_a_keyword_list_is_accepted_up_to_500_and_read_up_to_5000() -> None:
@@ -636,9 +648,9 @@ def test_an_element_that_cannot_be_read_is_one_rejected_entry_and_the_rest_of_th
     result = sanitize_keyword_list(["Acme Corp", _Unprintable(), _Shapeshifter(), _ExplodingDict(a=1), "Beta Corp"])
     assert result.keywords == ("Acme Corp", "Beta Corp")
     assert [(item.value, item.reason) for item in result.rejected] == [
-        ("[object Object]", "not_a_string"),
+        ("[object]", "not_a_string"),
         ("[unreadable value]", "not_a_string"),
-        ("[object Object]", "not_a_string"),
+        ("[object]", "not_a_string"),
     ]
 
 
