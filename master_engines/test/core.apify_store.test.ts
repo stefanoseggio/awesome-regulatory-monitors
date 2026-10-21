@@ -12,7 +12,9 @@ class FakeKv implements KeyValueLike {
         return structuredClone(this.data.get(key));
     }
     async setValue(key: string, value: unknown): Promise<void> {
-        this.data.set(key, structuredClone(value));
+        // Same contract as a key-value store: `null` deletes the record.
+        if (value === null) this.data.delete(key);
+        else this.data.set(key, structuredClone(value));
     }
 }
 
@@ -85,5 +87,68 @@ describe('resolveStateNamespace', () => {
         for (const bad of ['Has Space', 'UPPER', 'a/b', 'x'.repeat(41), 7, ['a']]) {
             expect(() => resolveStateNamespace({ stateNamespace: bad }, undefined), JSON.stringify(bad)).toThrow(/stateNamespace/);
         }
+    });
+});
+
+describe('ApifyDeltaStore delivery journal', () => {
+    const entries = [
+        { recordId: 'a', fingerprint: 'f1' },
+        { recordId: 'b', fingerprint: 'f2' },
+    ];
+
+    it('stores one journal record per source under journal.<namespace>.<source>, away from the state records', async () => {
+        const kv = new FakeKv();
+        const store = new ApifyDeltaStore('s', 'task-abc', async () => kv);
+        await store.saveJournal('ofac', entries);
+        await store.saveSource('ofac', stateWith('ofac', ['1']).sources.ofac!);
+        expect([...kv.data.keys()].sort()).toEqual(['journal.task-abc.ofac', 'state.task-abc.ofac']);
+        expect(await store.loadJournal('ofac')).toEqual(entries);
+        expect(await store.loadJournal('sec')).toEqual([]);
+    });
+
+    it('load() never mistakes a journal for a source memory', async () => {
+        const kv = new FakeKv();
+        const store = new ApifyDeltaStore('s', 'default', async () => kv);
+        await store.saveJournal('ofac', entries);
+        expect((await store.load()).sources).toEqual({});
+    });
+
+    it('clearing deletes the record (null) instead of leaving an empty one behind', async () => {
+        const kv = new FakeKv();
+        const store = new ApifyDeltaStore('s', 'default', async () => kv);
+        await store.saveJournal('ofac', entries);
+        await store.saveJournal('ofac', []);
+        expect(kv.data.size).toBe(0);
+    });
+
+    it('separate namespaces keep separate journals', async () => {
+        const kv = new FakeKv();
+        const a = new ApifyDeltaStore('s', 'team-a', async () => kv);
+        const b = new ApifyDeltaStore('s', 'team-b', async () => kv);
+        await a.saveJournal('ofac', entries);
+        expect(await b.loadJournal('ofac')).toEqual([]);
+    });
+
+    it('treats a corrupted journal record as empty rather than failing the run', async () => {
+        const kv = new FakeKv();
+        const store = new ApifyDeltaStore('s', 'default', async () => kv);
+        kv.data.set('journal.default.ofac', { not: 'an array' });
+        expect(await store.loadJournal('ofac')).toEqual([]);
+        kv.data.set('journal.default.ofac', [{ recordId: 5 }]);
+        expect(await store.loadJournal('ofac')).toEqual([]);
+    });
+
+    it('writes only recordId and fingerprint, and opens the key-value store once however many rows are journalled', async () => {
+        const kv = new FakeKv();
+        let opens = 0;
+        const store = new ApifyDeltaStore('s', 'default', async () => {
+            opens += 1;
+            return kv;
+        });
+        for (let i = 0; i < 50; i++) await store.saveJournal('ofac', [{ recordId: String(i), fingerprint: 'f', secret: 'x' } as never]);
+        await store.loadJournal('ofac');
+        await store.saveSource('ofac', stateWith('ofac', ['1']).sources.ofac!);
+        expect(opens).toBe(1);
+        expect(kv.data.get('journal.default.ofac')).toEqual([{ recordId: '49', fingerprint: 'f' }]);
     });
 });

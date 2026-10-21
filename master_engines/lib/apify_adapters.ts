@@ -6,7 +6,7 @@ import { Actor, log } from 'apify';
 
 import { type BillingPort, hasPositivePrice, RESULT_EVENT } from './charging.js';
 import type { RunSinks } from './router_core.js';
-import { type DeltaState, type DeltaStore, parseState, type SourceDeltaState } from './state.js';
+import { type DeltaState, type DeltaStore, parseJournal, parseState, type ProcessedRecord, type SourceDeltaState } from './state.js';
 import type { EngineSlug, Logger, RunSummary } from './types.js';
 
 export function createApifyLogger(): Logger {
@@ -31,8 +31,14 @@ export interface KeyValueLike {
  *     stale whole-document copy;
  *   - namespaces: separate Tasks keep separate memory (see `resolveStateNamespace`).
  * Record keys use only characters Apify allows (source ids are [a-z_], namespaces [a-z0-9-]).
+ *
+ * The same store holds one small DELIVERY JOURNAL per source under `journal.<namespace>.<source>` (see
+ * `DeltaStore.saveJournal`). `load()` ignores it: the router folds it into the memory at the start of the source.
+ * Clearing writes `null`, which deletes the record in a key-value store.
  */
 export class ApifyDeltaStore implements DeltaStore {
+    private opened: Promise<KeyValueLike> | undefined;
+
     constructor(
         private readonly storeName: string,
         private readonly namespace: string = 'default',
@@ -43,8 +49,18 @@ export class ApifyDeltaStore implements DeltaStore {
         return `state.${this.namespace}.`;
     }
 
+    private journalKey(source: string): string {
+        return `journal.${this.namespace}.${source}`;
+    }
+
+    /** Opens the store once per run: the journal is written after every row, so the handle must not be re-opened each time. */
+    private store(): Promise<KeyValueLike> {
+        this.opened ??= this.openStore();
+        return this.opened;
+    }
+
     async load(): Promise<DeltaState> {
-        const store = await this.openStore();
+        const store = await this.store();
         const sources: Record<string, unknown> = {};
         for await (const key of store.keys()) {
             if (!key.startsWith(this.prefix)) continue;
@@ -54,8 +70,18 @@ export class ApifyDeltaStore implements DeltaStore {
     }
 
     async saveSource(source: string, entry: SourceDeltaState): Promise<void> {
-        const store = await this.openStore();
+        const store = await this.store();
         await store.setValue(`${this.prefix}${source}`, entry);
+    }
+
+    async loadJournal(source: string): Promise<ProcessedRecord[]> {
+        const store = await this.store();
+        return parseJournal(await store.getValue(this.journalKey(source)));
+    }
+
+    async saveJournal(source: string, entries: readonly ProcessedRecord[]): Promise<void> {
+        const store = await this.store();
+        await store.setValue(this.journalKey(source), entries.length === 0 ? null : entries.map(({ recordId, fingerprint }) => ({ recordId, fingerprint })));
     }
 
     async save(state: DeltaState): Promise<void> {

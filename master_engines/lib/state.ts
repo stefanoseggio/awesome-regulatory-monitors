@@ -52,6 +52,19 @@ export interface DeltaStore {
      * every other source as it was when this run started and erase a concurrent run's progress).
      */
     saveSource?(source: string, entry: SourceDeltaState): Promise<void>;
+    /**
+     * Optional, and only used together with `saveJournal`. Reads ONE source's DELIVERY JOURNAL: the records that were
+     * pushed and billed since that source's last full checkpoint (see `saveJournal`). Returns [] when there is none.
+     */
+    loadJournal?(source: string): Promise<ProcessedRecord[]>;
+    /**
+     * Optional. Overwrites ONE source's delivery journal. The router calls it after EVERY row it has pushed and billed
+     * (with the whole pending list, at most one checkpoint window long) and clears it (`[]`) after each full
+     * checkpoint. The journal is a few hundred bytes, so unlike a full checkpoint its cost does not grow with the size
+     * of the delta memory. It shrinks the window in which a hard kill (timeout, OOM, migration) can make the next run
+     * deliver AND bill a row a second time from "the last 25 rows" to "the single row in flight".
+     */
+    saveJournal?(source: string, entries: readonly ProcessedRecord[]): Promise<void>;
 }
 
 export function createEmptyState(): DeltaState {
@@ -82,6 +95,22 @@ export function parseState(value: unknown): DeltaState {
         };
     }
     return { version: 2, sources };
+}
+
+/** A journal never holds more than one checkpoint window; anything longer than this on disk is not ours. */
+export const MAX_JOURNAL_ENTRIES = 1000;
+
+/** Validates a persisted journal. Anything malformed is an empty journal (never throws, never half-loads). */
+export function parseJournal(value: unknown): ProcessedRecord[] {
+    if (!Array.isArray(value) || value.length > MAX_JOURNAL_ENTRIES) return [];
+    const entries: ProcessedRecord[] = [];
+    for (const raw of value) {
+        if (!raw || typeof raw !== 'object') return [];
+        const { recordId, fingerprint } = raw as { recordId?: unknown; fingerprint?: unknown };
+        if (typeof recordId !== 'string' || recordId === '' || typeof fingerprint !== 'string') return [];
+        entries.push({ recordId, fingerprint });
+    }
+    return entries;
 }
 
 export function classifyRecord(state: DeltaState, source: string, recordId: string, fingerprint: string): RecordClass {
@@ -141,7 +170,10 @@ export function markProcessed(
 
 export class InMemoryDeltaStore implements DeltaStore {
     private snapshot: DeltaState;
+    private readonly journals = new Map<string, ProcessedRecord[]>();
     saves = 0;
+    /** Number of `saveJournal` calls, empty clears included. */
+    journalWrites = 0;
 
     constructor(initial: DeltaState = createEmptyState()) {
         this.snapshot = initial;
@@ -156,8 +188,22 @@ export class InMemoryDeltaStore implements DeltaStore {
         this.saves += 1;
     }
 
+    async loadJournal(source: string): Promise<ProcessedRecord[]> {
+        return structuredClone(this.journals.get(source) ?? []);
+    }
+
+    async saveJournal(source: string, entries: readonly ProcessedRecord[]): Promise<void> {
+        this.journalWrites += 1;
+        if (entries.length === 0) this.journals.delete(source);
+        else this.journals.set(source, structuredClone([...entries]));
+    }
+
     peek(): DeltaState {
         return structuredClone(this.snapshot);
+    }
+
+    peekJournal(source: string): ProcessedRecord[] {
+        return structuredClone(this.journals.get(source) ?? []);
     }
 }
 

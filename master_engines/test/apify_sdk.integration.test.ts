@@ -7,7 +7,8 @@
  *   - a poisoned watchlist produces no hit and no charge;
  *   - a budget limit stops the run and loses nothing (the next run delivers the rest, with no duplicate);
  *   - a pricing that prices `apify-default-dataset-item` is refused before any row is pushed;
- *   - a hard kill re-delivers at most CHECKPOINT_EVERY_ROWS rows; a platform error mid-run re-delivers none.
+ *   - a hard kill repeats (delivers AND bills again) at most the one row in flight, thanks to the delivery journal;
+ *     a platform error mid-run repeats none.
  *
  * Local-mode caveat, from the SDK source (charging.js calculateEventPrice): outside the platform the number of rows
  * a budget still allows is computed with a price of $1 per event, while the amount actually accumulated uses the
@@ -22,8 +23,6 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
 import { describe, expect, it } from 'vitest';
-
-import { CHECKPOINT_EVERY_ROWS } from '../lib/router_core.js';
 
 const run = promisify(execFile);
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -184,7 +183,15 @@ describe('real Apify SDK: billing', () => {
 });
 
 describe('real Apify SDK: retries, kills and platform errors', () => {
-    it(`a hard kill re-delivers at most ${CHECKPOINT_EVERY_ROWS} rows and loses none`, async () => {
+    // Every row is pushed with its event, and the SDK bills that event inside `pushData`: one push line == one charge.
+    const billedRows = (sb: Sandbox) => sb.pushes().filter((p) => p.event === 'doc-new').length;
+    const overBilledRows = (sb: Sandbox) => {
+        const counts = new Map<string, number>();
+        for (const p of sb.pushes()) counts.set(p.record_id, (counts.get(p.record_id) ?? 0) + 1);
+        return [...counts.values()].reduce((sum, n) => sum + (n - 1), 0);
+    };
+
+    it('a hard kill right after a push re-delivers AND re-bills only that one row in flight, and loses none', async () => {
         const sb = sandbox();
         const killed = await child(sb, 'A', ppe({ ROWS: '60', KILL_AFTER: '40' }));
         expect(killed.exitCode).toBe(137);
@@ -194,11 +201,38 @@ describe('real Apify SDK: retries, kills and platform errors', () => {
         expect(rerun.result?.ok).toBe(true);
         const all = sb.pushes().map((p) => p.record_id);
         expect(new Set(all).size).toBe(60);
-        const duplicates = all.length - new Set(all).size;
-        // the last checkpoint was after row 25, so rows 26..40 are delivered a second time
-        expect(duplicates).toBe(15);
-        expect(duplicates).toBeLessThanOrEqual(CHECKPOINT_EVERY_ROWS);
+        // Rows 1..39 were in the delivery journal; only row 40 (pushed and billed, journal write not reached) repeats.
+        // Before the journal this was 15 rows: everything since the checkpoint after row 25.
+        expect(overBilledRows(sb)).toBe(1);
+        expect(billedRows(sb)).toBe(61);
+        expect(rerun.result?.summary?.sources[0]?.emitted).toBe(21);
     }, 180_000);
+
+    it('a hard kill after the journal write repeats nothing: no duplicate delivery, no second charge', async () => {
+        const sb = sandbox();
+        const killed = await child(sb, 'A', ppe({ ROWS: '60', KILL_AFTER_JOURNAL: '40' }));
+        expect(killed.exitCode).toBe(137);
+        expect(sb.pushes('A')).toHaveLength(40);
+
+        const rerun = await child(sb, 'B', ppe({ ROWS: '60' }));
+        expect(rerun.result?.ok).toBe(true);
+        expect(new Set(sb.pushes().map((p) => p.record_id)).size).toBe(60);
+        expect(overBilledRows(sb)).toBe(0);
+        expect(billedRows(sb)).toBe(60);
+    }, 180_000);
+
+    it('the journal never lets a kill repeat more than one row, wherever in the run it lands', async () => {
+        for (const killAt of [1, 2, 24, 25, 26, 49, 50, 51]) {
+            const sb = sandbox();
+            const killed = await child(sb, 'A', ppe({ ROWS: '60', KILL_AFTER: String(killAt) }));
+            expect(killed.exitCode).toBe(137);
+            const rerun = await child(sb, 'B', ppe({ ROWS: '60' }));
+            expect(rerun.result?.ok).toBe(true);
+            expect(new Set(sb.pushes().map((p) => p.record_id)).size).toBe(60);
+            expect(overBilledRows(sb), `kill after push ${killAt}`).toBeLessThanOrEqual(1);
+            expect(billedRows(sb), `kill after push ${killAt}`).toBeLessThanOrEqual(61);
+        }
+    }, 300_000);
 
     it('a platform error mid-run is remembered: nothing already pushed is delivered or billed again', async () => {
         const sb = sandbox();

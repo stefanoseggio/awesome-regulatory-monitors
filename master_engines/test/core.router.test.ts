@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { FakeBilling, RESULT_EVENT, WATCHLIST_HIT_EVENT } from '../lib/charging.js';
 import { createHeldConnector } from '../lib/connector_helpers.js';
 import { allSourcesFailed, billingEventFor, describeSourceFailures, type EngineDefinition, mergeCredentialFields, resolveSources, runEngine, type RunSinks, shouldEmit } from '../lib/router_core.js';
-import { InMemoryDeltaStore } from '../lib/state.js';
+import { type DeltaStore, InMemoryDeltaStore, type ProcessedRecord } from '../lib/state.js';
 import {
     type Connector,
     type ConnectorContext,
@@ -268,6 +268,126 @@ describe('failure isolation', () => {
         const engine = engineOf(stub('first', [rec('1', 'a')]), stub('second', [rec('2', 'a')]));
         await runEngine(engine, { sources: ['first', 'second'] }, { sinks: h.sinks, ctx, clock });
         expect(store.saves).toBe(2);
+    });
+});
+
+describe('delivery journal (a hard kill must not make the next run deliver and bill rows twice)', () => {
+    const many = (n: number) => Array.from({ length: n }, (_, i) => rec(String(i + 1), 'a'));
+
+    it('writes the journal after every emitted row and clears it at every full checkpoint', async () => {
+        const store = new InMemoryDeltaStore();
+        const h = harness({ store });
+        await runEngine(engineOf(stub('ok', many(30))), { sources: ['ok'] }, { sinks: h.sinks, ctx, clock });
+        // 30 rows + a clear at the checkpoint after row 25 + a clear in the final persist (5 rows)
+        expect(store.journalWrites).toBe(32);
+        expect(store.peekJournal('ok')).toEqual([]);
+        expect(store.peek().sources.ok?.seenIds).toHaveLength(30);
+    });
+
+    it('holds exactly the rows delivered since the last checkpoint', async () => {
+        const snapshots: ProcessedRecord[][] = [];
+        const spy = new (class extends InMemoryDeltaStore {
+            override async saveJournal(source: string, entries: readonly ProcessedRecord[]): Promise<void> {
+                snapshots.push([...entries]);
+                return super.saveJournal(source, entries);
+            }
+        })();
+        const h = harness({ store: spy });
+        await runEngine(engineOf(stub('ok', many(27))), { sources: ['ok'] }, { sinks: h.sinks, ctx, clock });
+        expect(snapshots[0]).toEqual([{ recordId: '1', fingerprint: 'a' }]);
+        expect(snapshots[24]).toHaveLength(25);
+        expect(snapshots[25]).toEqual([]); // cleared by the checkpoint
+        expect(snapshots[26]).toEqual([{ recordId: '26', fingerprint: 'a' }]);
+        expect(snapshots[27]).toHaveLength(2);
+    });
+
+    it('recovers a journal left by an interrupted run and does not deliver those rows again', async () => {
+        const store = new InMemoryDeltaStore();
+        await store.saveJournal('ok', [
+            { recordId: '1', fingerprint: 'a' },
+            { recordId: '2', fingerprint: 'a' },
+            { recordId: '3', fingerprint: 'a' },
+        ]);
+        const h = harness({ store });
+        const summary = await runEngine(engineOf(stub('ok', many(5))), { sources: ['ok'] }, { sinks: h.sinks, ctx, clock });
+        expect(h.rows.map((r) => r.record_id)).toEqual(['4', '5']);
+        expect(summary.sources[0]).toMatchObject({ fetched: 5, emitted: 2, firstSeen: 2, unchanged: 3 });
+        expect(store.peekJournal('ok')).toEqual([]);
+        expect(store.peek().sources.ok?.seenIds.sort()).toEqual(['1', '2', '3', '4', '5']);
+        expect(h.billing.totalFor(RESULT_EVENT)).toBe(2);
+    });
+
+    it('a journalled record whose content has changed since is still delivered, as updated', async () => {
+        const store = new InMemoryDeltaStore();
+        await store.saveJournal('ok', [{ recordId: '1', fingerprint: 'old' }]);
+        const h = harness({ store });
+        await runEngine(engineOf(stub('ok', [rec('1', 'new')])), { sources: ['ok'] }, { sinks: h.sinks, ctx, clock });
+        expect(h.rows).toHaveLength(1);
+        expect(h.rows[0]).toMatchObject({ record_id: '1', delta_status: 'updated' });
+    });
+
+    it('a journal for a source that is not selected is left untouched', async () => {
+        const store = new InMemoryDeltaStore();
+        await store.saveJournal('other', [{ recordId: 'x', fingerprint: 'a' }]);
+        const h = harness({ store });
+        await runEngine(engineOf(stub('ok', many(2)), stub('other', [])), { sources: ['ok'] }, { sinks: h.sinks, ctx, clock });
+        expect(store.peekJournal('other')).toEqual([{ recordId: 'x', fingerprint: 'a' }]);
+    });
+
+    it('fails closed: when a journal write fails no further row is pushed, and the row already pushed is remembered', async () => {
+        const failing = new (class extends InMemoryDeltaStore {
+            private calls = 0;
+            override async saveJournal(source: string, entries: readonly ProcessedRecord[]): Promise<void> {
+                this.calls += 1;
+                if (this.calls === 3) throw new Error('kv store unavailable');
+                return super.saveJournal(source, entries);
+            }
+        })();
+        const h = harness({ store: failing });
+        await expect(runEngine(engineOf(stub('ok', many(10))), { sources: ['ok'] }, { sinks: h.sinks, ctx, clock })).rejects.toThrow('kv store unavailable');
+        expect(h.rows.map((r) => r.record_id)).toEqual(['1', '2', '3']);
+        // the third row was pushed before its journal write failed; the `finally` checkpoint still remembers it
+        expect(failing.peek().sources.ok?.seenIds.sort()).toEqual(['1', '2', '3']);
+    });
+
+    it('fails closed when the journal cannot be read: nothing is fetched into the dataset', async () => {
+        const unreadable = new (class extends InMemoryDeltaStore {
+            override async loadJournal(): Promise<ProcessedRecord[]> {
+                throw new Error('kv store unavailable');
+            }
+        })();
+        const h = harness({ store: unreadable });
+        await expect(runEngine(engineOf(stub('ok', many(3))), { sources: ['ok'] }, { sinks: h.sinks, ctx, clock })).rejects.toThrow('kv store unavailable');
+        expect(h.rows).toEqual([]);
+    });
+
+    it('is written BEFORE the watchlist-hit charge, so a kill between them leaks one hit instead of double-billing the row', async () => {
+        const order: string[] = [];
+        const store = new (class extends InMemoryDeltaStore {
+            override async saveJournal(source: string, entries: readonly ProcessedRecord[]): Promise<void> {
+                if (entries.length > 0) order.push('journal');
+                return super.saveJournal(source, entries);
+            }
+        })();
+        const h = harness({ store });
+        const realCharge = h.billing.charge.bind(h.billing);
+        h.billing.charge = async (event: string, count: number) => {
+            if (event === WATCHLIST_HIT_EVENT) order.push('hit');
+            else order.push('row');
+            return realCharge(event, count);
+        };
+        await runEngine(engineOf(stub('ok', [rec('1', 'a', 'ACME CORP')])), { sources: ['ok'], watchlistNames: ['Acme'] }, { sinks: h.sinks, ctx, clock });
+        expect(order).toEqual(['row', 'journal', 'hit']);
+    });
+
+    it('a store without journal support still works (checkpoints only)', async () => {
+        const inner = new InMemoryDeltaStore();
+        const plain: DeltaStore = { load: () => inner.load(), save: (state) => inner.save(state) };
+        const h = harness();
+        h.sinks.store = plain;
+        await runEngine(engineOf(stub('ok', many(3))), { sources: ['ok'] }, { sinks: h.sinks, ctx, clock });
+        expect(h.rows).toHaveLength(3);
+        expect(inner.peek().sources.ok?.seenIds).toHaveLength(3);
     });
 });
 

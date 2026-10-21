@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { classifyRecord, createEmptyState, InMemoryDeltaStore, markProcessed, parseState } from '../lib/state.js';
+import { classifyRecord, createEmptyState, InMemoryDeltaStore, markProcessed, MAX_JOURNAL_ENTRIES, parseJournal, parseState } from '../lib/state.js';
 
 describe('delta state', () => {
     it('classifies first_seen / unchanged / updated', () => {
@@ -76,5 +76,62 @@ describe('parseState', () => {
         loaded.sources.s?.seenIds.push('zzz');
         expect((await store.load()).sources.s?.seenIds).toEqual(['a']);
         expect(parseState(JSON.parse(JSON.stringify(state)))).toEqual(state);
+    });
+});
+
+describe('parseJournal', () => {
+    it('accepts a well-formed journal and returns copies of exactly recordId and fingerprint', () => {
+        expect(parseJournal([{ recordId: 'a', fingerprint: 'f1', extra: 1 }, { recordId: 'b', fingerprint: '' }])).toEqual([
+            { recordId: 'a', fingerprint: 'f1' },
+            { recordId: 'b', fingerprint: '' },
+        ]);
+        expect(parseJournal([])).toEqual([]);
+    });
+
+    it.each([
+        ['null', null],
+        ['undefined', undefined],
+        ['a string', 'abc'],
+        ['an object', { recordId: 'a', fingerprint: 'f' }],
+        ['a number', 7],
+        ['an entry that is not an object', ['x']],
+        ['a null entry', [null]],
+        ['an empty record id', [{ recordId: '', fingerprint: 'f' }]],
+        ['a numeric record id', [{ recordId: 1, fingerprint: 'f' }]],
+        ['a missing fingerprint', [{ recordId: 'a' }]],
+        ['a numeric fingerprint', [{ recordId: 'a', fingerprint: 3 }]],
+        ['one bad entry among good ones (all-or-nothing)', [{ recordId: 'a', fingerprint: 'f' }, { recordId: 2, fingerprint: 'f' }]],
+    ])('treats %s as an empty journal, never throwing', (_label, value) => {
+        expect(parseJournal(value)).toEqual([]);
+    });
+
+    it('refuses a journal longer than one checkpoint window could ever produce', () => {
+        const entries = Array.from({ length: MAX_JOURNAL_ENTRIES + 1 }, (_, i) => ({ recordId: String(i), fingerprint: 'f' }));
+        expect(parseJournal(entries)).toEqual([]);
+        expect(parseJournal(entries.slice(0, MAX_JOURNAL_ENTRIES))).toHaveLength(MAX_JOURNAL_ENTRIES);
+    });
+
+    it('keeps prototype-named record ids as plain data', () => {
+        expect(parseJournal([{ recordId: '__proto__', fingerprint: 'f' }, { recordId: 'constructor', fingerprint: 'g' }])).toEqual([
+            { recordId: '__proto__', fingerprint: 'f' },
+            { recordId: 'constructor', fingerprint: 'g' },
+        ]);
+    });
+});
+
+describe('InMemoryDeltaStore journal', () => {
+    it('overwrites per source, clears on an empty list, and never aliases the caller array', async () => {
+        const store = new InMemoryDeltaStore();
+        const entries = [{ recordId: 'a', fingerprint: 'f' }];
+        await store.saveJournal('s1', entries);
+        entries.push({ recordId: 'b', fingerprint: 'f' });
+        expect(await store.loadJournal('s1')).toEqual([{ recordId: 'a', fingerprint: 'f' }]);
+        await store.saveJournal('s2', [{ recordId: 'z', fingerprint: 'g' }]);
+        await store.saveJournal('s1', [{ recordId: 'c', fingerprint: 'f' }]);
+        expect(await store.loadJournal('s1')).toEqual([{ recordId: 'c', fingerprint: 'f' }]);
+        expect(await store.loadJournal('s2')).toEqual([{ recordId: 'z', fingerprint: 'g' }]);
+        await store.saveJournal('s1', []);
+        expect(await store.loadJournal('s1')).toEqual([]);
+        expect(store.journalWrites).toBe(4);
     });
 });

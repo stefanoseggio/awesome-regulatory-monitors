@@ -323,15 +323,39 @@ export async function runEngine(engine: EngineDefinition, rawInput: unknown, dep
         // row that was already pushed and billed is remembered even if a later push throws or the run is killed.
         const processed: ProcessedRecord[] = [];
         const memoryCap = effectiveMaxSeenIds(connector.maxSeenIds, input.maxItemsPerSource, state.sources[connector.id]?.seenIds.length ?? 0);
+        const writeState = async (): Promise<void> => {
+            const entry = state.sources[connector.id];
+            if (sinks.store.saveSource && entry) await sinks.store.saveSource(connector.id, entry);
+            else await sinks.store.save(state);
+        };
+        // The delivery journal: every row that was pushed AND billed since the last full checkpoint, rewritten after
+        // each such row. A hard kill cannot run `finally`, so without it the next run would deliver and bill every
+        // row since the last checkpoint (up to CHECKPOINT_EVERY_ROWS) a second time. With it only the row in flight at
+        // the instant of the kill can be repeated. Stores without journal support fall back to checkpoints alone.
+        const journalStore = sinks.store.loadJournal && sinks.store.saveJournal ? { load: sinks.store.loadJournal.bind(sinks.store), save: sinks.store.saveJournal.bind(sinks.store) } : undefined;
+        const journal: ProcessedRecord[] = [];
         const persist = async (): Promise<void> => {
             if (processed.length === 0) return;
             const batch = processed.slice();
             state = markProcessed(state, connector.id, batch, clock().toISOString(), memoryCap);
-            const entry = state.sources[connector.id];
-            if (sinks.store.saveSource && entry) await sinks.store.saveSource(connector.id, entry);
-            else await sinks.store.save(state);
+            await writeState();
             processed.splice(0, batch.length);
+            if (journalStore && journal.length > 0) {
+                await journalStore.save(connector.id, []);
+                journal.length = 0;
+            }
         };
+        if (journalStore) {
+            // An interrupted earlier run left rows that were delivered and billed but not yet in the delta memory.
+            // Fold them in BEFORE classifying anything, so they are not delivered and billed again.
+            const pending = await journalStore.load(connector.id);
+            if (pending.length > 0) {
+                state = markProcessed(state, connector.id, pending, clock().toISOString(), memoryCap);
+                await writeState();
+                await journalStore.save(connector.id, []);
+                ctx.log.info(`[${connector.id}] recovered ${pending.length} record(s) from the delivery journal of an interrupted run.`);
+            }
+        }
         let sinceCheckpoint = 0;
 
         try {
@@ -365,7 +389,13 @@ export async function runEngine(engine: EngineDefinition, rawInput: unknown, dep
                 }
                 summary.emitted += 1;
                 totalEmitted += 1;
-                processed.push({ recordId: record.recordId, fingerprint: record.fingerprint });
+                const delivered: ProcessedRecord = { recordId: record.recordId, fingerprint: record.fingerprint };
+                processed.push(delivered);
+                if (journalStore) {
+                    // Fail closed: a row whose delivery cannot be remembered must not be followed by more billable rows.
+                    journal.push(delivered);
+                    await journalStore.save(connector.id, journal);
+                }
 
                 if (matchedKeyword !== null) {
                     summary.watchlistHits += 1;

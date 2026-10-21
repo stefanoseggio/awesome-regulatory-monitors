@@ -8,6 +8,8 @@
  *   NS                  delta-memory namespace
  *   PUSHLOG, RUN_LABEL  file that receives one JSON line per row actually pushed, and this run's label
  *   KILL_AFTER=k        hard-kill the process (exit 137, no `finally`) right after the k-th successful push
+ *                       (the row is pushed and billed, but its journal entry is not yet written)
+ *   KILL_AFTER_JOURNAL=k  hard-kill right after the k-th delivery-journal write has completed
  *   FAIL_PUSH_AT=k      make the k-th pushData call throw a platform error BEFORE pushing anything
  * The last stdout line is `RESULT:<json>` with the outcome and the SDK's own charged-event counts.
  */
@@ -60,6 +62,23 @@ let pushed = 0;
     if (env.KILL_AFTER && pushed >= Number(env.KILL_AFTER)) process.exit(137);
     return result;
 };
+
+if (env.KILL_AFTER_JOURNAL) {
+    const openKv = Actor.openKeyValueStore.bind(Actor) as (name?: string) => Promise<{ setValue: (key: string, value: unknown, options?: unknown) => Promise<void> }>;
+    let journalWrites = 0;
+    (Actor as unknown as { openKeyValueStore: unknown }).openKeyValueStore = async (name?: string) => {
+        const store = await openKv(name);
+        const original = store.setValue.bind(store);
+        store.setValue = async (key, value, options) => {
+            await original(key, value, options);
+            if (key.startsWith('journal.') && value !== null) {
+                journalWrites += 1;
+                if (journalWrites >= Number(env.KILL_AFTER_JOURNAL)) process.exit(137);
+            }
+        };
+        return store;
+    };
+}
 
 let outcome: Record<string, unknown>;
 try {
