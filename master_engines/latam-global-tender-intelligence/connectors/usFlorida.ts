@@ -45,9 +45,19 @@
  *        legacy 14 keys (agencyAdNumber, type, title, openDate, closeDate, favorite, status, typeId, version,
  *        advertisementId, uniqueName, publishDate, organization{organizationId, entity, shortName, vbsAgency,
  *        version, name}, agency). Timestamps are "+00:00" UTC instants.
- *   The listing, count, detail and error fixtures used by the tests are the legacy actor's real captures of
- *   2026-09-07 (copied verbatim, see test/tenders-b.usFlorida.test.ts); this session did not re-capture them.
- *   Not re-verified this session: the count endpoint, the detail endpoint and the 400 body shape.
+ *   POST .../mfmp/pub/search/bids/count (same body, pageSize 1) -> HTTP 200 application/json, the bare integer 168.
+ *   GET  .../mfmp/pub/search/bids/detail?id=17274 with Accept: application/json -> HTTP 200 application/json, 36 keys,
+ *        1 document. The SAME request WITHOUT the Accept header -> HTTP 200 with the "<!DOCTYPE html>" Angular shell:
+ *        the gate is content negotiation, as the legacy notes say. id=999999999 -> HTTP 200 with every field null.
+ *   POST .../count with a wrongly typed filter (`type: ["Request for Proposals"]`, a label instead of the id "6") ->
+ *        HTTP 400 application/json {"errorMessage":"We could not complete this action. Please contact the MFMP Help Desk
+ *        at 866-FLA-EPRO (866-352-3776) for assistance.","errorId":null}, byte-for-byte the legacy error_400 fixture.
+ *   End to end: this connector, driven through lib/http.ts createHttpClient (Node fetch, honest User-Agent) against the
+ *   live portal with fetchDetail=true, walked the OPEN register (168 rows on 2 pages) and returned 6 fully populated
+ *   records, detail included.
+ *   The listing/detail/error FIXTURES used by the tests are the legacy actor's real captures of 2026-09-07 (copied
+ *   verbatim, see test/tenders-b.usFlorida.test.ts); this session verified the live shapes above but did not re-capture
+ *   those files.
  * ============================================================================
  *
  * OVERLAP NOTE: `emerging-market-sovereign-debt-auction-monitor` does not overlap this source.
@@ -254,11 +264,14 @@ export function toSiteLocal(value: string | null | undefined): string | null {
     return `${parts.year}-${parts.month}-${parts.day} ${hour}:${parts.minute} ${parts.timeZoneName}`;
 }
 
-/** Signed whole days from `now` to `target` (truncated toward zero; negative once passed). */
+/**
+ * Signed whole days from `now` to `target` (truncated toward zero; negative once passed). `|| 0` normalises the `-0`
+ * that truncation yields for a target a few hours in the past, which the legacy code let through.
+ */
 export function daysUntil(target: string | null | undefined, now: Date): number | null {
     const iso = toUtcIso(target);
     if (!iso) return null;
-    return Math.trunc((new Date(iso).getTime() - now.getTime()) / 86_400_000);
+    return Math.trunc((new Date(iso).getTime() - now.getTime()) / 86_400_000) || 0;
 }
 
 /** Whole days between two instants (truncated toward zero). */
@@ -266,7 +279,7 @@ export function daysBetween(start: string | null | undefined, end: string | null
     const a = toUtcIso(start);
     const b = toUtcIso(end);
     if (!a || !b) return null;
-    return Math.trunc((new Date(b).getTime() - new Date(a).getTime()) / 86_400_000);
+    return Math.trunc((new Date(b).getTime() - new Date(a).getTime()) / 86_400_000) || 0;
 }
 
 /** Raw advertisement HTML -> readable plain text: block elements become line breaks, entities are decoded, whitespace collapses. */

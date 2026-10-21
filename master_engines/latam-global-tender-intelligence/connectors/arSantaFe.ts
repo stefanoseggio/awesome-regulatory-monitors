@@ -61,6 +61,9 @@
  *   GET .../AppAjax.php?a=shared.getOrganismosLey -> 200 JSON `{"success":true,...,"data":[{
  *        "idOrganismoLey12510":"27","nombre":"ADMINISTRACIÓN PROVINCIAL DE IMPUESTOS"},...]}`.
  *   The captured responses are the `santafe.live-2026-10-21.*` fixtures used by the tests.
+ *   End to end: this connector, driven through lib/http.ts `createHttpClient` (Node's global fetch, honest
+ *   User-Agent) against the live portal, returned 4 AP records with detail (79 payload keys; idGestion 139530
+ *   with its pliego document and "$ 58.500.000,00" monto) and 3 ET records for `objeto=medicamentos`.
  * ============================================================================
  */
 import { createHash } from 'node:crypto';

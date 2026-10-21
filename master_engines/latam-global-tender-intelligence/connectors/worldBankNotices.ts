@@ -56,7 +56,11 @@
  *        walk therefore never requests os > 100000.
  *   GET ...?format=json&id=OP00469489 -> HTTP 200, total "1": the `id` filter works, so the legacy `source_url`
  *        is a real per-notice link. A guessed `noticedate=` parameter -> HTTP 400 (no server-side date filter).
- *   `contact_web_url` is frequently null; `bid_reference_no` is the human reference number.
+ *   `contact_web_url` is frequently null; `bid_reference_no` is the human reference number. A live Contract Award
+ *        omitted `contact_organization` and `submission_deadline_date` entirely (absent keys), which the schema and the
+ *        'World Bank' fallback handle.
+ *   End to end: this connector, driven through lib/http.ts createHttpClient (Node fetch, honest User-Agent) against the
+ *        live API with `dateRange: '7d'` and `pageSize: 50`, returned 60 distinct notices over 2 pages.
  * ============================================================================
  *
  * OVERLAP NOTE: `emerging-market-sovereign-debt-auction-monitor` does not overlap this source.
@@ -183,6 +187,12 @@ export function noticeTextToPlain(html: string | null | undefined): string | nul
     if (!html) return null;
     const $ = cheerio.load(html, null, false);
     $('script, style').remove();
+    // Block boundaries become spaces, so `<p>a</p><p>b</p>` and `<p>a</p>\n<p>b</p>` hash identically: a harmless re-wrap
+    // upstream must not look like an edited notice.
+    $('br').replaceWith(' ');
+    $('p, div, li, tr, td, th, h1, h2, h3, h4, h5, h6, blockquote, pre, table').each((_, el) => {
+        $(el).append(' ');
+    });
     const text = $.root().text().replace(/ /g, ' ').replace(/\s+/g, ' ').trim();
     return text === '' ? null : text;
 }

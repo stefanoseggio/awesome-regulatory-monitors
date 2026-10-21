@@ -64,9 +64,31 @@ export function hasRawHttp(http: HttpClient): http is RawCapableHttpClient {
 
 export type PortalCharset = 'utf-8' | 'windows-1252' | 'iso-8859-1';
 
-/** Decodes raw response bytes with an explicit charset. Never throws on malformed input. */
+/**
+ * The 32 characters windows-1252 puts at bytes 0x80-0x9F (WHATWG index; the five unassigned bytes 0x81,
+ * 0x8D, 0x8F, 0x90, 0x9D map to the same C1 control code points, as in a browser).
+ */
+const WINDOWS_1252_C1 = '\u20ac\u0081\u201a\u0192\u201e\u2026\u2020\u2021\u02c6\u2030\u0160\u2039\u0152\u008d\u017d\u008f\u0090\u2018\u2019\u201c\u201d\u2022\u2013\u2014\u02dc\u2122\u0161\u203a\u0153\u009d\u017e\u0178';
+
+/**
+ * Decodes windows-1252 bytes WITHOUT relying on `TextDecoder('windows-1252')`. Observed in this port session:
+ * Node 22.22.0 (ICU 77.1) decodes bytes 0x80-0x9F through that label as C1 CONTROL characters (0x93 -> U+0093
+ * instead of the left double quotation mark U+201C, 0x96 -> U+0096 instead of the en dash), i.e. as if it were
+ * ISO-8859-1, while the legacy decode.ts and its own tests assume the browser behaviour. Bytes 0x00-0x7F and
+ * 0xA0-0xFF are identical in both charsets and are decoded as Latin-1; only the 0x80-0x9F block needs the table.
+ */
+export function decodeWindows1252(body: Uint8Array): string {
+    const latin1 = Buffer.from(body.buffer, body.byteOffset, body.byteLength).toString('latin1');
+    return latin1.replace(/[\u0080-\u009f]/g, (c) => WINDOWS_1252_C1.charAt(c.charCodeAt(0) - 0x80));
+}
+
+/**
+ * Decodes raw response bytes with an explicit charset. Never throws on malformed input. `iso-8859-1` follows the
+ * WHATWG/browser rule (the label means windows-1252), which is also how a browser would read ar_tucuman's pages.
+ */
 export function decodePortalBytes(body: Uint8Array, charset: PortalCharset): string {
-    return new TextDecoder(charset).decode(body);
+    if (charset === 'utf-8') return new TextDecoder('utf-8').decode(body);
+    return decodeWindows1252(body);
 }
 
 /**

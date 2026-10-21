@@ -55,6 +55,9 @@
  *        `<input name="num_total" type="hidden" value=27>` (27 tenders in estado 1 today, 6 pages),
  *        tender modals present; the 15 raw non-ASCII bytes of the page all sit inside HTML comments
  *        (`<!-- http://172.16.0.33/obras_publicas/ <0xF3 or 0xC3 0xB3> http://rig.tucuman.gov.ar/... -->`).
+ *   End to end through lib/http.ts `createHttpClient` (text-only client): estado 1 returned 7 tenders over two
+ *   pages (ids 9091, 9090, ... with `reparticion` + first renglón as watchText); estado 3 (num_total 313, 63
+ *   pages) returned 3 tenders through a scratch raw-capable client that decodes ISO-8859-1.
  * ============================================================================
  */
 import type { Cheerio, CheerioAPI } from 'cheerio';

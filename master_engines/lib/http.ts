@@ -4,7 +4,7 @@
  * redirect validation. No CAPTCHA solving, no fingerprint spoofing, no WAF
  * circumvention - a source that needs those is `held`.
  */
-import type { HttpClient, HttpRequestInit, Logger } from './types.js';
+import type { HttpClient, HttpRequestInit, Logger, RawHttpResponse } from './types.js';
 
 export interface HttpClientOptions {
     userAgent: string;
@@ -68,15 +68,15 @@ export class HttpRedirectError extends Error {
     }
 }
 
-/** Reads a response body as text, aborting once `maxBytes` is exceeded. */
-async function readText(response: Response, url: string, maxBytes: number | undefined): Promise<string> {
-    if (maxBytes === undefined) return response.text();
+/** Reads a response body as bytes, aborting once `maxBytes` is exceeded. */
+async function readBytes(response: Response, url: string, maxBytes: number | undefined): Promise<Uint8Array> {
+    if (maxBytes === undefined) return new Uint8Array(await response.arrayBuffer());
     const declared = Number(response.headers.get('content-length'));
     if (Number.isFinite(declared) && declared > maxBytes) {
         await response.body?.cancel().catch(() => undefined);
         throw new HttpBodyTooLargeError(url, maxBytes);
     }
-    if (!response.body) return response.text();
+    if (!response.body) return new Uint8Array(await response.arrayBuffer());
 
     const reader = response.body.getReader();
     const chunks: Uint8Array[] = [];
@@ -97,7 +97,7 @@ async function readText(response: Response, url: string, maxBytes: number | unde
         merged.set(chunk, offset);
         offset += chunk.byteLength;
     }
-    return new TextDecoder('utf-8').decode(merged);
+    return merged;
 }
 
 export function createHttpClient(options: HttpClientOptions): HttpClient {
@@ -137,14 +137,20 @@ export function createHttpClient(options: HttpClientOptions): HttpClient {
         throw new HttpRedirectError(url, `more than ${init.redirects.max} redirects`);
     }
 
-    async function request(url: string, init: HttpRequestInit = {}): Promise<{ text: string; finalUrl: string }> {
+    let warnedAboutCaHint = false;
+
+    async function request(url: string, init: HttpRequestInit = {}): Promise<{ bytes: Uint8Array; response: Response; finalUrl: string }> {
+        if (init.tlsExtraCaPem !== undefined && !warnedAboutCaHint) {
+            warnedAboutCaHint = true;
+            options.log?.warning('tlsExtraCaPem was supplied but the default HTTP client cannot add trust anchors per request; set NODE_EXTRA_CA_CERTS on the Actor process instead.');
+        }
         let lastError: unknown;
         for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
             const controller = new AbortController();
             const timer = setTimeout(() => controller.abort(), init.timeoutMs ?? defaultTimeoutMs);
             try {
                 const { response, finalUrl } = await fetchOnce(url, init, controller.signal);
-                if (response.ok) return { text: await readText(response, finalUrl, init.maxBytes), finalUrl };
+                if (response.ok) return { bytes: await readBytes(response, finalUrl, init.maxBytes), response, finalUrl };
                 const preview = (await response.text().catch(() => '')).slice(0, 200);
                 const error = new HttpStatusError(finalUrl, response.status, preview);
                 if (!RETRYABLE_STATUS.has(response.status) || attempt === maxRetries) throw error;
@@ -166,11 +172,16 @@ export function createHttpClient(options: HttpClientOptions): HttpClient {
 
     return {
         async getText(url, init) {
-            return (await request(url, init)).text;
+            return new TextDecoder('utf-8').decode((await request(url, init)).bytes);
         },
         async getJson<T = unknown>(url: string, init?: HttpRequestInit): Promise<T> {
-            const { text } = await request(url, { ...init, headers: { accept: 'application/json', ...init?.headers } });
-            return JSON.parse(text) as T;
+            const { bytes } = await request(url, { ...init, headers: { accept: 'application/json', ...init?.headers } });
+            return JSON.parse(new TextDecoder('utf-8').decode(bytes)) as T;
+        },
+        async getRaw(url, init): Promise<RawHttpResponse> {
+            const { bytes, response } = await request(url, init);
+            const setCookies = typeof response.headers.getSetCookie === 'function' ? response.headers.getSetCookie() : [];
+            return { status: response.status, body: bytes, setCookies };
         },
     };
 }

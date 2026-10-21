@@ -65,6 +65,11 @@
  *        bytes contain 0xF3, 0xED, 0xFA, 0x93, 0x94 (Windows-1252) next to the corrupted-estado
  *        sequence EF BF BD inside the page's own JS string. Captured as the `entrerios.live-2026-10-21.*`
  *        fixture (byte-exact).
+ *   End to end (through a scratch raw-capable client implementing the proposed `getRaw` over Node's fetch; the
+ *   shipped lib/http.ts has none): an UNFILTERED POST returned 5,505 table rows = 5,483 unique record ids + exactly
+ *   22 byte-identical duplicate pairs collapsed - the same 5,505 / 22 figures the legacy AGENTS.md reports for
+ *   2026-09-04; `estado=3, organismo=8` returned the 17 rows of the legacy fixture. Through the shipped text-only
+ *   lib/http.ts client the source fails closed with SourceFetchError, as designed.
  * ============================================================================
  */
 import { createHash } from 'node:crypto';

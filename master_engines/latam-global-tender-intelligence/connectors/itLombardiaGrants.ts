@@ -74,6 +74,10 @@
  *   GET .../resource/8g3e-h8jh.json -> HTTP 404 {"code":"dataset.missing"}: the dataset id in the README's SAMPLE
  *        OUTPUT `source_url` does not exist (the README prose and every live check say bukx-h2uy), so the per-record
  *        `source_url` here uses bukx-h2uy.
+ *   End to end: this connector, driven through lib/http.ts createHttpClient (Node fetch, honest User-Agent, real 1 s
+ *        crawl-delay) against the live dataset with `statusFilter: ['OPEN']`, walked 1,934 unique rows in 2 requests and
+ *        matched 118 bandi as OPEN at the run clock (2026-10-21); the first, RLAV2026052883, opened 2026-10-15 and
+ *        closes 2026-11-05.
  *   GET https://www.dati.lombardia.it/robots.txt -> `User-agent: * / Crawl-delay: 1`; Disallow rules cover /browse,
  *        /page, /catalog, /facet (query-string variants), /OData.svc/, /api/odata/, /login, /tiles/, /api/collocate*;
  *        `/resource/` and `/api/views/` are not disallowed.

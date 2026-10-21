@@ -62,6 +62,11 @@
  *   Identity: two pages of 250 notices (500 rows, scope ALL, onlyLatestVersions=false) for the default
  *   rolling query had 500 distinct notice-identifier values and no repeated publication-number, which is
  *   the evidence for using notice-identifier as the stable record id.
+ *   publication / deadline values also arrive as a Z-suffixed date ("2026-11-09Z"); like the "+02:00" form they are kept
+ *   verbatim, as the legacy did.
+ *   End to end: this connector, driven through lib/http.ts createHttpClient (Node fetch, honest User-Agent) against the
+ *   live API with the default query and `limit: 20`, returned 25 distinct notices over 2 pages (TED reporting 2,524
+ *   matching).
  *   `notice-type` and `legal-basis` are accepted by the legacy input schema but its normaliser never read
  *   them; they are surfaced here (`notice_type`, `legal_basis`, null unless selected in `fields`) because
  *   they are the field that tells a contract notice from an award notice.

@@ -147,3 +147,54 @@ describe('redirect validation', () => {
         expect(calls[0]?.init.redirect).toBeUndefined();
     });
 });
+
+describe('getRaw', () => {
+    it('returns undecoded bytes, status and every Set-Cookie header', async () => {
+        const headers = new Headers();
+        headers.append('set-cookie', 'ASP.NET_SessionId=abc; path=/; HttpOnly');
+        headers.append('set-cookie', 'lang=es; path=/');
+        const bytes = new Uint8Array([0x70, 0xf3, 0x6c, 0x69, 0x7a, 0x61]); // "póliza" in windows-1252/latin1
+        const { client } = clientWith(() => new Response(bytes, { headers }));
+        const raw = await client.getRaw!('https://x.test/');
+        expect(raw.status).toBe(200);
+        expect(Array.from(raw.body)).toEqual(Array.from(bytes));
+        expect(raw.setCookies).toEqual(['ASP.NET_SessionId=abc; path=/; HttpOnly', 'lang=es; path=/']);
+    });
+
+    it('shares the retry, status and size policy with getText', async () => {
+        let n = 0;
+        const flaky = clientWith(() => (++n < 2 ? new Response('busy', { status: 503 }) : new Response('ok')));
+        expect((await flaky.client.getRaw!('https://x.test/')).status).toBe(200);
+        expect(n).toBe(2);
+
+        const missing = clientWith(() => new Response('nope', { status: 404 }));
+        await expect(missing.client.getRaw!('https://x.test/')).rejects.toBeInstanceOf(HttpStatusError);
+
+        const big = clientWith(() => new Response('x'.repeat(5000)));
+        await expect(big.client.getRaw!('https://x.test/', { maxBytes: 100 })).rejects.toBeInstanceOf(HttpBodyTooLargeError);
+    });
+
+    it('forwards a POST body and headers (cookie threading)', async () => {
+        const { client, calls } = clientWith(() => new Response('ok'));
+        await client.getRaw!('https://x.test/post', { method: 'POST', body: 'a=1', headers: { cookie: 'ASP.NET_SessionId=abc' } });
+        expect(calls[0]?.init.method).toBe('POST');
+        expect(calls[0]?.init.body).toBe('a=1');
+        expect((calls[0]?.init.headers as Record<string, string>).cookie).toBe('ASP.NET_SessionId=abc');
+    });
+});
+
+describe('tlsExtraCaPem hint', () => {
+    it('warns once instead of being silently ignored', async () => {
+        const warnings: string[] = [];
+        const client = createHttpClient({
+            userAgent: 'ua',
+            maxRetries: 0,
+            log: { info() {}, debug() {}, error() {}, warning: (m) => warnings.push(m) },
+            fetchImpl: (async () => new Response('ok')) as typeof fetch,
+        });
+        await client.getText('https://x.test/', { tlsExtraCaPem: '-----BEGIN CERTIFICATE-----\nAAA\n-----END CERTIFICATE-----' });
+        await client.getText('https://x.test/', { tlsExtraCaPem: 'again' });
+        expect(warnings).toHaveLength(1);
+        expect(warnings[0]).toContain('NODE_EXTRA_CA_CERTS');
+    });
+});

@@ -42,12 +42,28 @@ export interface HttpRequestInit {
      * the only place a caller-supplied hostname can be re-checked after a 3xx.
      */
     redirects?: { max: number; validate?: (target: URL) => boolean };
+    /**
+     * Transport HINT: PEM CERTIFICATE blocks to ADD to the trust store for this request (never a private key).
+     * The default client cannot honour it on Node's global `fetch` and logs a warning instead of ignoring it
+     * silently; set `NODE_EXTRA_CA_CERTS` on the Actor process (the engine Dockerfiles do) for the same effect.
+     */
+    tlsExtraCaPem?: string;
+}
+
+/** Undecoded response, for portals that mislabel their charset or thread state through `Set-Cookie`. */
+export interface RawHttpResponse {
+    status: number;
+    body: Uint8Array;
+    /** Every `Set-Cookie` header of the final response, one element per header. */
+    setCookies: readonly string[];
 }
 
 /** Minimal HTTP port. Connectors never call `fetch` directly so tests can inject fixtures. */
 export interface HttpClient {
     getText(url: string, init?: HttpRequestInit): Promise<string>;
     getJson<T = unknown>(url: string, init?: HttpRequestInit): Promise<T>;
+    /** Optional. Same retry/timeout/size/redirect policy as `getText`; a non-2xx status throws exactly like `getText`. */
+    getRaw?(url: string, init?: HttpRequestInit): Promise<RawHttpResponse>;
 }
 
 export interface ConnectorContext {
