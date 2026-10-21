@@ -23,7 +23,7 @@ import { z } from 'zod';
 import { clampInteger, describeSanitization, findKeywordMatch, sanitizeKeywordList } from './_guards.js';
 import { type BillingPort, DEFAULT_DATASET_ITEM_EVENT, DEFAULT_HIT_BILLER_OPTIONS, hasPositivePrice, RESULT_EVENT, WATCHLIST_HIT_EVENT, WatchlistHitBiller } from './charging.js';
 import { createScrubber, collectSecrets } from './secrets.js';
-import { classifyRecord, type DeltaStore, effectiveMaxSeenIds, markProcessed, type ProcessedRecord } from './state.js';
+import { classifyRecord, type DeltaStore, effectiveMaxSeenIds, markProcessed, NAMESPACE_PATTERN, type ProcessedRecord } from './state.js';
 import {
     type Connector,
     type ConnectorContext,
@@ -96,7 +96,12 @@ export const EngineInputSchema = z.object({
      * Isolates delta memory: two Tasks (different watchlists, filters or delta modes) must not consume each other's
      * "new" records. Read by the Apify adapter before the store is opened; the router itself never uses it.
      */
-    stateNamespace: z.string().regex(/^[a-z0-9-]{1,40}$/u, 'stateNamespace must be 1-40 characters of a-z, 0-9 and "-".').optional(),
+    stateNamespace: z.preprocess(
+        // The form's text field is documented as "leave empty": an empty or null value means "not set", as it does in
+        // resolveStateNamespace, instead of failing the whole run on the pattern below.
+        (value) => (value === '' || value === null ? undefined : value),
+        z.string().regex(NAMESPACE_PATTERN, 'stateNamespace must be 1-40 characters of a-z, 0-9 and "-".').optional(),
+    ),
 });
 export type EngineInput = z.infer<typeof EngineInputSchema>;
 

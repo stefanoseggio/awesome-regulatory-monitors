@@ -40,7 +40,7 @@
         "sourceOptions": {
             "title": "Per-source options",
             "type": "object",
-            "description": "Options keyed by source id, e.g. {\"fda_ema_recalls\": {\"subSources\": [\"fda\"]}}. Each source validates its own slice and rejects unknown keys. Put credentials in the secret fields below, not here.",
+            "description": "Options keyed by source id, e.g. {\"us_florida\": {\"includeContactDetails\": true}}. Each source validates its own slice and rejects unknown keys. Put credentials in the secret fields below, not here.",
             "editor": "json",
             "default": {}
         },

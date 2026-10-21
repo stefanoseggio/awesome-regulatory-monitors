@@ -8,8 +8,5 @@
     "buildTag": "latest",
     "minMemoryMbytes": 1024,
     "maxMemoryMbytes": 1024,
-    "inputSchema": "./input_schema.json",
-    "categories": [
-        "BUSINESS"
-    ]
+    "inputSchema": "./input_schema.json"
 }

@@ -10,6 +10,11 @@ import type { EnginePricing } from '../pricing/event_catalog.js';
 export interface EngineMeta {
     title: string;
     description: string;
+    /**
+     * The `sourceOptions` example shown in the input form: JSON keyed by a source id of THIS engine, with options that
+     * source really accepts (a test parses it against the source's own options schema).
+     */
+    sourceOptionsExample: string;
 }
 
 export const ENGINE_META: Record<string, EngineMeta> = {
@@ -17,16 +22,19 @@ export const ENGINE_META: Record<string, EngineMeta> = {
         title: 'Global RegTech Compliance Feed - sanctions, enforcement, debarment, recalls',
         description:
             'One Actor, six regulatory delta sources: OFAC sanctioned vessels, World Bank sanctions, UK Modern Slavery statements, SEC enforcement releases, AI-crawler permission signals and FDA/EMA drug-safety records. Choose sources per run, keep per-source options, and receive only new or changed records.',
+        sourceOptionsExample: '{"fda_ema_recalls": {"subSources": ["fda"]}}',
     },
     'latam-global-tender-intelligence': {
         title: 'LatAm & Global Tender Intelligence - public procurement delta feed',
         description:
             'One Actor for public tenders and grants: Argentine provincial portals (Santa Fe, Tucuman, Entre Rios), Chile Diario Oficial, EU TED, Florida MFMP, World Bank notices and Regione Lombardia grants. Held sources (ar_cordoba, ar_salta, ar_mendoza, ar_pba, au_grantconnect, ADB, IDB) are refused with their reason.',
+        sourceOptionsExample: '{"us_florida": {"includeContactDetails": true}}',
     },
     'global-corporate-patent-intelligence': {
         title: 'Global Corporate & Patent Intelligence - PTAB, EPO, trials, company registers',
         description:
             'One Actor for corporate and IP change monitoring: USPTO PTAB trials and EPO opposition watch (bring your own keys), ClinicalTrials.gov + FDA Orange Book, Singapore ACRA and UAE (ADGM/DIFC) registers. Receive only new or changed records.',
+        sourceOptionsExample: '{"clinicaltrials_orange_book": {"sponsors": ["Pfizer"]}}',
     },
 };
 
@@ -45,9 +53,24 @@ const CREDENTIAL_TITLES: Record<string, string> = {
     epoOpsConsumerSecret: 'EPO OPS consumer secret',
 };
 
+/**
+ * The source the form pre-selects, and the one a run started with no input uses: the first active source that needs no
+ * mandatory option. Pre-selecting a bring-your-own-key source would make the default input fail preflight, and the
+ * Apify Store re-runs a published Actor on its default input to check that it works.
+ */
+export function defaultSourceFor(engine: EngineDefinition): string {
+    const active = engine.connectors.filter((c) => c.status === 'active');
+    const keyless = active.find((c) => (c.requiredOptions ?? []).length === 0);
+    const chosen = keyless ?? active[0];
+    if (!chosen) throw new Error(`${engine.slug} has no active source`);
+    return chosen.id;
+}
+
 export function buildInputSchema(engine: EngineDefinition): Record<string, unknown> {
     const active = engine.connectors.filter((c) => c.status === 'active');
     const held = engine.connectors.filter((c) => c.status === 'held');
+    const meta = ENGINE_META[engine.slug];
+    if (!meta) throw new Error(`No ENGINE_META for ${engine.slug}`);
     const properties: Record<string, unknown> = {
         sources: {
             title: 'Sources to run',
@@ -55,14 +78,14 @@ export function buildInputSchema(engine: EngineDefinition): Record<string, unkno
             description: `Source ids to run in this execution. Held sources are not selectable: ${held.map((c) => c.id).join(', ') || 'none'}.`,
             editor: 'select',
             items: { type: 'string', enum: active.map((c) => c.id), enumTitles: active.map((c) => firstSentence(c.description)) },
-            default: [active[0]?.id],
+            default: [defaultSourceFor(engine)],
             minItems: 1,
         },
         sourceOptions: {
             title: 'Per-source options',
             type: 'object',
             description:
-                'Options keyed by source id, e.g. {"fda_ema_recalls": {"subSources": ["fda"]}}. Each source validates its own slice and rejects unknown keys. Put credentials in the secret fields below, not here.',
+                `Options keyed by source id, e.g. ${meta.sourceOptionsExample}. Each source validates its own slice and rejects unknown keys. Put credentials in the secret fields below, not here.`,
             editor: 'json',
             default: {},
         },
@@ -129,7 +152,6 @@ export function buildActorJson(engine: EngineDefinition, pricing: EnginePricing)
         minMemoryMbytes: pricing.memoryMbytes,
         maxMemoryMbytes: pricing.memoryMbytes,
         inputSchema: './input_schema.json',
-        categories: ['BUSINESS'],
     };
 }
 

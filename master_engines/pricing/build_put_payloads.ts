@@ -30,7 +30,9 @@ export const MINIMAL_MAX_TOTAL_CHARGE_USD = 0.1;
 
 /**
  * The smallest `maxTotalChargeUsd` a caller may set must still pay for a run's start events plus the single most
- * expensive event: with a lower floor the first matched record could not even be billed its `watchlist-hit`.
+ * expensive event (the `watchlist-hit`), so the floor itself never makes the dearest single event unaffordable.
+ * It does NOT cover a matched row on the dearest source (row event plus hit): at the floor such a run simply stops at
+ * the budget limit, which the router handles (it never spends the SDK's one-event overcharge on a hit).
  * Rounded up to the cent, never below {@link MINIMAL_MAX_TOTAL_CHARGE_USD}.
  */
 export function minimalMaxTotalChargeFor(pricing: EnginePricing): number {
@@ -157,7 +159,7 @@ export function buildPricingPutBody(pricing: EnginePricing, options: BuildOption
 
     const actorChargeEvents: Record<string, ChargeEventBody> = {
         [START_EVENT_NAME]: {
-            eventTitle: 'Actor start',
+            eventTitle: 'Actor Start',
             eventDescription: 'Charged when the Actor starts running. Number of events charged depends on Actor memory (one event per GB, minimum one event).',
             eventPriceUsd: pricing.startPriceUsd,
             isOneTimeEvent: true,

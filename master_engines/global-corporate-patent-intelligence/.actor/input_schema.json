@@ -27,14 +27,14 @@
                 ]
             },
             "default": [
-                "uspto_ptab"
+                "clinicaltrials_orange_book"
             ],
             "minItems": 1
         },
         "sourceOptions": {
             "title": "Per-source options",
             "type": "object",
-            "description": "Options keyed by source id, e.g. {\"fda_ema_recalls\": {\"subSources\": [\"fda\"]}}. Each source validates its own slice and rejects unknown keys. Put credentials in the secret fields below, not here.",
+            "description": "Options keyed by source id, e.g. {\"clinicaltrials_orange_book\": {\"sponsors\": [\"Pfizer\"]}}. Each source validates its own slice and rejects unknown keys. Put credentials in the secret fields below, not here.",
             "editor": "json",
             "default": {}
         },

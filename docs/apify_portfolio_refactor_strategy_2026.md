@@ -121,7 +121,7 @@ What the installed SDK (`apify` 3.7.2) actually does, read from `charging.js` an
 | Hit ordering | The `watchlist-hit` charge is made **after** the journal write. | A kill between the two leaks one unbilled hit (at most $0.15) instead of re-billing a whole row. |
 | Ghost billing | `findKeywordMatch` cannot match on an empty list; `WatchlistHitBiller` needs a proven match **and** a priced event **and** the caps. | Empty, blank and one-letter watchlists produce zero hits and zero `watchlist-hit` charges (tested end to end against the SDK). |
 
-**Residual, cannot be removed without a transaction across the dataset, the charge API and the key-value store (the platform offers none):** one row in flight at the instant of a hard kill can be delivered and billed twice, and a row whose charge call fails after its push is delivered unbilled and delivered again. The alternative, writing the journal before the push, trades that for a possible lost row (never delivered, never billed); the implemented choice keeps the compliance feeds lossless. Dollar exposure per hard kill is tabulated in `docs/audits/` (one row plus its hit).
+**Residual, cannot be removed without a transaction across the dataset, the charge API and the key-value store (the platform offers none):** one row in flight at the instant of a hard kill can be delivered and billed twice, and a row whose charge call fails after its push is delivered unbilled and delivered again. The alternative, writing the journal before the push, trades that for a possible lost row (never delivered, never billed); the implemented choice keeps the compliance feeds lossless. Dollar exposure per hard kill is tabulated in `docs/audits/` and is exact: the dearest row event only, because the hit is charged after the journal write.
 
 Per-row cost of the journal: one small key-value write per delivered row (at most 25 entries, a few hundred bytes), independent of the size of the delta memory. Its latency on the platform has not been measured.
 
@@ -241,17 +241,22 @@ No single bug can re-open it:
 
 ### 5.3 Validation criteria per keyword
 
-Applied in this order, per keyword:
+Applied in this order, per keyword (`lib/_guards.ts`; the reference model in `test/stress.guards_fuzz.test.ts` is written from this table, not from the code):
 
 | # | Rule |
 |---|---|
 | 1 | must be a string (numbers, objects, `null` are rejected, never coerced) |
-| 2 | Unicode NFKC, then line breaks and tabs become a space, then control, zero-width and bidi characters are removed, whitespace runs collapse to one space, ends trimmed |
-| 3 | length >= **2 code points** after normalisation (one astral-plane letter counts as one) |
-| 4 | length <= 200 code points |
-| 5 | contains at least one letter or digit (`--`, `..`, `()` are rejected) |
-| 6 | de-duplicated case-insensitively, first spelling wins |
-| 7 | at most 500 accepted; the rest are rejected as `over_limit` |
+| 2 | at most **4,096 UTF-16 units**, checked before any Unicode work (`String.prototype.normalize` is quadratic on adversarial combining marks: 80,000 units take 2.6 s; the 200 code point cap in rule 7 only applies after normalisation) |
+| 3 | well-formed Unicode: a lone surrogate is rejected as `invalid_unicode` (it would match half of an astral character, so a hit could be billed for text that does not contain the keyword) |
+| 4 | cleaned to a **fixed point** of: Unicode NFKC, line breaks and tabs to a space, removal of every `Default_Ignorable_Code_Point` and `Bidi_Control` character and the C0/C1 controls (4,239 code points in 19 ranges: zero-width characters, soft hyphen, bidi marks, Arabic letter mark, variation selectors, Hangul fillers, Mongolian selectors, tag characters), whitespace runs collapsed to one space, ends trimmed. One pass is not enough: removal can expose a composable sequence (`e`, ZWSP, combining acute), so the pass repeats until the text stops changing; a text that has not settled after 8 passes counts as empty |
+| 5 | length >= **2 code points** after cleaning (one astral-plane letter counts as one; a letter plus an invisible character is one) |
+| 6 | contains at least one letter or digit (`--`, `..`, `()` are rejected) |
+| 7 | length <= 200 code points |
+| 8 | de-duplicated case-insensitively, first spelling wins |
+| 9 | at most 500 accepted; the rest are rejected as `over_limit` |
+| 10 | at most **5,000 entries inspected**; the remainder is not read and is reported as ONE `over_limit` entry. A bare string is first cut to 200,000 units, then split on LF, CR, comma and semicolon (ASCII only; their fullwidth look-alikes are not separators) |
+
+Matching (`findKeywordMatch`) cleans the haystack with the same function after cutting it to **8,192 units**, lower-cases it, and tests a substring. It cannot match on an empty list, and `sanitizeKeywordList` / `findKeywordMatch` never throw, even for a revoked Proxy.
 
 ### 5.4 The `clinicaltrials` keyword guard
 
@@ -424,6 +429,15 @@ A second pass over the whole of `master_engines/`, run sequentially by one revie
 | RA-5 | low | `redactUrl` fallback used regular expressions on a string `new URL()` could not parse | **Fixed.** Linear `redactQueryString`, input capped at 4,096 |
 | RA-6 | low | Billing and state atomicity had been argued from the SDK source only | **Verified** with the real SDK (section 2.4) |
 | RA-7 | high | After a hard kill the next run delivered **and billed** every row since the last 25-row checkpoint a second time (real SDK: 75 charges for 60 distinct rows after a kill at row 40; up to 25 repeated rows per kill, so up to 25 x (dearest event + a hit) per kill). The first version of this document described that exposure as re-delivery only and did not say the rows were re-billed | **Fixed.** Per-row delivery journal, recovered before classification, hit charged after the journal write, fail closed. A kill now repeats at most the row in flight (section 2.4). Regression tests: 3 real-SDK scenarios, 8 router, 17 state and adapter tests |
+| RA-8 | medium | The keyword guard removed only a hand-typed list of invisible characters. 4,146 `Default_Ignorable_Code_Point` / `Bidi_Control` code points survived: U+061C, Hangul fillers, U+034F, Mongolian selectors, tag characters and more, so a keyword could be one visible letter plus an invisible one (passing the 2-code-point minimum) or made only of invisible letters | **Fixed.** Removal by Unicode property (`\p{Default_Ignorable_Code_Point}`, `\p{Bidi_Control}`); an exhaustive sweep of all 1,114,112 code points compares the guard with an independent reference |
+| RA-9 | low | Cleaning was not idempotent (NFKC ran before removal, which can expose a composable sequence): a keyword accepted once was dropped or changed when sanitised again, so a client that cleaned a list and sent it saw the Actor reject a keyword it had reported as accepted | **Fixed.** Cleaning repeats to a fixed point (8-pass limit); property P5 checks idempotence over 20,000+ generated inputs |
+| RA-10 | low | A keyword with a lone surrogate matched by UTF-16 substring, so a hit could be billed for text that does not contain the keyword | **Fixed.** Rejected as `invalid_unicode` |
+| RA-11 | medium | `String.prototype.normalize` runs on the whole keyword and the whole record text before the 200-character cap, and it is quadratic on adversarial combining marks (80,000 units: 2.6 s, 1 MB: minutes). A watchlist entry or a hostile upstream text could burn a run's CPU. A 9 MB bare string also became millions of entries and rejection records | **Fixed.** Raw keyword cap 4,096 units, haystack cap 8,192, bare string cap 200,000, 5,000 entries inspected. Two connectors still apply NFD/NFKD to upstream text (`world_bank_debarred` slug, capped at 256; `ar_santafe` `fold`, uncapped) |
+| RA-12 | low | `sanitizeKeywordList` documented that it never throws but did (a revoked or hostile Proxy as an element or as the container) | **Fixed.** Wrapped; the watchlist is disabled instead |
+| RA-13 | medium | The patents Actor pre-selected `uspto_ptab`, which needs a bring-your-own key, so a run on the default input failed preflight. The Apify Store re-runs a published Actor on its default input to check that it works | **Fixed.** The default is the first active source that needs no mandatory option (`clinicaltrials_orange_book`); a test requires every engine default to pass preflight |
+| RA-14 | low | `stateNamespace: ""` (an empty form field, documented "Leave empty") passed `resolveStateNamespace` but failed `EngineInputSchema`, failing the whole run | **Fixed.** An empty string or `null` means "not set" |
+| RA-15 | low | `actor.json` carried `categories`, which is not an `actor.json` property; the `sourceOptions` form example named a source (`fda_ema_recalls`) that two of the three engines do not have; the start event was titled `Actor start` where the Console default is `Actor Start` | **Fixed.** Removed; one valid example per engine (a test parses it against the source's own options schema); title mirrored. Payloads regenerated |
+| RA-16 | medium | The ReDoS gate accepted an allowlist entry with an empty `enforcedBy` (the empty string is a substring of every text), accepted a code comment as the enforcing test, accepted an empty `bound`, and did not see `new globalThis.RegExp(x)`, an alias of `RegExp`, or a string passed to `.match()` / `.search()` / `.matchAll()` | **Fixed.** Entries are validated; `enforcedBy` must appear in an `it()` / `test()` / `describe()` title read from the AST; indirect constructions are analysed or listed. A pattern that only recheck's time-budgeted fuzzer rates safe is a note, not a failure, so the gate cannot flake |
 
 ---
 

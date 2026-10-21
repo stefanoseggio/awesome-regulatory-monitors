@@ -207,7 +207,8 @@ export class InMemoryDeltaStore implements DeltaStore {
     }
 }
 
-const NAMESPACE_PATTERN = /^[a-z0-9-]{1,40}$/u;
+/** The shape of a `stateNamespace`; shared with the engine input schema so the two can never disagree. */
+export const NAMESPACE_PATTERN = /^[a-z0-9-]{1,40}$/u;
 
 /**
  * Which delta-memory namespace a run uses. Two Tasks with different watchlists, filters or delta modes must not share
