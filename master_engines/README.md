@@ -1,0 +1,97 @@
+# Master Engines
+
+Three consolidated Apify Actors that replace a fleet of single-source Actors. One shared runtime, one delta-memory
+format, one set of billing guards; each source is a small connector.
+
+| Engine | Active sources | Held (registered, refused with a reason) |
+|---|---|---|
+| `global-regtech-compliance-feed` | `ofac`, `world_bank_debarred`, `uk_modern_slavery`, `sec_enforcement`, `ai_crawler_signals`, `fda_ema_recalls` | `paris_mou_thetis`, `tokyo_mou_apcis`, `imo_gisis` |
+| `latam-global-tender-intelligence` | `ar_santafe`, `ar_tucuman`, `ar_entrerios`, `ar_cordoba`, `cl_diario_oficial`, `eu_ted`, `us_florida`, `world_bank_notices`, `it_lombardia_grants` | `ar_salta`, `ar_mendoza`, `ar_pba`, `au_grantconnect`, `adb_procurement`, `idb_procurement` |
+| `global-corporate-patent-intelligence` | `uspto_ptab`, `epo_opposition`, `clinicaltrials_orange_book`, `sg_acra`, `ae_registers` | none |
+
+The strategy, governance and remediation matrix live in
+[`../docs/apify_portfolio_refactor_strategy_2026.md`](../docs/apify_portfolio_refactor_strategy_2026.md).
+The Apify pay-per-event policy research (with citations) is in
+[`docs-research/apify-ppe-policy-verification.md`](docs-research/apify-ppe-policy-verification.md).
+
+## Layout
+
+```
+lib/
+  types.ts               Connector / SourceRecord / HttpClient contracts, RunSummary
+  _guards.ts             watchlist keyword sanitiser + matcher (the ghost-billing remediation)
+  router_core.ts         preflight, per-source options, delta modes, emit + billing, state
+  charging.ts            PPE guard rails (WatchlistHitBiller, price validation)
+  charge_watchlist_hit.ts  drop-in guarded Actor.charge('watchlist-hit')
+  state.ts               delta memory (seenIds + fingerprints per source)
+  http.ts                shared client: retries, Retry-After, body cap, redirect validation, getRaw
+  apify_adapters.ts      the only file that imports the apify SDK
+  connector_helpers.ts   fingerprintOf, dateRangeToFrom, createHeldConnector
+pricing/
+  event_catalog.ts       single source of truth for per-source PPE events and prices (with evidence)
+  apply_billing.ts       stamps connectors with their catalog events
+  build_put_payloads.ts  validated PUT /v2/actors/{id} bodies + 14-day notice metadata
+  payloads/              generated bodies, kept in sync by a test
+<engine>/
+  index.ts               explicit connector registry (never glob)
+  main.ts                one line: runEngineMain(engine, userAgent)
+  connectors/            one file per source (+ held registries)
+  .actor/                generated: actor.json, input_schema.json, Dockerfile
+scripts/                 generate_pricing_payloads, generate_actor_files, stage_actor
+test/                    fixture-driven, no network
+```
+
+## Running an engine
+
+Input (all engines):
+
+```jsonc
+{
+  "sources": ["sec_enforcement", "fda_ema_recalls"],      // active ids only; a held id fails the whole run before any request
+  "sourceOptions": { "fda_ema_recalls": { "subSources": ["fda"] } },
+  "deltaMode": "onlyChanged",                              // all | onlyChanged | onlyNew
+  "maxItemsPerSource": 500,
+  "watchlistNames": ["Acme Corp"],                         // entries < 2 chars / blank / punctuation-only are dropped
+  "maxWatchlistHitsPerRun": 200,
+  "maxWatchlistSpendUsd": 50,
+  "fdaApiKey": "..."                                       // BYOK credentials are top-level isSecret fields
+}
+```
+
+`deltaMode`: `onlyNew` = first sighting only; `onlyChanged` = first sighting + changed (this is what the legacy actors
+called `onlyNew: true`); `all` = everything, unchanged records included (tagged `delta_status: "unchanged"`).
+
+Every dataset row carries `engine`, `source`, `record_id`, `delta_status`, `is_new`, `is_watchlist_match`,
+`matched_watchlist_keyword`, `scraped_at` on top of the connector's own fields. A `RUN_SUMMARY` key-value record holds
+per-source counts, `warnings` (non-fatal problems such as one sub-source being down) and watchlist accounting.
+
+A failed preflight (unknown or held source, missing credential, invalid option) ends the run `FAILED` with the full
+list of problems, before any network request or billable event.
+
+## Commands
+
+```bash
+npm install
+npm run typecheck          # tsc --noEmit, strict
+npm test                   # vitest, no network
+npx tsx scripts/generate_actor_files.ts
+npx tsx scripts/generate_pricing_payloads.ts --now=<ISO instant> [--paying-users=false] [--strict]
+npx tsx scripts/stage_actor.ts <engine-slug> [--out=<dir>]   # self-contained build context for `apify push`
+```
+
+`stage_actor` was verified end to end: stage, `npm ci`, `npm run build` with the reduced `tsconfig`, then a local run
+of the built engine against the live SEC feed.
+
+Live smoke runs from a sandbox behind an egress proxy need `NODE_USE_ENV_PROXY=1` for Node's global `fetch`.
+
+## Adding a connector
+
+1. Implement `Connector<Options>` in `<engine>/connectors/<name>.ts`: a strict zod options schema, `fetch(ctx, options, run)`
+   returning `SourceRecord[]` (`recordId` stable across runs, `fingerprint` changes iff a consumer-visible field changed,
+   `watchText` = the names a watchlist should match). Network only through `ctx.http`; clock only through `ctx.now()`.
+2. Read every keyword/name-list option through `sanitizeKeywordList()`; an empty result means "no filter", never "match all".
+3. Register it explicitly in `<engine>/index.ts` and add its events to `pricing/event_catalog.ts`
+   (`applyCatalogBilling` and `validatePricing` fail loudly if an active connector has no priced event).
+4. Add a fixture-driven test. Regenerate the actor files and payloads and commit them (tests fail if they drift).
+5. A source that needs a CAPTCHA solve, a spoofed browser fingerprint, a login or a WAF bypass is registered with
+   `createHeldConnector()` and a precise reason, not worked around.
