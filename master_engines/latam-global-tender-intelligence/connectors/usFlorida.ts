@@ -845,6 +845,9 @@ const CLOCK_DERIVED_KEYS = ['daysUntilClose', 'isOpenForResponses', 'timeRemaini
  * except the clock-derived ones, so a version bump, status flip, addendum, new document or a detail fetch that
  * recovered after a transient failure (`detailFetched` / `detailError` change) all re-emit the record.
  */
+/** PPE event for a listing-only (no detail) record; priced in pricing/event_catalog.ts. */
+export const FLORIDA_SUMMARY_EVENT = 'tender-summary';
+
 export function toSourceRecord(item: ListingItem, detailResult: DetailResult | null, now: Date): SourceRecord {
     const payload = buildPayload(item, detailResult, now);
     const stable: Record<string, unknown> = { ...payload };
@@ -855,6 +858,8 @@ export function toSourceRecord(item: ListingItem, detailResult: DetailResult | n
         fingerprint: fingerprintOf([stable]),
         payload,
         watchText: [agency, item.title].filter((part) => part.trim().length > 0).join(' '),
+        // Legacy pricing: `result` for a full-detail record, `result-summary` for a listing-only one.
+        billingEvent: payload.detailFetched === true ? undefined : FLORIDA_SUMMARY_EVENT,
     };
 }
 

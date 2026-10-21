@@ -1,4 +1,6 @@
 import type { EngineDefinition } from '../lib/router_core.js';
+import { applyCatalogBilling } from '../pricing/apply_billing.js';
+import { TENDERS_PRICING } from '../pricing/event_catalog.js';
 import { arCordobaConnector } from './connectors/arCordoba.js';
 import { arEntreRiosConnector } from './connectors/arEntreRios.js';
 import { arSantaFeConnector } from './connectors/arSantaFe.js';
@@ -19,23 +21,27 @@ export const TENDERS_USER_AGENT = 'latam-global-tender-intelligence/0.1 (+https:
  * operator (`ar_salta`, `ar_mendoza`, `ar_pba`) must stay registered so that selecting one yields the held
  * reason instead of "unknown source".
  */
-export const tendersEngine: EngineDefinition = {
-    slug: 'latam-global-tender-intelligence',
-    connectors: [
-        arSantaFeConnector,
-        arTucumanConnector,
-        arEntreRiosConnector,
-        arCordobaConnector,
-        clDiarioOficialConnector,
-        euTedConnector,
-        usFloridaConnector,
-        worldBankNoticesConnector,
-        itLombardiaGrantsConnector,
-        auGrantconnectConnector,
-        adbProcurementConnector,
-        idbProcurementConnector,
-        arSaltaConnector,
-        arMendozaConnector,
-        arPbaConnector,
-    ],
-};
+export const tendersEngine: EngineDefinition = applyCatalogBilling(
+    {
+        slug: 'latam-global-tender-intelligence',
+        credentialFields: { socrataAppToken: { source: 'it_lombardia_grants', option: 'socrataAppToken' } },
+        connectors: [
+            arSantaFeConnector,
+            arTucumanConnector,
+            arEntreRiosConnector,
+            arCordobaConnector,
+            clDiarioOficialConnector,
+            euTedConnector,
+            usFloridaConnector,
+            worldBankNoticesConnector,
+            itLombardiaGrantsConnector,
+            auGrantconnectConnector,
+            adbProcurementConnector,
+            idbProcurementConnector,
+            arSaltaConnector,
+            arMendozaConnector,
+            arPbaConnector,
+        ],
+    },
+    TENDERS_PRICING,
+);

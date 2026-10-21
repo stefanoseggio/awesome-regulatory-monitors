@@ -1,0 +1,63 @@
+{
+    "pricingInfos": [
+        {
+            "pricingModel": "PAY_PER_EVENT",
+            "pricingPerEvent": {
+                "actorChargeEvents": {
+                    "apify-actor-start": {
+                        "eventTitle": "Actor start",
+                        "eventDescription": "Charged when the Actor starts running. Number of events charged depends on Actor memory (one event per GB, minimum one event).",
+                        "eventPriceUsd": 0.005,
+                        "isOneTimeEvent": true
+                    },
+                    "tender-detail": {
+                        "eventTitle": "Tender record",
+                        "eventDescription": "One tender delivered with its full detail (buyer, budget, dates, documents).",
+                        "eventPriceUsd": 0.003,
+                        "isPrimaryEvent": true
+                    },
+                    "tender-summary": {
+                        "eventTitle": "Tender summary record",
+                        "eventDescription": "One tender delivered from the listing only (no detail page fetched).",
+                        "eventPriceUsd": 0.001
+                    },
+                    "notice-record": {
+                        "eventTitle": "Procurement notice",
+                        "eventDescription": "One World Bank procurement notice delivered to the dataset.",
+                        "eventPriceUsd": 0.001
+                    },
+                    "notice-new": {
+                        "eventTitle": "New EU TED notice",
+                        "eventDescription": "A TED procurement notice never delivered before.",
+                        "eventPriceUsd": 0.02
+                    },
+                    "notice-updated": {
+                        "eventTitle": "Updated EU TED notice",
+                        "eventDescription": "A previously delivered TED notice whose content changed.",
+                        "eventPriceUsd": 0.01
+                    },
+                    "grant-new": {
+                        "eventTitle": "New Lombardia grant call",
+                        "eventDescription": "A Regione Lombardia grant call (bando) never delivered before.",
+                        "eventPriceUsd": 0.02
+                    },
+                    "grant-updated": {
+                        "eventTitle": "Updated Lombardia grant call",
+                        "eventDescription": "A previously delivered grant call whose status or fields changed.",
+                        "eventPriceUsd": 0.008
+                    },
+                    "watchlist-hit": {
+                        "eventTitle": "Watchlist hit",
+                        "eventDescription": "Charged once for each delivered tender record whose text matches a keyword of the caller's own watchlist. Never charged when no valid keyword was supplied.",
+                        "eventPriceUsd": 0.15
+                    }
+                }
+            },
+            "minimalMaxTotalChargeUsd": 0.1,
+            "apifyMarginPercentage": 0.2,
+            "createdAt": "2026-10-21T00:00:00.000Z",
+            "startedAt": "2026-11-04T00:00:00.000Z",
+            "reasonForChange": "Consolidation of single-source Actors into latam-global-tender-intelligence: each legacy source keeps its own per-record price as a separate event, and the start event is set to $0.005."
+        }
+    ]
+}

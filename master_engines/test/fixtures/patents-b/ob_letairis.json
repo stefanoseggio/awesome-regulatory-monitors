@@ -1,0 +1,109 @@
+{
+  "meta": {
+    "disclaimer": "Do not rely on openFDA to make decisions regarding medical care. While we make every effort to ensure that data is accurate, you should assume all results are unvalidated. We may limit or otherwise restrict your access to the API in line with our Terms of Service.",
+    "terms": "https://open.fda.gov/terms/",
+    "license": "https://open.fda.gov/license/",
+    "last_updated": "2026-10-20",
+    "results": {
+      "skip": 0,
+      "limit": 10,
+      "total": 2
+    }
+  },
+  "results": [
+    {
+      "approval_date": "20070615",
+      "patents": [
+        {
+          "patent_number": "8377933",
+          "expiration_date": "20271211",
+          "patent_use_code": "U-1754",
+          "patent_submission_date": "20151023"
+        },
+        {
+          "patent_number": "9474752",
+          "expiration_date": "20271211",
+          "patent_use_code": "U-1754",
+          "patent_submission_date": "20161123"
+        },
+        {
+          "patent_number": "9549926",
+          "expiration_date": "20311014",
+          "patent_use_code": "U-1965",
+          "patent_submission_date": "20170216"
+        }
+      ],
+      "product_number": "001",
+      "products": [
+        {
+          "active_ingredients": [
+            {
+              "name": "AMBRISENTAN",
+              "strength": "5MG"
+            }
+          ],
+          "brand_name": "LETAIRIS",
+          "application_name": "GILEAD",
+          "application_type": "N",
+          "application_number": "022081",
+          "therapeutic_equivalence_codes": [
+            "AB"
+          ],
+          "reference_listed_drug": true,
+          "reference_standard": false,
+          "marketing_status": "HUMAN PRESCRIPTION DRUG",
+          "application_full_name": "GILEAD SCIENCES INC",
+          "dosage_form": "TABLET",
+          "route": "ORAL"
+        }
+      ]
+    },
+    {
+      "approval_date": "20070615",
+      "patents": [
+        {
+          "patent_number": "8377933",
+          "expiration_date": "20271211",
+          "patent_use_code": "U-1754",
+          "patent_submission_date": "20151023"
+        },
+        {
+          "patent_number": "9474752",
+          "expiration_date": "20271211",
+          "patent_use_code": "U-1754",
+          "patent_submission_date": "20161123"
+        },
+        {
+          "patent_number": "9549926",
+          "expiration_date": "20311014",
+          "patent_use_code": "U-1965",
+          "patent_submission_date": "20170216"
+        }
+      ],
+      "product_number": "002",
+      "products": [
+        {
+          "active_ingredients": [
+            {
+              "name": "AMBRISENTAN",
+              "strength": "10MG"
+            }
+          ],
+          "brand_name": "LETAIRIS",
+          "application_name": "GILEAD",
+          "application_type": "N",
+          "application_number": "022081",
+          "therapeutic_equivalence_codes": [
+            "AB"
+          ],
+          "reference_listed_drug": true,
+          "reference_standard": true,
+          "marketing_status": "HUMAN PRESCRIPTION DRUG",
+          "application_full_name": "GILEAD SCIENCES INC",
+          "dosage_form": "TABLET",
+          "route": "ORAL"
+        }
+      ]
+    }
+  ]
+}

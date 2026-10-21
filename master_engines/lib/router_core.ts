@@ -21,7 +21,7 @@
 import { z } from 'zod';
 
 import { clampInteger, describeSanitization, findKeywordMatch, sanitizeKeywordList } from './_guards.js';
-import { type BillingPort, DEFAULT_HIT_BILLER_OPTIONS, WatchlistHitBiller } from './charging.js';
+import { type BillingPort, DEFAULT_HIT_BILLER_OPTIONS, RESULT_EVENT, WatchlistHitBiller } from './charging.js';
 import { classifyRecord, type DeltaStore, markProcessed, type ProcessedRecord } from './state.js';
 import {
     type Connector,
@@ -36,9 +36,40 @@ import {
     type SourceRunSummary,
 } from './types.js';
 
+/** A BYOK credential exposed as its own top-level (secret) input field and routed into one source's options. */
+export interface CredentialField {
+    source: string;
+    option: string;
+}
+
 export interface EngineDefinition {
     slug: EngineSlug;
     connectors: ReadonlyArray<Connector<any>>;
+    /**
+     * top-level input key -> the source option it feeds. Apify only masks/encrypts a field declared `isSecret` in the
+     * input schema, so credentials get their own top-level fields instead of travelling inside the free-form
+     * `sourceOptions` JSON object.
+     */
+    credentialFields?: Readonly<Record<string, CredentialField>>;
+}
+
+/**
+ * Copies top-level credential fields into `sourceOptions[source][option]`. An explicit value already present in
+ * `sourceOptions` wins; blank or non-string values are ignored. Pure: returns a new object.
+ */
+export function mergeCredentialFields(engine: EngineDefinition, rawInput: unknown): unknown {
+    if (!engine.credentialFields || !rawInput || typeof rawInput !== 'object' || Array.isArray(rawInput)) return rawInput;
+    const input = rawInput as Record<string, unknown>;
+    const existing = input.sourceOptions && typeof input.sourceOptions === 'object' && !Array.isArray(input.sourceOptions) ? (input.sourceOptions as Record<string, unknown>) : {};
+    const sourceOptions: Record<string, unknown> = { ...existing };
+    for (const [topKey, target] of Object.entries(engine.credentialFields)) {
+        const value = input[topKey];
+        if (typeof value !== 'string' || value.trim() === '') continue;
+        const current = sourceOptions[target.source] && typeof sourceOptions[target.source] === 'object' ? (sourceOptions[target.source] as Record<string, unknown>) : {};
+        if (current[target.option] !== undefined) continue;
+        sourceOptions[target.source] = { ...current, [target.option]: value.trim() };
+    }
+    return { ...input, sourceOptions };
 }
 
 export const EngineInputSchema = z.object({
@@ -61,10 +92,10 @@ export type EngineInput = z.infer<typeof EngineInputSchema>;
 /** Where the router sends rows and how it bills them. */
 export interface RunSinks {
     /**
-     * Pushes one row and bills the `result` event in a single step.
+     * Pushes one row and bills `eventName` (default `result`) in a single step.
      * `emitted: false` means the row was NOT pushed because the budget is exhausted.
      */
-    emit(row: Record<string, unknown>): Promise<{ emitted: boolean; limitReached: boolean }>;
+    emit(row: Record<string, unknown>, eventName?: string): Promise<{ emitted: boolean; limitReached: boolean }>;
     billing: BillingPort;
     store: DeltaStore;
     saveSummary(summary: RunSummary): Promise<void>;
@@ -131,6 +162,15 @@ export function resolveSources(engine: EngineDefinition, input: EngineInput): Re
     return resolved;
 }
 
+/** The PPE event billed for a delivered record of class `cls` from `connector`. */
+export function billingEventFor(connector: Connector<any>, cls: RecordClass): string {
+    const b = connector.billing;
+    const base = b?.newEvent ?? RESULT_EVENT;
+    if (cls === 'updated') return b?.updatedEvent ?? base;
+    if (cls === 'unchanged') return b?.snapshotEvent ?? base;
+    return base;
+}
+
 /** Whether a record of class `cls` is emitted under `mode`. */
 export function shouldEmit(mode: DeltaMode, cls: RecordClass): boolean {
     if (mode === 'all') return true;
@@ -150,7 +190,7 @@ export async function runEngine(engine: EngineDefinition, rawInput: unknown, dep
     const clock = deps.clock ?? (() => new Date());
     const startedAt = clock().toISOString();
 
-    const parsedInput = EngineInputSchema.safeParse(rawInput ?? {});
+    const parsedInput = EngineInputSchema.safeParse(mergeCredentialFields(engine, rawInput ?? {}));
     if (!parsedInput.success) {
         throw new FatalConfigError(
             `Invalid ${engine.slug} input: ${parsedInput.error.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`).join('; ')}`,
@@ -185,13 +225,27 @@ export async function runEngine(engine: EngineDefinition, rawInput: unknown, dep
             updated: 0,
             unchanged: 0,
             watchlistHits: 0,
+            warnings: [],
         };
         sourceSummaries.push(summary);
+
+        // Connectors report partial failures through ctx.log.warning; capture them on the summary so a
+        // "one sub-source down" run is machine-visible without every connector learning a new API.
+        const sourceCtx: ConnectorContext = {
+            ...ctx,
+            log: {
+                ...ctx.log,
+                warning(message: string) {
+                    if (summary.warnings.length < 50) summary.warnings.push(message.slice(0, 500));
+                    ctx.log.warning(message);
+                },
+            },
+        };
 
         // 2. FETCH - isolated per source.
         let records: SourceRecord[];
         try {
-            records = await connector.fetch(ctx, options, { maxItemsPerSource: input.maxItemsPerSource });
+            records = await connector.fetch(sourceCtx, options, { maxItemsPerSource: input.maxItemsPerSource });
         } catch (error) {
             summary.error = error instanceof Error ? error.message : String(error);
             ctx.log.error(`[${connector.id}] fetch failed: ${summary.error}`);
@@ -224,7 +278,7 @@ export async function runEngine(engine: EngineDefinition, rawInput: unknown, dep
                 scraped_at: clock().toISOString(),
             };
 
-            const emission = await sinks.emit(row);
+            const emission = await sinks.emit(row, record.billingEvent ?? billingEventFor(connector, cls));
             if (!emission.emitted) {
                 stoppedOnChargeLimit = true;
                 ctx.log.info(`[${connector.id}] charge limit reached before record ${record.recordId}; stopping.`);

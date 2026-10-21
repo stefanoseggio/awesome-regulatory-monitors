@@ -49,10 +49,12 @@ export class ApifyBilling implements BillingPort {
 
 export function createApifySinks(engine: EngineSlug): RunSinks {
     return {
-        async emit(row) {
+        async emit(row, eventName = RESULT_EVENT) {
             // `pushData(row, eventName)` limits by remaining budget, pushes, then bills
-            // `result` in one step - a separate Actor.charge() afterwards would double-bill.
-            const charge = await Actor.pushData(row, RESULT_EVENT);
+            // `eventName` in one step - a separate Actor.charge() afterwards would double-bill.
+            // The pricing must NOT also carry `apify-default-dataset-item`: with both priced,
+            // pushData bills both events per row (verified in the installed SDK).
+            const charge = await Actor.pushData(row, eventName);
             const emitted = charge === undefined ? true : charge.chargedCount > 0 || !Actor.getChargingManager().getPricingInfo().isPayPerEvent;
             return { emitted, limitReached: charge?.eventChargeLimitReached ?? false };
         },

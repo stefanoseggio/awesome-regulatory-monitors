@@ -1,0 +1,53 @@
+{
+  "meta": {
+    "disclaimer": "Do not rely on openFDA to make decisions regarding medical care. While we make every effort to ensure that data is accurate, you should assume all results are unvalidated. We may limit or otherwise restrict your access to the API in line with our Terms of Service.",
+    "terms": "https://open.fda.gov/terms/",
+    "license": "https://open.fda.gov/license/",
+    "last_updated": "2026-10-20",
+    "results": {
+      "skip": 0,
+      "limit": 10,
+      "total": 1
+    }
+  },
+  "results": [
+    {
+      "approval_date": "20230929",
+      "exclusivity": [
+        {
+          "exclusivity_code": "NP",
+          "exclusivity_expiration_date": "20260929"
+        }
+      ],
+      "patents": [
+        {
+          "patent_number": "7722856",
+          "expiration_date": "20310224",
+          "patent_use_code": "U-4442",
+          "patent_submission_date": "20260313"
+        }
+      ],
+      "product_number": "001",
+      "products": [
+        {
+          "active_ingredients": [
+            {
+              "name": "TECHNETIUM TC-99M LABELED CARBON",
+              "strength": "N/A"
+            }
+          ],
+          "brand_name": "TECHNEGAS KIT",
+          "application_name": "CYCLOMEDICA",
+          "application_type": "N",
+          "application_number": "022335",
+          "reference_listed_drug": true,
+          "reference_standard": true,
+          "marketing_status": "HUMAN PRESCRIPTION DRUG",
+          "application_full_name": "CYCLOMEDICA AUSTRALIA PTY LTD",
+          "dosage_form": "AEROSOL",
+          "route": "INHALATION"
+        }
+      ]
+    }
+  ]
+}

@@ -66,7 +66,23 @@
  *    server-side, reproduced with fresh tokens and connections, not fixable client-side.
  *
  * RE-VERIFIED IN THIS PORT SESSION (2026-10-21, curl / the lib HTTP client through the sandbox egress proxy)
- *   @@LIVE_RESULTS@@
+ *   GET https://newreg.adgm.com/s/search-results -> HTTP 200, 115,857 bytes, containing the
+ *     `/s/sfsites/l/%7B...%7D/bootstrap.js` reference; extractAuraBootstrap() read a 72-character fwuid and a
+ *     27-character app-loaded marker from the live page (lib HTTP client, honest User-Agent, no impersonation).
+ *   POST https://newreg.adgm.com/s/sfsites/aura?r=1&aura.ApexAction.execute=1 (legacy search string, blank name,
+ *     aura.token=null, that fresh bootstrap) -> a 2xx reply whose action is in ERROR:
+ *       [{"exceptionType":"System.NullPointerException","message":"null input to JSON parser","stackTrace":
+ *        "(System Code)\nClass.RASearchUtil.getSearchResponseForPR: line 2889, column 1"}]
+ *     i.e. exactly the signature the legacy outage playbook recorded on 2026-09-17, so the ADGM failure is still
+ *     in place on 2026-10-21, 34 days later. The request does reach the Apex method; this session could NOT tell a
+ *     server-side defect from a drifted request contract (that needs a browser capture of ADGM's own page, and no
+ *     browser exists in the sandbox). ZERO live ADGM rows were obtained: the row parser rests on the legacy
+ *     fixtures and README capture alone.
+ *   POST https://www.difc.com/api/handleRequest (legacy body, offset 0) -> HTTP 500 "Internal Server Error", via
+ *     both curl and the lib HTTP client - the legacy outage signature again. ZERO live DIFC rows.
+ *   Consequence: the connector is `active` (the legacy design, and its outage playbook, is "recovery on the
+ *   government's end is enough" and a failing source degrades gracefully), but today a run that selects only
+ *   ae_registers reports `every selected UAE register sub-source failed` with those two upstream errors.
  *
  * Honest limits of this connector, stated where they bite:
  *  - TRANSPORT. The legacy actor used `impit` (real Chrome TLS/HTTP2 fingerprint impersonation). The

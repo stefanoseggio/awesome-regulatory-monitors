@@ -57,17 +57,19 @@
  *     -> HTTP 401 {"message":"Unauthorized"}
  *   POST https://api.uspto.gov/api/v1/patent/trials/nonexistent-route/search
  *     -> HTTP 403 {"message":"Missing Authentication Token"}
+ *   POST (same body) with a syntactically plausible but invalid `x-api-key` -> HTTP 403 {"message":"Forbidden"}
  *   i.e. the real route exists and is key-gated (a different gateway answer from an unknown
- *   route), and there is no CAPTCHA / WAF challenge on the API host. The AUTHENTICATED
+ *   route, and an invalid key is told apart from a missing one), and there is no CAPTCHA / WAF challenge on the
+ *   API host. The AUTHENTICATED
  *   response shape could NOT be re-verified (no ODP key is held by this codebase): the
  *   field names below rest on the legacy record above and on the stub's README sample.
  *   The data.uspto.gov documentation site itself sits behind an AWS WAF challenge script and
  *   was deliberately not scraped.
  * ============================================================================
  *
- * KNOWN LIMITATION (lib): `lib/http.ts` retries a 429 after 1 s / 2 s / 4 s, shorter than the
- * "at least 5 second delay" USPTO asks for. A connector cannot change the shared retry
- * schedule; see libChangeRequests in the group report.
+ * RATE-LIMIT FLOOR: every request passes `minRetryDelayMs: PTAB_MIN_RETRY_DELAY_MS` so the shared client
+ * never retries a 429/5xx sooner than the "at least 5 second delay" USPTO publishes (a larger
+ * `Retry-After` still wins).
  */
 import { z } from 'zod';
 
@@ -86,6 +88,8 @@ export const PTAB_JURISDICTION = 'US';
 
 /** Response-size ceiling per page (100 proceedings are far below this; it only bounds a hostile/broken reply). */
 const PTAB_MAX_RESPONSE_BYTES = 25_000_000;
+/** USPTO ODP: "we strongly discourage automatic retries ... without at least 5 second delay". */
+const PTAB_MIN_RETRY_DELAY_MS = 5000;
 const PTAB_TIMEOUT_MS = 60_000;
 
 // ---------------------------------------------------------------------------
@@ -371,7 +375,7 @@ function describeFailure(error: unknown, secrets: ReadonlyArray<string | undefin
                 : error.status === 429
                   ? ' - rate limited (ODP allows burst = 1 and asks for at least 5 s between retries)'
                   : '';
-        const preview = error.bodyPreview ? `: ${error.bodyPreview}` : '';
+        const preview = error.bodyPreview ? `: ${error.bodyPreview.replace(/\s+/g, ' ').trim()}` : '';
         return scrubSecrets(`USPTO ODP PTAB search answered HTTP ${error.status}${preview}${hint}`, secrets);
     }
     return scrubSecrets(`USPTO ODP PTAB search failed: ${error instanceof Error ? error.message : String(error)}`, secrets);
@@ -413,6 +417,7 @@ export async function fetchPtabProceedings(ctx: ConnectorContext, options: Uspto
                 body: JSON.stringify(buildPtabRequestBody(params, offset, requested)),
                 timeoutMs: PTAB_TIMEOUT_MS,
                 maxBytes: PTAB_MAX_RESPONSE_BYTES,
+                minRetryDelayMs: PTAB_MIN_RETRY_DELAY_MS,
             });
         } catch (error) {
             const message = describeFailure(error, secrets);

@@ -219,14 +219,19 @@ export function parseLegalEvents(xml: string, publicationNumber: string): EpoLeg
  * Legacy id `{publicationNumber}:{eventCode}:{eventDate}`. Two additions, both needed because the router
  * silently drops a repeated id: an event whose own country differs from the watched number's country
  * prefix gets `:{country}` (a lapse in AT and in BE on the same gazette date are two events), and a
- * remaining collision gets `#{signature}` (a hash of the event's complete text; an exact duplicate is
- * dropped). For the ordinary case - an `EP` event of an `EP` publication - the id is the legacy one.
+ * remaining collision between two DIFFERENT events gets `#{signature}` (a hash of the event's complete
+ * text). An event whose text is identical to the one already holding the id is an exact duplicate and
+ * yields `null`. For the ordinary case - an `EP` event of an `EP` publication - the id is the legacy one.
+ *
+ * `taken` maps every id handed out so far to the signature of the event that holds it.
  */
-export function eventRecordId(event: EpoLegalEvent, taken: ReadonlySet<string>): string | null {
+export function eventRecordId(event: EpoLegalEvent, taken: ReadonlyMap<string, string>): string | null {
     const countryPrefix = event.publicationNumber.slice(0, 2).toUpperCase();
     const country = event.eventCountry !== null && event.eventCountry.toUpperCase() !== countryPrefix ? `:${event.eventCountry}` : '';
     const base = `${event.publicationNumber}:${event.eventCode ?? 'unknown'}:${event.eventDate ?? 'unknown'}${country}`;
-    if (!taken.has(base)) return base;
+    const holder = taken.get(base);
+    if (holder === undefined) return base;
+    if (holder === event.signature) return null;
     const disambiguated = `${base}#${event.signature}`;
     return taken.has(disambiguated) ? null : disambiguated;
 }
@@ -270,13 +275,13 @@ export function epoWatchText(event: EpoLegalEvent): string {
 }
 
 /** Opposition-family events of one publication as source records, ids made unique within the call. */
-export function legalEventsToRecords(events: readonly EpoLegalEvent[], taken: Set<string> = new Set()): SourceRecord[] {
+export function legalEventsToRecords(events: readonly EpoLegalEvent[], taken: Map<string, string> = new Map()): SourceRecord[] {
     const records: SourceRecord[] = [];
     for (const event of events) {
         if (!event.isOppositionRelated) continue;
         const recordId = eventRecordId(event, taken);
         if (recordId === null) continue;
-        taken.add(recordId);
+        taken.set(recordId, event.signature);
         records.push({
             recordId,
             fingerprint: fingerprintOf([event.eventCode, event.eventDate, event.eventDescription, event.eventCountry]),
@@ -427,9 +432,12 @@ function isInvalidAccessToken(error: unknown): boolean {
     return error instanceof HttpStatusError && (error.status === 400 || error.status === 401) && /invalid_access_token/i.test(error.bodyPreview);
 }
 
-/** A per-number problem (bad reference, nothing recorded): skip the number, keep looking up the rest. */
+/**
+ * A per-number problem (bad reference, nothing recorded): skip the number, keep looking up the rest. A 400 that
+ * says `invalid_access_token` is NOT per-number - the token was refused twice in a row - so it stops the lookups.
+ */
 function isSkippableLookupError(error: unknown): boolean {
-    return error instanceof HttpStatusError && (error.status === 404 || error.status === 400);
+    return error instanceof HttpStatusError && (error.status === 404 || (error.status === 400 && !isInvalidAccessToken(error)));
 }
 
 function sleep(ms: number): Promise<void> {
@@ -446,7 +454,8 @@ function sleep(ms: number): Promise<void> {
  * that number (OPS answers 404 for an unknown reference). Any other failure - notably 403 fair-use /
  * robot rejections, 429 and 5xx after the shared client's own retries - STOPS the lookups (hammering
  * a throttled service is the one thing a fair-use policy forbids): with no records yet it is a source
- * failure, otherwise the records found so far are returned and the truncation is logged.
+ * failure, otherwise the records found so far are returned and the truncation is logged. A 200 reply that
+ * cannot be read as an OPS legal document is handled the same way.
  */
 export async function fetchEpoOppositionEvents(ctx: ConnectorContext, options: EpoOppositionOptions, run: RunParams): Promise<SourceRecord[]> {
     const key = options.epoOpsConsumerKey;
@@ -479,7 +488,7 @@ export async function fetchEpoOppositionEvents(ctx: ConnectorContext, options: E
     };
 
     const records: SourceRecord[] = [];
-    const taken = new Set<string>();
+    const taken = new Map<string, string>();
     let lookedUp = 0;
     let skipped = 0;
 
@@ -507,7 +516,11 @@ export async function fetchEpoOppositionEvents(ctx: ConnectorContext, options: E
         try {
             events = parseLegalEvents(xml, publicationNumber);
         } catch (error) {
-            throw new SourceFetchError(scrubSecrets(`EPO OPS legal response for ${publicationNumber} could not be read: ${error instanceof Error ? error.message : String(error)}`, secrets), EPO_SOURCE_ID);
+            // An unreadable reply (an OPS <error> document or an HTML page with HTTP 200) is never read as "no events".
+            const message = scrubSecrets(`EPO OPS legal response for ${publicationNumber} could not be read: ${error instanceof Error ? error.message : String(error)}`, secrets);
+            if (records.length === 0) throw new SourceFetchError(message, EPO_SOURCE_ID);
+            ctx.log.warning(`[${EPO_SOURCE_ID}] stopping after ${lookedUp} of ${watchlist.length} lookup(s) with ${records.length} event(s) kept. ${message}`);
+            break;
         }
         lookedUp += 1;
         for (const record of legalEventsToRecords(events, taken)) {

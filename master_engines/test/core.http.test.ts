@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createHttpClient, HttpBodyTooLargeError, HttpRedirectError, HttpStatusError, redactUrl } from '../lib/http.js';
+import { createHttpClient, HttpBodyTooLargeError, HttpRedirectError, HttpStatusError, parseRetryAfterMs, redactUrl } from '../lib/http.js';
 
 type Handler = (url: string, init: RequestInit) => Response | Promise<Response>;
 
@@ -196,5 +196,40 @@ describe('tlsExtraCaPem hint', () => {
         await client.getText('https://x.test/', { tlsExtraCaPem: 'again' });
         expect(warnings).toHaveLength(1);
         expect(warnings[0]).toContain('NODE_EXTRA_CA_CERTS');
+    });
+});
+
+describe('retry floor and Retry-After', () => {
+    it('never retries sooner than minRetryDelayMs', async () => {
+        let n = 0;
+        const { client, sleeps } = clientWith(() => (++n < 3 ? new Response('slow down', { status: 429 }) : new Response('ok')));
+        await client.getText('https://x.test/', { minRetryDelayMs: 5000 });
+        expect(sleeps).toEqual([5000, 5000]);
+    });
+
+    it('honours a larger Retry-After header than the back-off schedule', async () => {
+        let n = 0;
+        const { client, sleeps } = clientWith(() => (++n < 2 ? new Response('x', { status: 429, headers: { 'retry-after': '7' } }) : new Response('ok')));
+        await client.getText('https://x.test/');
+        expect(sleeps).toEqual([7000]);
+    });
+
+    it('keeps the exponential schedule when it is already larger', async () => {
+        let n = 0;
+        const { client, sleeps } = clientWith(() => (++n < 3 ? new Response('x', { status: 503, headers: { 'retry-after': '0' } }) : new Response('ok')));
+        await client.getText('https://x.test/');
+        expect(sleeps).toEqual([10, 20]);
+    });
+
+    it('parseRetryAfterMs handles seconds, dates, junk and the cap', () => {
+        expect(parseRetryAfterMs('3')).toBe(3000);
+        expect(parseRetryAfterMs('0')).toBe(0);
+        expect(parseRetryAfterMs(null)).toBe(0);
+        expect(parseRetryAfterMs('soon')).toBe(0);
+        expect(parseRetryAfterMs('99999')).toBe(120_000);
+        expect(parseRetryAfterMs('-5')).toBe(0);
+        const now = Date.parse('2026-10-21T00:00:00Z');
+        expect(parseRetryAfterMs('Wed, 21 Oct 2026 00:00:10 GMT', now)).toBe(10_000);
+        expect(parseRetryAfterMs('Wed, 21 Oct 2026 00:00:00 GMT', now + 5000)).toBe(0);
     });
 });

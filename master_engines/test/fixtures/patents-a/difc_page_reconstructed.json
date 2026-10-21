@@ -1,0 +1,41 @@
+{
+  "_fixtureNote": "RECONSTRUCTED, NOT A LIVE REPLY (the DIFC route answers HTTP 500 today). Envelope and field names per the legacy difcSource.ts / types.ts (Data.companyList, IsSuccess, ...). Row 1 is the legacy test/difcSource.test.ts default row (field values as in that test). Row 2 is SYNTHETIC: a second entity with a different name and a struck-off status so the tests can exercise the field mapping, the legalForm fallback and the activity split.",
+  "Data": {
+    "companyList": [
+      {
+        "Id": "0010J00001iuxV0QAI",
+        "Name": "One Foods Holdings Limited",
+        "ROC_Status__c": "Active",
+        "Registration_License_No__c": "2368",
+        "Legal_Type_of_Entity__c": "LTD",
+        "Legal_Entity_Type__c": "Private Company",
+        "ROC_reg_incorp_Date__c": "2017-01-11",
+        "License_Activity_Details__c": "Holding Company;",
+        "Nature_of_business__c": null,
+        "Registered_Address__c": "Innovation Hub, DIFC, Dubai",
+        "Company_Type__c": "Non - financial",
+        "Website": null
+      },
+      {
+        "Id": "0010J00001iuxZ4QAI",
+        "Name": "Example Managing Office Limited",
+        "ROC_Status__c": "Inactive - Struck Off",
+        "Registration_License_No__c": "2403",
+        "Legal_Type_of_Entity__c": null,
+        "Legal_Entity_Type__c": "Private Company",
+        "ROC_reg_incorp_Date__c": "2017-02-02",
+        "License_Activity_Details__c": "Holding Company;Managing Office;",
+        "Nature_of_business__c": null,
+        "Registered_Address__c": null,
+        "Company_Type__c": "Non - financial",
+        "Website": null
+      }
+    ]
+  },
+  "ErrorData": null,
+  "IsSuccess": true,
+  "Errors": null,
+  "Message": null,
+  "StatusCode": 200,
+  "SubStatusCode": null
+}

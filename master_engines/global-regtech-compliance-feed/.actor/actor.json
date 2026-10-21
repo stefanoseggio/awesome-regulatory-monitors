@@ -1,0 +1,15 @@
+{
+    "$schema": "https://apify.com/schemas/v1/actor.ide.json",
+    "actorSpecification": 1,
+    "name": "global-regtech-compliance-feed",
+    "title": "Global RegTech Compliance Feed - sanctions, enforcement, debarment, recalls",
+    "description": "One Actor, six regulatory delta sources: OFAC sanctioned vessels, World Bank sanctions, UK Modern Slavery statements, SEC enforcement releases, AI-crawler permission signals and FDA/EMA drug-safety records. Choose sources per run, keep per-source options, and receive only new or changed records.",
+    "version": "0.1",
+    "buildTag": "latest",
+    "minMemoryMbytes": 2048,
+    "maxMemoryMbytes": 2048,
+    "inputSchema": "./input_schema.json",
+    "categories": [
+        "BUSINESS"
+    ]
+}

@@ -1,0 +1,102 @@
+{
+    "$schema": "https://apify.com/schemas/v1/input.ide.json",
+    "title": "global-regtech-compliance-feed configuration",
+    "type": "object",
+    "schemaVersion": 1,
+    "properties": {
+        "sources": {
+            "title": "Sources to run",
+            "type": "array",
+            "description": "Source ids to run in this execution. Held sources are not selectable: paris_mou_thetis, tokyo_mou_apcis, imo_gisis.",
+            "editor": "select",
+            "items": {
+                "type": "string",
+                "enum": [
+                    "ofac",
+                    "world_bank_debarred",
+                    "uk_modern_slavery",
+                    "sec_enforcement",
+                    "ai_crawler_signals",
+                    "fda_ema_recalls"
+                ],
+                "enumTitles": [
+                    "US Treasury OFAC SDN list, sdnType=Vessel entries (also absorbs delta-registry-ofac-sanct…",
+                    "World Bank \"Other Sanctions\" table (Table 2 of the debarred-firms page: letters of reprim…",
+                    "UK Modern Slavery Statement Registry: the registry's official per-year bulk CSV (Open Gov…",
+                    "SEC litigation releases and administrative proceedings from SEC.gov's own RSS feeds (25-i…",
+                    "Per-domain AI-crawler permissions from robots.txt (RFC 9309 group matching for 18 tracked…",
+                    "US FDA drug enforcement (recall) records from openFDA and EU EMA Direct Healthcare Profes…"
+                ]
+            },
+            "default": [
+                "ofac"
+            ],
+            "minItems": 1
+        },
+        "sourceOptions": {
+            "title": "Per-source options",
+            "type": "object",
+            "description": "Options keyed by source id, e.g. {\"fda_ema_recalls\": {\"subSources\": [\"fda\"]}}. Each source validates its own slice and rejects unknown keys. Put credentials in the secret fields below, not here.",
+            "editor": "json",
+            "default": {}
+        },
+        "deltaMode": {
+            "title": "Delta mode",
+            "type": "string",
+            "description": "onlyChanged = new and changed records (default). onlyNew = new records only. all = every record, unchanged ones included.",
+            "editor": "select",
+            "enum": [
+                "all",
+                "onlyChanged",
+                "onlyNew"
+            ],
+            "enumTitles": [
+                "All records (snapshot)",
+                "New and changed records",
+                "New records only"
+            ],
+            "default": "onlyChanged"
+        },
+        "maxItemsPerSource": {
+            "title": "Max records per source",
+            "type": "integer",
+            "description": "Upper bound on records taken from each source in one run.",
+            "minimum": 1,
+            "maximum": 10000,
+            "default": 500
+        },
+        "watchlistNames": {
+            "title": "Watchlist keywords",
+            "type": "array",
+            "description": "Case-insensitive substrings matched against each record's names. Entries shorter than 2 characters, blank or punctuation-only entries are ignored. With no valid keyword nothing matches and the watchlist-hit event is never charged.",
+            "editor": "stringList",
+            "default": []
+        },
+        "maxWatchlistHitsPerRun": {
+            "title": "Max billable watchlist hits per run",
+            "type": "integer",
+            "description": "Hard ceiling on watchlist-hit events charged in one run.",
+            "minimum": 0,
+            "maximum": 100000,
+            "default": 200
+        },
+        "maxWatchlistSpendUsd": {
+            "title": "Max watchlist-hit spend per run (USD)",
+            "type": "number",
+            "description": "Hard ceiling on USD charged for watchlist-hit in one run.",
+            "minimum": 0,
+            "maximum": 10000,
+            "default": 50
+        },
+        "fdaApiKey": {
+            "title": "openFDA API key (optional)",
+            "type": "string",
+            "description": "Bring-your-own credential for fda_ema_recalls. Stored encrypted by Apify and never logged.",
+            "editor": "textfield",
+            "isSecret": true
+        }
+    },
+    "required": [
+        "sources"
+    ]
+}

@@ -1316,6 +1316,9 @@ export function buildPayload(candidate: Candidate, detailResult: DetailResult | 
 }
 
 /** Turns one candidate (+ its detail result) into the router's SourceRecord. */
+/** PPE event for a listing-only (no detail page) record; priced in pricing/event_catalog.ts. */
+export const TENDER_SUMMARY_EVENT = 'tender-summary';
+
 export function toSourceRecord(candidate: Candidate, detailResult: DetailResult | null, now: Date): SourceRecord {
     const payload = buildPayload(candidate, detailResult, now);
     const { item } = candidate;
@@ -1340,6 +1343,8 @@ export function toSourceRecord(candidate: Candidate, detailResult: DetailResult 
         ]),
         payload,
         watchText: [item.comprador ?? detail?.organismoLicitante ?? '', item.objeto ?? detail?.objeto ?? ''].filter((p) => p.trim() !== '').join(' '),
+        // Legacy pricing: `result` for a record built from the full detail page, `result-summary` for a listing-only one.
+        billingEvent: payload.detailFetched === true ? undefined : TENDER_SUMMARY_EVENT,
     };
 }
 

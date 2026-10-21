@@ -15,6 +15,6 @@
         "declaration": false,
         "sourceMap": true
     },
-    "include": ["lib/**/*.ts", "global-regtech-compliance-feed/**/*.ts", "latam-global-tender-intelligence/**/*.ts", "global-corporate-patent-intelligence/**/*.ts", "test/**/*.ts"],
+    "include": ["lib/**/*.ts", "global-regtech-compliance-feed/**/*.ts", "latam-global-tender-intelligence/**/*.ts", "global-corporate-patent-intelligence/**/*.ts", "pricing/**/*.ts", "scripts/**/*.ts", "test/**/*.ts"],
     "exclude": ["node_modules", "dist"]
 }

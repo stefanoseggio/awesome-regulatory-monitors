@@ -18,6 +18,17 @@ export interface HttpClientOptions {
 
 const RETRYABLE_STATUS = new Set([408, 425, 429, 500, 502, 503, 504]);
 const REDIRECT_STATUS = new Set([301, 302, 303, 307, 308]);
+const MAX_RETRY_AFTER_MS = 120_000;
+
+/** Parses a `Retry-After` header (delta-seconds or HTTP-date) to ms, or 0 when absent/invalid. */
+export function parseRetryAfterMs(value: string | null, now: number = Date.now()): number {
+    if (!value) return 0;
+    const seconds = Number(value);
+    if (Number.isFinite(seconds) && seconds >= 0) return Math.min(MAX_RETRY_AFTER_MS, Math.round(seconds * 1000));
+    const at = Date.parse(value);
+    return Number.isFinite(at) ? Math.min(MAX_RETRY_AFTER_MS, Math.max(0, at - now)) : 0;
+}
+
 const SECRET_QUERY_KEY = /key|token|secret|passw|auth|sig|credential/i;
 
 /** Masks credential-looking query parameters so an error message or log line never carries them. */
@@ -145,7 +156,9 @@ export function createHttpClient(options: HttpClientOptions): HttpClient {
             options.log?.warning('tlsExtraCaPem was supplied but the default HTTP client cannot add trust anchors per request; set NODE_EXTRA_CA_CERTS on the Actor process instead.');
         }
         let lastError: unknown;
+        let retryAfterMs = 0;
         for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+            retryAfterMs = 0;
             const controller = new AbortController();
             const timer = setTimeout(() => controller.abort(), init.timeoutMs ?? defaultTimeoutMs);
             try {
@@ -154,6 +167,7 @@ export function createHttpClient(options: HttpClientOptions): HttpClient {
                 const preview = (await response.text().catch(() => '')).slice(0, 200);
                 const error = new HttpStatusError(finalUrl, response.status, preview);
                 if (!RETRYABLE_STATUS.has(response.status) || attempt === maxRetries) throw error;
+                retryAfterMs = parseRetryAfterMs(response.headers.get('retry-after'));
                 lastError = error;
             } catch (error) {
                 if (error instanceof HttpStatusError && !RETRYABLE_STATUS.has(error.status)) throw error;
@@ -163,7 +177,7 @@ export function createHttpClient(options: HttpClientOptions): HttpClient {
             } finally {
                 clearTimeout(timer);
             }
-            const delay = baseDelayMs * 2 ** attempt;
+            const delay = Math.max(baseDelayMs * 2 ** attempt, init.minRetryDelayMs ?? 0, retryAfterMs);
             options.log?.debug(`retry ${attempt + 1}/${maxRetries} for ${redactUrl(url)} in ${delay}ms: ${String(lastError)}`);
             await sleep(delay);
         }

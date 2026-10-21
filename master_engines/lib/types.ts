@@ -34,6 +34,11 @@ export interface HttpRequestInit {
     headers?: Record<string, string>;
     body?: string;
     timeoutMs?: number;
+    /**
+     * Minimum delay before retrying a retryable response, in ms (a published rate-limit floor such as USPTO ODP's
+     * "at least 5 second delay"). A `Retry-After` header larger than the back-off schedule also wins, capped at 120 s.
+     */
+    minRetryDelayMs?: number;
     /** Hard cap on the response body in bytes; exceeding it throws `HttpBodyTooLargeError` and aborts the read. */
     maxBytes?: number;
     /**
@@ -88,9 +93,23 @@ export interface SourceRecord {
     payload: Record<string, unknown>;
     /** Free text the watchlist is matched against (respondent, vessel owner, company name...). */
     watchText?: string;
+    /**
+     * Overrides the PPE event for this one record (e.g. a listing-only summary row that is cheaper than a
+     * full-detail row). Takes precedence over the connector's `billing` mapping; must exist in the engine's pricing.
+     */
+    billingEvent?: string;
 }
 
 export type ConnectorStatus = 'active' | 'held';
+
+export interface ConnectorBilling {
+    /** Event for a `first_seen` record (default `result`). */
+    newEvent?: string;
+    /** Event for an `updated` record (default: `newEvent`). */
+    updatedEvent?: string;
+    /** Event for an `unchanged` record re-emitted by `deltaMode: all` (default: `newEvent`). */
+    snapshotEvent?: string;
+}
 
 export interface Connector<O = Record<string, unknown>> {
     /** Stable id used in `input.sources`, `input.sourceOptions` and the state store. */
@@ -102,6 +121,12 @@ export interface Connector<O = Record<string, unknown>> {
     readonly status: ConnectorStatus;
     /** Required when `status === 'held'`: why the source must not run. */
     readonly heldReason?: string;
+    /**
+     * PPE event billed per delivered record, by delta class. Anything omitted falls back to `newEvent`, then to
+     * `result`. This lets a consolidated engine keep each legacy actor's own price (e.g. $0.0005 for an OFAC
+     * vessel vs $0.05 for an SEC release) instead of forcing one blended price on every source.
+     */
+    readonly billing?: ConnectorBilling;
     /**
      * How many record ids of this source the delta memory retains (newest first). Defaults to 5000.
      * Raise it for snapshot sources larger than the default, otherwise the oldest ids are evicted and
@@ -142,6 +167,8 @@ export interface SourceRunSummary {
     updated: number;
     unchanged: number;
     watchlistHits: number;
+    /** Non-fatal problems the connector logged while it still returned records (one sub-source down, a throttled stop...). */
+    warnings: string[];
     error?: string;
 }
 

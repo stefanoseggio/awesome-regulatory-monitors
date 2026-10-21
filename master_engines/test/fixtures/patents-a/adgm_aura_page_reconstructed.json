@@ -1,0 +1,53 @@
+{
+  "_fixtureNote": "RECONSTRUCTED, NOT A LIVE REPLY (ADGM answers an Apex NullPointerException today, see adgm_aura_error_live.json). Envelope per the legacy adgmSource.ts parser (actions[0].state SUCCESS, returnValue.returnValue.data.data = rows). Row 1 rebuilds the real record the legacy README says was captured live from ADGM's public register (0727 HOLDING LIMITED, registration 22086; the README documents its derived fields, so the raw `Id` and the trade-name text are not known and the trade name is set to the entity's own name). Row 2 is the legacy test/adgmSource.test.ts default row.",
+  "actions": [
+    {
+      "id": "1;a",
+      "state": "SUCCESS",
+      "returnValue": {
+        "returnValue": {
+          "data": {
+            "data": [
+              {
+                "Name": "0727 HOLDING LIMITED",
+                "Entity_Type__c": "Private Company Limited By Shares",
+                "Is_continued__c": false,
+                "Incorporation_Date__c": "2024-11-07",
+                "Registration_Number__c": "22086",
+                "Entity_Status__c": "Registered",
+                "Category__c": "Non-Financial (Category B)",
+                "Entity_Sub_Type__c": "Special Purpose Vehicle",
+                "License_Status__c": "Licensed",
+                "Addresses__r": [
+                  {
+                    "Full_Address__c": "Sub-Unit 1 of the Unit 4, Level 8, Al Sarab Tower, Adgm Square, Al Maryah Island, Abu Dhabi, United Arab Emirates"
+                  }
+                ],
+                "Trade_Names__r": [
+                  {
+                    "Name_in_English__c": "0727 HOLDING LIMITED",
+                    "Status__c": "Active"
+                  }
+                ]
+              },
+              {
+                "Id": "001",
+                "Name": "TEST ENTITY LIMITED",
+                "Entity_Type__c": "Private Company Limited By Shares",
+                "Is_continued__c": false,
+                "Incorporation_Date__c": "2024-01-01",
+                "Registration_Number__c": "1000",
+                "Entity_Status__c": "Registered",
+                "Category__c": "Non-Financial (Category B)",
+                "Entity_Sub_Type__c": null,
+                "License_Status__c": "Licensed",
+                "Addresses__r": null,
+                "Trade_Names__r": null
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

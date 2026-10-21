@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 import { FakeBilling, RESULT_EVENT, WATCHLIST_HIT_EVENT } from '../lib/charging.js';
 import { createHeldConnector } from '../lib/connector_helpers.js';
-import { type EngineDefinition, resolveSources, runEngine, type RunSinks, shouldEmit } from '../lib/router_core.js';
+import { billingEventFor, type EngineDefinition, mergeCredentialFields, resolveSources, runEngine, type RunSinks, shouldEmit } from '../lib/router_core.js';
 import { InMemoryDeltaStore } from '../lib/state.js';
 import {
     type Connector,
@@ -66,9 +66,9 @@ function harness(opts: { ppe?: boolean; prices?: Record<string, number>; budgetU
     const rows: Array<Record<string, unknown>> = [];
     const summaries: RunSummary[] = [];
     const sinks: RunSinks = {
-        async emit(row) {
+        async emit(row, eventName = RESULT_EVENT) {
             if (billing.isPayPerEvent()) {
-                const r = await billing.charge(RESULT_EVENT, 1);
+                const r = await billing.charge(eventName, 1);
                 if (r.chargedCount < 1) return { emitted: false, limitReached: true };
                 rows.push(row);
                 return { emitted: true, limitReached: r.eventChargeLimitReached };
@@ -363,5 +363,123 @@ describe('watchlist billing through the router', () => {
         await runEngine(engine, { sources: ['alpha'], watchlistNames: ['', 'Acme Corp'] }, { sinks: h.sinks, ctx, clock });
         expect(h.summaries).toHaveLength(1);
         expect(h.summaries[0]).toMatchObject({ engine: 'global-regtech-compliance-feed', deltaMode: 'onlyChanged', totalEmitted: 3, watchlist: { accepted: 1, rejected: 1 } });
+    });
+});
+
+describe('per-source billing events', () => {
+    const priced = { 'apify-actor-start': 0.005, result: 0.001, 'vessel-record': 0.0005, 'statement-new': 0.02, 'statement-updated': 0.01, 'watchlist-hit': 0.15 };
+
+    it('billingEventFor falls back from updated/snapshot to new to result', () => {
+        const none = stub('a', []);
+        const only = stub('b', [], { billing: { newEvent: 'vessel-record' } });
+        const full = stub('c', [], { billing: { newEvent: 'statement-new', updatedEvent: 'statement-updated', snapshotEvent: 'statement-snapshot' } });
+        expect(['first_seen', 'updated', 'unchanged'].map((c) => billingEventFor(none, c as never))).toEqual(['result', 'result', 'result']);
+        expect(['first_seen', 'updated', 'unchanged'].map((c) => billingEventFor(only, c as never))).toEqual(['vessel-record', 'vessel-record', 'vessel-record']);
+        expect(['first_seen', 'updated', 'unchanged'].map((c) => billingEventFor(full, c as never))).toEqual(['statement-new', 'statement-updated', 'statement-snapshot']);
+    });
+
+    it('bills each source at its own event, and a new vs updated record at different events', async () => {
+        const store = new InMemoryDeltaStore();
+        const engine = engineOf(
+            stub('ofac', [rec('1', 'a')], { billing: { newEvent: 'vessel-record' } }),
+            stub('uk', [rec('9', 'a')], { billing: { newEvent: 'statement-new', updatedEvent: 'statement-updated' } }),
+        );
+        const first = harness({ prices: priced, store });
+        await runEngine(engine, { sources: ['ofac', 'uk'] }, { sinks: first.sinks, ctx, clock });
+        expect(first.billing.calls).toEqual([
+            { eventName: 'vessel-record', count: 1 },
+            { eventName: 'statement-new', count: 1 },
+        ]);
+
+        const changed = engineOf(
+            stub('ofac', [rec('1', 'a')], { billing: { newEvent: 'vessel-record' } }),
+            stub('uk', [rec('9', 'b')], { billing: { newEvent: 'statement-new', updatedEvent: 'statement-updated' } }),
+        );
+        const second = harness({ prices: priced, store });
+        await runEngine(changed, { sources: ['ofac', 'uk'] }, { sinks: second.sinks, ctx, clock });
+        expect(second.billing.calls).toEqual([{ eventName: 'statement-updated', count: 1 }]);
+    });
+
+    it('a connector without billing keeps using the result event', async () => {
+        const h = harness({ prices: priced });
+        await runEngine(engineOf(stub('plain', [rec('1', 'a')])), { sources: ['plain'] }, { sinks: h.sinks, ctx, clock });
+        expect(h.billing.calls).toEqual([{ eventName: 'result', count: 1 }]);
+    });
+});
+
+describe('connector warnings reach the run summary', () => {
+    it('captures ctx.log.warning calls made during fetch, per source', async () => {
+        const noisy = stub('noisy', [rec('1', 'a')], {
+            async fetch(c: ConnectorContext) {
+                c.log.warning('difc failed, adgm ok');
+                return [rec('1', 'a')];
+            },
+        });
+        const h = harness();
+        const summary = await runEngine(engineOf(noisy, stub('quiet', [rec('2', 'a')])), { sources: ['noisy', 'quiet'] }, { sinks: h.sinks, ctx, clock });
+        expect(summary.sources.find((s) => s.source === 'noisy')?.warnings).toEqual(['difc failed, adgm ok']);
+        expect(summary.sources.find((s) => s.source === 'quiet')?.warnings).toEqual([]);
+        expect(summary.sources.find((s) => s.source === 'noisy')?.error).toBeUndefined();
+    });
+
+    it('bounds the number and size of captured warnings', async () => {
+        const chatty = stub('chatty', [], {
+            async fetch(c: ConnectorContext) {
+                for (let i = 0; i < 80; i += 1) c.log.warning('x'.repeat(2000));
+                return [];
+            },
+        });
+        const h = harness();
+        const summary = await runEngine(engineOf(chatty), { sources: ['chatty'] }, { sinks: h.sinks, ctx, clock });
+        const w = summary.sources[0]?.warnings ?? [];
+        expect(w).toHaveLength(50);
+        expect(w.every((m) => m.length <= 500)).toBe(true);
+    });
+});
+
+describe('credential fields', () => {
+    const engine: EngineDefinition = {
+        slug: 'global-regtech-compliance-feed',
+        credentialFields: { apiKey: { source: 'byok', option: 'apiKey' } },
+        connectors: [stub('byok', [rec('1', 'a')], { requiredOptions: ['apiKey'], optionsSchema: z.object({ apiKey: z.string().optional() }) })],
+    };
+
+    it('routes a top-level secret field into the source options', async () => {
+        const h = harness();
+        await runEngine(engine, { sources: ['byok'], apiKey: '  s3cret  ' }, { sinks: h.sinks, ctx, clock });
+        expect(h.rows).toHaveLength(1);
+    });
+
+    it('an explicit sourceOptions value wins over the top-level field', () => {
+        const merged = mergeCredentialFields(engine, { sources: ['byok'], apiKey: 'top', sourceOptions: { byok: { apiKey: 'explicit' } } }) as { sourceOptions: Record<string, Record<string, string>> };
+        expect(merged.sourceOptions.byok?.apiKey).toBe('explicit');
+    });
+
+    it('ignores blank and non-string values, so a missing credential still fails preflight', async () => {
+        const h = harness();
+        for (const apiKey of ['', '   ', 42, null, {}]) {
+            await expect(runEngine(engine, { sources: ['byok'], apiKey }, { sinks: h.sinks, ctx, clock })).rejects.toThrow(/requires option\(s\): apiKey/);
+        }
+    });
+
+    it('never echoes the credential in a preflight error', async () => {
+        const strict: EngineDefinition = {
+            slug: 'global-regtech-compliance-feed',
+            credentialFields: { apiKey: { source: 'strict', option: 'apiKey' } },
+            connectors: [stub('strict', [], { optionsSchema: z.object({ apiKey: z.string().min(50) }) })],
+        };
+        const h = harness();
+        const error = await runEngine(strict, { sources: ['strict'], apiKey: 'TOP-SECRET-VALUE' }, { sinks: h.sinks, ctx, clock }).catch((e: Error) => e);
+        expect((error as Error).message).toMatch(/Invalid options/);
+        expect((error as Error).message).not.toContain('TOP-SECRET-VALUE');
+    });
+
+    it('does not mutate the caller input and leaves engines without credential fields untouched', () => {
+        const input = { sources: ['byok'], apiKey: 'k' };
+        const copy = JSON.stringify(input);
+        mergeCredentialFields(engine, input);
+        expect(JSON.stringify(input)).toBe(copy);
+        const plain = { slug: 'global-regtech-compliance-feed' as const, connectors: [] };
+        expect(mergeCredentialFields(plain, input)).toBe(input);
     });
 });

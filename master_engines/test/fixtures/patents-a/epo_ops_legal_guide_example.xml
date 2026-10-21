@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  DOCUMENTATION EXAMPLE, NOT A LIVE RESPONSE. Reproduced from the public "OPS RESTful Web Services Reference Guide
+  v 1.3.20, June 2024" (EPO), section 3.5 Legal service, "Response example" (pages 118-120), downloaded 2026-10-21 from
+  https://link.epo.org/web/searching-for-patents/data/en-ops-v3.2-documentation-version-1.3.20.pdf
+  (request in the guide: GET http://ops.epo.org/rest-services/legal/publication/docdb/EP.1000000.A1).
+  Whitespace is re-flowed where the PDF page breaks split a line; element and attribute names and values are the guide's.
+  The two events are EPO's own illustration of the structure: neither is an opposition event.
+-->
+<ops:world-patent-data xmlns:ops="http://ops.epo.org" xmlns="http://www.epo.org/exchange">
+  <ops:patent-family legal="true">
+    <ops:publication-reference>
+      <document-id document-id-type="docdb">
+        <country>EP</country>
+        <doc-number>1000000</doc-number>
+        <kind>A1</kind>
+      </document-id>
+    </ops:publication-reference>
+    <ops:family-member family-id="19768124">
+      <publication-reference>
+        <document-id document-id-type="docdb">
+          <country>EP</country>
+          <doc-number>1000000</doc-number>
+          <kind>A1</kind>
+          <date>20000517</date>
+        </document-id>
+        <document-id document-id-type="epodoc">
+          <doc-number>EP1000000</doc-number>
+          <date>20000517</date>
+        </document-id>
+      </publication-reference>
+      <application-reference doc-id="17397285" is-representative="YES">
+        <document-id document-id-type="docdb">
+          <country>EP</country>
+          <doc-number>99203729</doc-number>
+          <kind>A</kind>
+          <date>19991108</date>
+        </document-id>
+      </application-reference>
+      <priority-claim kind="national">
+        <document-id document-id-type="docdb">
+          <country>NL</country>
+          <doc-number>1010536</doc-number>
+          <kind>A</kind>
+          <date>19981112</date>
+        </document-id>
+        <priority-active-indicator>YES</priority-active-indicator>
+      </priority-claim>
+      <ops:legal code="AK     " desc="DESIGNATED CONTRACTING STATES:" infl="+"
+ dateMigr="00010101">
+        <ops:pre line="00001">EP     99203729A 2000-05-17AK          +DESIGNATED
+ CONTRACTING STATES: Kind Code of Ref Document A1</ops:pre>
+        <ops:pre line="00002">EP    99203729A 2000-05-17AK    +DESIGNATED
+CONTRACTING STATES: Designated State(s) AT BE CH CY DE DK ES FI FR GB GR IE
+IT LI LU MC NL PT SE</ops:pre>
+        <ops:L001EP desc="Country Code">EP</ops:L001EP>
+        <ops:L002EP desc="Filing / Published Document">F</ops:L002EP>
+        <ops:L003EP desc="Document Number">    99203729</ops:L003EP>
+        <ops:L004EP desc="Kind Code">A</ops:L004EP>
+        <ops:L005EP desc="IPR Type">PI</ops:L005EP>
+        <ops:L006EP desc="PRS DOCUMENT TYPE">P</ops:L006EP>
+        <ops:L007EP desc="Gazette DATE">2000-05-17</ops:L007EP>
+        <ops:L008EP desc="Legal Event Code 1">AK</ops:L008EP>
+        <ops:L018EP desc="DATE last exchanged">2003-01-01</ops:L018EP>
+        <ops:L019EP desc="DATE first created">2003-05-28</ops:L019EP>
+        <ops:L500EP>
+          <ops:L506EP desc="Kind Code of Ref Document">A1</ops:L506EP>
+          <ops:L507EP desc="Designated State(s)">AT BE CH CY DE DK ES FI FR GB
+GR IE IT LI LU MC NL PT SE</ops:L507EP>
+        </ops:L500EP>
+      </ops:legal>
+      <ops:legal code="AX    " desc="EXTENSION OF THE EUROPEAN PATENT TO"
+infl="+" dateMigr="00010101">
+        <ops:pre line="00001">EP    99203729A 2000-05-17AX    +EXTENSION OF
+THE EUROPEAN PATENT TO Free Format Text AL;LT;LV;MK;RO;SI</ops:pre>
+        <ops:L001EP desc="Country Code">EP</ops:L001EP>
+        <ops:L002EP desc="Filing / Published Document">F</ops:L002EP>
+        <ops:L003EP desc="Document Number">    99203729</ops:L003EP>
+        <ops:L004EP desc="Kind Code">A</ops:L004EP>
+        <ops:L005EP desc="IPR Type">PI</ops:L005EP>
+        <ops:L006EP desc="PRS DOCUMENT TYPE">P</ops:L006EP>
+        <ops:L007EP desc="Gazette DATE">2000-05-17</ops:L007EP>
+        <ops:L008EP desc="Legal Event Code 1">AX</ops:L008EP>
+        <ops:L018EP desc="DATE last exchanged">2003-01-01</ops:L018EP>
+        <ops:L019EP desc="DATE first created">2003-05-28</ops:L019EP>
+        <ops:L500EP>
+          <ops:L510EP desc="Free Format Text">AL;LT;LV;MK;RO;SI</ops:L510EP>
+        </ops:L500EP>
+      </ops:legal>
+      <!-- other legal elements removed for readability -->
+    </ops:family-member>
+  </ops:patent-family>
+</ops:world-patent-data>
