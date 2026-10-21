@@ -36,11 +36,12 @@
  * SSRF GUARD. Domains are caller-supplied and fetched server-side, so the zod schema accepts a bare public
  * hostname only: no scheme, path, query, credentials, port, IPv4/IPv6 literal (including decimal, hex and
  * shorthand forms), `localhost`, single-label names, reserved/internal suffixes, or hostnames that embed an
- * IPv4 address (the `127.0.0.1.nip.io` family). At most MAX_DOMAINS domains are accepted. Two residual risks
- * cannot be closed from inside a connector and are reported as lib change requests: (1) DNS can still resolve
- * a public-looking name to a private address (rebinding), and (2) `lib/http.ts` follows redirects without a
- * per-hop host check. Only parsed signals are ever emitted - never the raw response body - so a redirect
- * to an internal service can at most reveal presence/size of a text document, not its content.
+ * IPv4 address (the `127.0.0.1.nip.io` family). At most MAX_DOMAINS domains are accepted. Every request goes
+ * through `lib/http.ts` with manual redirect handling: each hop must be https and its host must itself pass
+ * {@link validateHostname}, and the body is capped at MAX_BODY_BYTES. One residual risk cannot be closed from
+ * inside a connector: DNS can still resolve a public-looking name to a private address (rebinding) - deploy
+ * behind an egress policy that blocks private ranges. Only parsed signals are ever emitted - never the raw
+ * response body - so even a rebinding hit can at most reveal presence/size of a text document, not its content.
  *
  * NOT PORTED: the legacy delta vocabulary (`event_type` BASELINE_SNAPSHOT / ALLOWED / DISALLOWED / CHANGED /
  * NO_CHANGE) and the diff fields (`changed_permissions`, `changed_content_signals`, `llms_txt_change`).
@@ -86,6 +87,9 @@ export const DEFAULT_TRACKED_BOTS: readonly string[] = [
 
 /** RFC 9309 section 2.5: a crawler must parse at least 500 KiB; anything beyond 512 KiB is ignored. */
 export const ROBOTS_MAX_CHARS = 512 * 1024;
+/** Hard cap on any fetched file (robots.txt, llms.txt, llms-full.txt) before it is parsed or hashed. */
+export const MAX_BODY_BYTES = 8 * 1024 * 1024;
+const MAX_REDIRECTS = 5;
 
 // ---------------------------------------------------------------------------
 // Hostname validation (SSRF guard)
@@ -393,7 +397,12 @@ function messageOf(error: unknown): string {
 
 async function probe(ctx: ConnectorContext, url: string, timeoutMs: number): Promise<Probe> {
     try {
-        const body = await ctx.http.getText(url, { timeoutMs, headers: { accept: 'text/plain, */*;q=0.5' } });
+        const body = await ctx.http.getText(url, {
+            timeoutMs,
+            maxBytes: MAX_BODY_BYTES,
+            redirects: { max: MAX_REDIRECTS, validate: (target) => target.protocol === 'https:' && validateHostname(target.hostname).ok },
+            headers: { accept: 'text/plain, */*;q=0.5' },
+        });
         if (HTML_BODY.test(body)) return { kind: 'absent' };
         return { kind: 'ok', body };
     } catch (error) {

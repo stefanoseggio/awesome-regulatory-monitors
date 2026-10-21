@@ -16,7 +16,7 @@
  *           HTML. The legacy actor's compliance doctrine - kept here - is that an
  *           undocumented internal API gateway is not a source, so Table 1 is NEVER
  *           queried. Do not "fix" this by pointing ctx.http at that gateway.
- *   Table 2 "Other Sanctions" (letters of reprimand, conditional non-debarment, ...)
+ *   Table 2 "Other Sanctions" (letters of reprimand, conditional non-debarment and similar)
  *           IS a plain static <table> in the fetched HTML and is this connector's entire
  *           scope.
  * Consequence: this connector does NOT list the World Bank's formally debarred firms.
@@ -47,14 +47,16 @@
  *        `apigwext.worldbank.org` gateway reference for Table 1.
  *   GET https://www.worldbank.org/robots.txt -> 200; no rule mentions procurement,
  *        projects-operations, debarred or sanction.
+ *   End to end: the connector, driven through lib/http.ts createHttpClient (Node's global
+ *   fetch, honest User-Agent) against the live page, returned the four rows with the ids
+ *   `wb-sanction-oao-armada-ongoing` (the id the legacy README documents) and three more.
  *   Caveat: in this sandbox the egress proxy rewrote the sanction-document hrefs into
- *   `mcas-proxyweb.mcas.ms/certificate-checker?...originalUrl=...` wrappers, so the
+ *   `mcas-proxyweb.mcas.ms/certificate-checker` wrapper URLs, so the
  *   document URLs seen live here are an artefact of that proxy, not of the World Bank.
  *   The href handling is therefore verified against the legacy fixture (clean absolute
  *   worldbank.org URLs), not against the proxied live page.
  * ============================================================================
  */
-import type { AnyNode } from 'cheerio';
 import * as cheerio from 'cheerio';
 import { z } from 'zod';
 
@@ -144,7 +146,7 @@ export function slugify(value: string): string {
             .toLowerCase()
             .normalize('NFKD')
             // Strip combining diacritical marks (U+0300-U+036F) left behind by NFKD, e.g. "é" -> "e".
-            .replace(/[̀-ͯ]/g, '')
+            .replace(/[\u0300-\u036f]/g, '')
             .replace(/[^a-z0-9]+/g, '-')
             .replace(/^-+|-+$/g, '')
             .slice(0, 80)
@@ -155,28 +157,10 @@ export function slugify(value: string): string {
 // Table 2 parser (port of legacy src/sources/worldBankDebarredFirms.ts)
 // ---------------------------------------------------------------------------
 
-// The "Name of Firm & Address" cell sometimes holds more than just the firm name: a
-// first <p> with the name (+ a trailing "*<digits>" footnote marker), followed by one
-// or more further <p> siblings carrying the firm's address (confirmed live, e.g.
-// "TPF GETINSA EUROESTUDIOS S.L. *59" then separate <p>s for street/city/country). A
-// plain `.text()` over the whole cell concatenates all of that - address included -
-// onto the name, and in the live (minified) markup those <p>s are adjacent with no
-// whitespace between them at all, so the address would run directly onto the footnote
-// marker and silently break the "*<digits>" footnote-stripping regex. The firm name and
-// its footnote only ever live in the cell's first <p>, so anchoring extraction to that
-// first <p> sidesteps the concatenation entirely.
-function extractFirmNameCellText(cell: cheerio.Cheerio<AnyNode>): string {
-    const firstParagraph = cell.find('p').first();
-    const source = firstParagraph.length > 0 ? firstParagraph : cell;
-    return source.text().replace(/\s+/g, ' ').trim();
-}
-
-function findOtherSanctionsTable($: cheerio.CheerioAPI): cheerio.Cheerio<AnyNode> | null {
-    for (const table of $('table').toArray()) {
-        const headerRowText = $(table).find('tr').first().text().replace(/\s+/g, ' ');
-        if (OTHER_SANCTIONS_HEADER_PATTERNS.every((pattern) => pattern.test(headerRowText))) return $(table);
-    }
-    return null;
+/** True when a table's first row carries all four "Other Sanctions" header labels. */
+export function isOtherSanctionsHeader(headerRowText: string): boolean {
+    const text = headerRowText.replace(/\s+/g, ' ');
+    return OTHER_SANCTIONS_HEADER_PATTERNS.every((pattern) => pattern.test(text));
 }
 
 /**
@@ -185,7 +169,10 @@ function findOtherSanctionsTable($: cheerio.CheerioAPI): cheerio.Cheerio<AnyNode
  */
 export function parseOtherSanctionsHtml(html: string): DebarredFirmsExtractionResult {
     const $ = cheerio.load(html);
-    const table = findOtherSanctionsTable($);
+    const tableElement = $('table')
+        .toArray()
+        .find((candidate) => isOtherSanctionsHeader($(candidate).find('tr').first().text()));
+    const table = tableElement ? $(tableElement) : null;
 
     if (!table) {
         return {
@@ -204,7 +191,18 @@ export function parseOtherSanctionsHtml(html: string): DebarredFirmsExtractionRe
         const [nameCell, dateCell, sanctionCell, groundsCell] = cells;
         if (cells.length < 4 || !nameCell || !dateCell || !sanctionCell || !groundsCell) continue;
 
-        const firmNameRaw = extractFirmNameCellText($(nameCell));
+        // The "Name of Firm & Address" cell sometimes holds more than just the firm name: a
+        // first <p> with the name (+ a trailing "*<digits>" footnote marker), followed by one
+        // or more further <p> siblings carrying the firm's address (confirmed live, e.g.
+        // "TPF GETINSA EUROESTUDIOS S.L. *59" then separate <p>s for street/city/country). A
+        // plain `.text()` over the whole cell concatenates all of that - address included -
+        // onto the name, and in the live (minified) markup those <p>s are adjacent with no
+        // whitespace between them at all, so the address would run directly onto the footnote
+        // marker and silently break the "*<digits>" footnote-stripping regex. The firm name and
+        // its footnote only ever live in the cell's first <p>, so anchoring extraction to that
+        // first <p> sidesteps the concatenation entirely.
+        const firstParagraph = $(nameCell).find('p').first();
+        const firmNameRaw = (firstParagraph.length > 0 ? firstParagraph : $(nameCell)).text().replace(/\s+/g, ' ').trim();
         if (!firmNameRaw) continue;
 
         const dateOfImpositionRaw = $(dateCell).text().replace(/\s+/g, ' ').trim();
@@ -282,7 +280,7 @@ export function normalizeOtherSanction(raw: WorldBankOtherSanctionRaw): Normaliz
 
 /**
  * Legacy id scheme `wb-sanction-<slug(name)>-<slug(date text)>`. One addition: a name
- * with no ASCII letters or digits (all-Cyrillic, CJK, ...) slugifies to the empty string
+ * with no ASCII letters or digits (all-Cyrillic or all-CJK, for example) slugifies to the empty string
  * and every such firm sharing a date would collide, so the slug falls back to a short
  * hash of the cleaned name. NOTE (inherited from the legacy design, not fixable without a
  * verified stable key): the id embeds the free-text date column, so the World Bank
@@ -293,7 +291,7 @@ export function sanctionRecordId(cleanedName: string, dateOfImpositionRaw: strin
     return `${SANCTION_ID_PREFIX}${nameSlug}-${slugify(dateOfImpositionRaw)}`;
 }
 
-/** Makes ids unique within one fetch: the 2nd, 3rd... row with an identical id get a `-2`, `-3` suffix in page order (the router would otherwise silently drop them). */
+/** Makes ids unique within one fetch: the 2nd and later rows with an identical id get a `-2`, `-3` suffix in page order (the router would otherwise silently drop them). */
 export function disambiguateIds(ids: readonly string[]): string[] {
     const seen = new Map<string, number>();
     return ids.map((id) => {
@@ -335,7 +333,7 @@ export const worldBankDebarredConnector: Connector<WorldBankDebarredOptions> = {
     engine: 'global-regtech-compliance-feed',
     legacyActor: 'actor-20-mdb-procurement-monitor',
     description:
-        'World Bank "Other Sanctions" table (Table 2 of the debarred-firms page: letters of reprimand, conditional non-debarment, ...). Does NOT include the main debarment register (Table 1), which is only available from an undocumented gateway and is out of scope. Open static HTML; no credentials.',
+        'World Bank "Other Sanctions" table (Table 2 of the debarred-firms page: letters of reprimand, conditional non-debarment and similar). Does NOT include the main debarment register (Table 1), which is only available from an undocumented gateway and is out of scope. Open static HTML; no credentials.',
     status: 'active',
     optionsSchema: worldBankDebarredOptionsSchema,
 

@@ -1,0 +1,221 @@
+<link href="../bootstrap/dist/css/bootstrap_verdecito.min.css" rel="stylesheet" media="screen">
+<style type="text/css">
+	#main-menu {
+		position:relative;
+		z-index:0;
+		width:24em;
+	}
+	#main-menu ul {
+		width:24em; /* fixed width only please - you can use the "subMenusMinWidth"/"subMenusMaxWidth" script options to override this if you like */
+	}
+	h1 small, .h1 small, h2 small, .h2 small, h3 small, .h3 small, h1 .small, .h1 .small, h2 .small, .h2 .small, h3 .small, .h3 .small {
+    font-size: 100%;
+}
+@media (min-width: 1200px){
+	.container {
+		 width: 90%;
+		}}
+</style>
+
+<script type="text/javascript" src="https://code.jquery.com/jquery-3.7.0.js"></script>
+<script type="text/javascript" src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script><script src="../bootstrap/dist/js/bootstrap.min.js"></script><link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css" />
+<link rel="stylesheet" href="https://cdn.datatables.net/2.0.8/css/dataTables.dataTables.css" />
+<!--  -->
+<script src="https://cdn.datatables.net/2.0.8/js/dataTables.js"></script>
+<script src="https://cdn.datatables.net/buttons/3.0.2/js/dataTables.buttons.js"></script>
+<script src="https://cdn.datatables.net/buttons/3.0.2/js/buttons.dataTables.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
+<script src="https://cdn.datatables.net/buttons/3.0.2/js/buttons.html5.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/3.0.2/js/buttons.print.min.js"></script>
+
+<style>
+	.pagination-container {
+		display: flex;
+		justify-content: space-between;
+		margin-top: 16px;
+	}
+</style>
+
+<div class="col-md-12" id="container">
+	<img src="./constancia/encabezado_no_constancia.png" style="display: none" id="encabezado-contancia" />
+	<p>&nbsp;</p>
+	<p style="font-size:18px">Utilice las opciones de b&uacute;squeda para localizar un Procedimiento de
+		Contrataci&oacute;n</p>
+	<hr>
+	<form name="form" method="post" action="">
+		<div class="col-md-2">
+			<label>Procedimiento de Contrataci&oacute;n****</label>
+			<select name="tipo_licitacion" id="tipo_licitacion" class="form-control">
+				<option value="">Seleccionï¿½</option>
+				<option value = 1>Licitación Privada</option><option value = 2>Licitación Pública</option><option value = 3>Solicitud de Cotización</option><option value = 4>Contratación Directa</option>			</select>
+		</div>
+		<div class="col-md-2">
+			<label>Aï¿½o</label>
+			<select name="anio" id="anio" class="form-control">
+				<option value="">Seleccionï¿½</option>
+				<option  value = 2025>2025</option><option  value = 2024>2024</option><option  value = 2023>2023</option><option  value = 2022>2022</option><option  value = 2021>2021</option><option  value = 2020>2020</option><option  value = 2019>2019</option><option  value = 2018>2018</option><option  value = 2017>2017</option><option  value = 2016>2016</option><option  value = 2015>2015</option><option  value = 2014>2014</option><option  value = 2013>2013</option><option  value = 2012>2012</option><option  value = 2011>2011</option><option  value = 2010>2010</option><option  value = 2009>2009</option><option  value = 2008>2008</option><option  value = 2007>2007</option><option  value = 2006>2006</option><option  value = 2005>2005</option><option  value = 2004>2004</option><option  value = 0>0</option>			</select>
+
+			<!-- <input name="anio" type="text" id="anio" value="" size="4" maxlength="4" class="form-control" placeholder="Ingrese AÃ¯Â¿Â½o" data-bv-stringlength="true" data-bv-stringlength-min="2" data-bv-stringlength-max="4" data-bv-stringlength-message="El AÃ¯Â¿Â½o debe tener como m&iacute;nimo 3 caracteres y 4 de m&aacute;ximo."/> -->
+		</div>
+		<div class="col-md-2">
+			<label>Estado</label>
+			<select name="estado" id="estado" class="form-control">
+				<option value="">Seleccionï¿½</option>
+				<option SELECTED value = 1>Próximas Aperturas</option><option value = 2>En proceso de evaluación</option><option value = 3>Realizada</option><option value = 4>Fracasada</option>			</select>
+		</div>
+		<div class="col-md-2">
+			<label>Palabra</label>
+						<input name="palabra" type="text" id="palabra" value="" size="20" class="form-control"
+				placeholder="Ingresï¿½ Palabras" />
+		</div>
+		<div class="col-md-2">
+			<label>ORGANISMO</label>
+			<select name="cmb_organismo" id="cmb_organismo" class="form-control">
+				<option value="">Seleccionï¿½</option>
+				<option value = 1>Unidad Central de Contrataciones</option><option value = 3>Ministerio de Desarrollo Social</option><option value = 4>Consejo General de Educación</option><option value = 5>Administradora Tributaria de Entre Ríos</option><option value = 6>UADER</option><option value = 7>Oficina de Compras y Asesoramiento - Poder Judicial de Entre Ríos</option><option value = 8>Ministerio de Salud</option><option value = 9>Dirección Provincial de Vialidad</option>			</select>
+		</div>
+		<div class="col-md-1" style="display: flex; justify-content: end; align-items: flex-end;">
+			<button type="submit" name="buscar" id="buscar" class="btn btn-success" style="margin-top: 25px;">Buscar</button>
+		</div>
+		<div class="col-md-1" style="display: flex; justify-content: end; align-items: flex-end;">
+			<button name="resetear" id="resetear" class="btn btn-success" style="margin-top: 25px;">Limpiar</button>
+		</div>
+	</form>
+	<p>&nbsp;</p>
+	<hr>
+	</hr>
+	<div align="center">
+					<div class="row">
+				<div class="col-md-3 col-lg-3"></div>
+				<div class="col-md-6 col-lg-6">
+					<div class="alert alert-dark" role="alert" style="background-color:#ebedef">
+						No hay informaci&oacute;n con ese criterio. Intente con otra b&uacute;squeda....
+					</div>
+				</div>
+				<div class="col-md-3 col-lg-3"></div>
+			</div>
+			</div>
+</div>
+
+<script>
+	document.getElementById("resetear").addEventListener("click", (e) => {
+		e.preventDefault()
+
+		document.getElementById("tipo_licitacion").value = ""
+		document.getElementById("anio").value = "";
+		document.getElementById("estado").value = ""
+		document.getElementById("palabra").value = ""
+		document.getElementById("cmb_organismo").value = ""
+	})
+
+	function enviarTamanio(height) {
+		window.parent.postMessage(
+			{ height: height + 50 },
+			"*"
+		);
+	};
+
+	function getBase64(selector) {
+		let c = document.createElement('canvas');
+		let img = document.querySelector(selector);
+		c.height = img.naturalHeight * 0.8;
+		c.width = img.naturalWidth * 0.8;
+		let ctx = c.getContext('2d');
+
+		ctx.drawImage(img, 0, 0, c.width, c.height);
+		return c.toDataURL();
+	}
+
+	$(document).ready(function () {
+		let primeraCarga = Boolean(``);
+
+		window.addEventListener('DOMContentLoaded', () => {
+			enviarTamanio(document.getElementById("container").scrollHeight)
+		})
+
+		const table = $('#tabla-resultados').DataTable({
+			"dom": "Blrt<'pagination-container'ip>",
+			"paging": 'false',
+			"ordering": 'false',
+			"order": [],
+			"pageLength": primeraCarga ? 0 : 10,
+			"scrollX": /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent),
+			scrollCollapse: true,
+			columnDefs: [{
+				targets: "_all",
+				sortable: false
+			}],
+			layout: {
+				topStart: {
+					buttons: ['pdf']
+				}
+			},
+			buttons: [{
+				text: "PDF",
+				extend: 'pdfHtml5',
+				title: 'Unidad Central de Contrataciones',
+				messageTop: 'Procedimientos de Contrataciï¿½n: Próximas Aperturas',
+				className: "pdf-button",
+				customize: function (obj) {
+					const [subTitulo, busqueda] = obj.content[1].text.split(":")
+
+					obj.content.splice(0, 0, { image: getBase64('#encabezado-contancia') })
+
+					obj.content[1] = {
+						text: `Fecha de consulta: ${new Date().toLocaleString("es-AR", {
+							year: "numeric",
+							month: "2-digit",
+							day: "2-digit"
+						})}`,
+						margin: [0, 20, 0, 10]
+					}
+					obj.content[2].text = [`${subTitulo}: `, { text: busqueda, bold: true }]
+
+					obj.content[3] = { ...obj.content[3], fontSize: 10 }
+
+
+				},
+				exportOptions: {
+					columns: [0, 1, 2, 3, 4]
+				}
+			}],
+			language: {
+				"info": "Total _TOTAL_ registros",
+				"infoEmpty": "",
+				"lengthMenu": '',
+				"zeroRecords": "Sin resultados encontrados",
+
+				"paginate": {
+					"sInfo": 'false', "sortable": '',
+					"first": "Primero",
+					"last": "Ultimo",
+					"next": ">>",
+					"previous": "<<",
+				}
+			},
+			initComplete: function () {
+				let pdfButtonTable = $('.pdf-button')[0];
+				//En vez de usar el boton de dataTable utilizo uno custom
+				$('#imprimir-resultado').on("click", () => pdfButtonTable.click())
+				pdfButtonTable.style.display = "none"
+			},
+			drawCallback: function (settings) {
+				let pagination = $(".pagination-container")
+				if (0 <= 10 || primeraCarga)
+					pagination.hide();
+				else pagination.show();
+			}
+		});
+
+		/* table.buttons().container()
+			.appendTo('#imprimir-resultado'); */
+
+		new ResizeObserver(entries => {
+			for (let entry of entries) {
+				enviarTamanio(entry.contentRect.height)
+			}
+		}).observe(document.querySelector("#container"))
+	});
+</script>

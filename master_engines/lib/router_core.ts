@@ -250,7 +250,7 @@ export async function runEngine(engine: EngineDefinition, rawInput: unknown, dep
         }
 
         // 6. STATE - after every source, only for processed records.
-        state = markProcessed(state, connector.id, processed, clock().toISOString());
+        state = markProcessed(state, connector.id, processed, clock().toISOString(), connector.maxSeenIds);
         await sinks.store.save(state);
     }
 

@@ -53,12 +53,18 @@
  *                736 <INDIVIDUAL> records, IMO sentences still present as
  *                free text ("International Maritime Organization (IMO) Number:
  *                1790183.", "IMO number: 5571322").
+ *    End to end: the connector, driven through lib/http.ts createHttpClient (Node's
+ *    global fetch, honest User-Agent, redirects followed) against both live hosts,
+ *    returned vessel records in ~11 s (both downloads + both parses).
  *    Two structural observations the port preserves rather than "fixes":
  *      - 5 of 1,559 vessels have a "Vessel Registration Identification" idNumber
- *        that is a bare number without the "IMO " prefix (e.g. uid 17104
- *        "8606173"). The legacy parser only accepts "IMO <7 digits>" as an IMO and
- *        files the bare number under otherIds; that behaviour is kept so the
- *        legacy field semantics do not shift under consumers.
+ *        that is not "IMO <7 digits>": two bare 7-digit numbers (uid 17104
+ *        "8606173", uid 33809 "9894387"), one 5-digit number (uid 23424 "15411")
+ *        and two national-registry strings (uid 37479 "RS 150443", uid 37482
+ *        "RS 130280"). The legacy parser only accepts "IMO <7 digits>" as an IMO
+ *        and files everything else under otherIds; that behaviour is kept (a bare
+ *        7-digit number is not provably an IMO) so the legacy field semantics do
+ *        not shift under consumers.
  *      - remarks may carry several "Linked To:" clauses (uid 15055 has two); the
  *        legacy `linkedTo` field keeps the first only. The watch text below reads
  *        all of them.
@@ -189,7 +195,7 @@ export function extractAllLinkedTo(remarks: string | null): string[] {
  * Record_Count).
  *
  * Uses cheerio in xmlMode - the document's default xmlns is unprefixed, so plain
- * tag-name selectors (`sdnEntry`, `uid`, ...) match.
+ * tag-name selectors (`sdnEntry`, `uid` and so on) match.
  */
 export function parseSdnXml(xml: string): ParsedSdnFeed {
     const $ = cheerio.load(xml, { xmlMode: true });

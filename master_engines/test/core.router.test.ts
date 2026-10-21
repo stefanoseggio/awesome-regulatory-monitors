@@ -228,6 +228,24 @@ describe('delta modes and state', () => {
     });
 });
 
+describe('per-connector delta memory size', () => {
+    it('retains maxSeenIds ids for a connector that declares it, instead of the global default', async () => {
+        const many = Array.from({ length: 12 }, (_, i) => rec(String(i), 'a'));
+        const store = new InMemoryDeltaStore();
+        const h = harness({ store });
+        await runEngine(engineOf(stub('big', many, { maxSeenIds: 8 })), { sources: ['big'] }, { sinks: h.sinks, ctx, clock });
+        expect(store.peek().sources.big?.seenIds).toHaveLength(8);
+    });
+
+    it('keeps everything under the default when maxSeenIds is not declared', async () => {
+        const many = Array.from({ length: 12 }, (_, i) => rec(String(i), 'a'));
+        const store = new InMemoryDeltaStore();
+        const h = harness({ store });
+        await runEngine(engineOf(stub('plain', many)), { sources: ['plain'] }, { sinks: h.sinks, ctx, clock });
+        expect(store.peek().sources.plain?.seenIds).toHaveLength(12);
+    });
+});
+
 describe('failure isolation', () => {
     it('one failing source does not discard the others, and its state is untouched', async () => {
         const engine = engineOf(

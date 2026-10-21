@@ -34,6 +34,14 @@ export interface HttpRequestInit {
     headers?: Record<string, string>;
     body?: string;
     timeoutMs?: number;
+    /** Hard cap on the response body in bytes; exceeding it throws `HttpBodyTooLargeError` and aborts the read. */
+    maxBytes?: number;
+    /**
+     * Opt-in manual redirect handling. Without it the platform default (follow) applies.
+     * With it, every hop is resolved here and `validate` must approve the target before it is requested -
+     * the only place a caller-supplied hostname can be re-checked after a 3xx.
+     */
+    redirects?: { max: number; validate?: (target: URL) => boolean };
 }
 
 /** Minimal HTTP port. Connectors never call `fetch` directly so tests can inject fixtures. */
@@ -78,6 +86,12 @@ export interface Connector<O = Record<string, unknown>> {
     readonly status: ConnectorStatus;
     /** Required when `status === 'held'`: why the source must not run. */
     readonly heldReason?: string;
+    /**
+     * How many record ids of this source the delta memory retains (newest first). Defaults to 5000.
+     * Raise it for snapshot sources larger than the default, otherwise the oldest ids are evicted and
+     * re-emit as `first_seen` on the next run.
+     */
+    readonly maxSeenIds?: number;
     /** Zod schema for this source's slice of `input.sourceOptions[id]`. */
     readonly optionsSchema: z.ZodType<O, z.ZodTypeDef, unknown>;
     /** Option keys that must be present (BYOK credentials etc.); checked in preflight, before any network call. */

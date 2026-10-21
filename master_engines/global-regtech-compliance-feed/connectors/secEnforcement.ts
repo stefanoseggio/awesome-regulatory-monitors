@@ -261,7 +261,8 @@ export function splitRespondents(title: string): string[] {
     const seen = new Set<string>();
     const names: string[] = [];
     for (const part of parts) {
-        const name = restore(part.replace(/^and\s+/iu, '').trim());
+        // Trim BEFORE stripping the conjunction: after a ';' split the fragment is " and Edward ...".
+        const name = restore(part.trim().replace(/^and\s+/iu, '').trim());
         const key = name.toLowerCase();
         if (name === '' || seen.has(key)) continue;
         seen.add(key);

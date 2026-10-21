@@ -22,26 +22,31 @@
  *   StatementSummaries2026.csv -> HTTP/2 200 application/octet-stream, 16,068,687 bytes,
  *     last-modified 2026-10-21; UTF-8 BOM; 75 columns; 11,324 data rows; 0 rows with an
  *     inconsistent column count; every line ends CRLF and 11,069 rows contain embedded
- *     CRLF inside quoted fields (OrganisationSectors, Policies, Address, ...); 159 rows
+ *     CRLF inside quoted fields (OrganisationSectors, Policies, Address and others); 159 rows
  *     have a comma inside OrganisationName and 9 have literal quote characters in it.
  *   2020 (8,479 rows), 2024 (13,048), 2027 (120): identical 75-column header, same
- *     encoding. Year 2028 -> 404 (an XML <Error> body), i.e. a not-yet-published year.
- *   No robots.txt is served on the downloads host (HTTP 400 OutOfRangeInput).
+ *     encoding. Year 2028 -> HTTP 404 (XML <Error> BlobNotFound body), i.e. a not-yet-published year.
+ *   The downloads host serves no robots.txt (a request for it returns an HTTP 400 OutOfRangeInput XML error).
  *   LastUpdated is DD/MM/YYYY (date only, never blank/odd in any of the four files);
  *   PDFDate is ISO-8601 datetime. The file is NOT sorted by either.
- *   The five turnover brackets and the two sector types match the option enums below.
+ *   In the 2026 file the five turnover brackets and the two sector types are exactly the option enums below.
+ * End to end: the connector, driven through lib/http.ts createHttpClient (Node's global fetch,
+ * honest User-Agent) against the live 2026 file, loaded 11,324 rows and returned the newest
+ * updated statements. Run over local copies of the 2020, 2024, 2026 and 2027 files together, it
+ * produced 32,971 records with 32,971 distinct ids (= 11,324 + 8,479 + 13,048 + 120 rows).
  * Findings that changed the port (kept explicit because they are load-bearing):
  *   1. The legacy record id `<StatementSummaryURL>::<OrganisationName>` COLLIDES on
- *      real data: 5 rows of 2026, 7 of 2020 and 8 of 2024 share it - a UK branch and a
- *      foreign registration of the same legal name (e.g. ASTOMOS ENERGY CORPORATION,
- *      CompanyNumber BR010206 and FC028623) under one group statement. The router
+ *      real data: 5 rows of 2026, 7 of 2020 and 8 of 2024 share it - two registrations of
+ *      the same legal name with different company numbers under one group statement (e.g.
+ *      ASTOMOS ENERGY CORPORATION, CompanyNumber BR010206 and FC028623). The router
  *      de-duplicates by recordId, so one of each pair would silently vanish. The
  *      CompanyNumber is the distinguishing column; appending it removes every collision
  *      in all four files (verified), and a residual collision gets an ordinal suffix.
  *   2. csv-parse is not a dependency of the master engines, so a small RFC 4180 parser
  *      is implemented here ({@link parseCsv}) with the legacy options' semantics
  *      (columns, skip_empty_lines, bom, relax_quotes). It was cross-checked against
- *      Python's csv module on the full live 2026 file (row count, every cell).
+ *      Python's csv module on the complete live 2020, 2024, 2026 and 2027 files
+ *      (identical SHA-256 over every record and cell).
  * ============================================================================
  *
  * CAP-BEFORE-DELTA: the router applies `maxItemsPerSource` to what a connector returns,
@@ -288,13 +293,24 @@ function toNullableString(raw: string | undefined): string | null {
 }
 
 /**
+ * Removes quote characters that WRAP a whole name (a real 2026 row is `"Edelweiss Air Ltd."`, quotes
+ * included, as data). Only a name that both starts and ends with a quote and has no other quote inside
+ * is unwrapped. The legacy `.replace(/^"+|"+$/g, '')` stripped edge quotes unconditionally, which
+ * mangled real registered names that merely START with a quote - `"K" LINE (EUROPE) LIMITED` became
+ * `K" LINE (EUROPE) LIMITED`, a string that is not the registered name (8 of the 9 quoted names in the
+ * live 2026 file are "K" LINE companies).
+ */
+export function stripWrappingQuotes(name: string): string {
+    const wrapped = name.match(/^"+([^"]*)"+$/);
+    return wrapped?.[1] !== undefined ? wrapped[1].trim() : name;
+}
+
+/**
  * `OrganisationName` is not always a name - confirmed live (10 of 11,324 rows in 2026), where it
- * holds a bare numeric reference while the real name sits in `ParentName`. Also strips stray
- * literal quote characters some real rows carry as data (e.g. a real name parses to
- * `"Edelweiss Air Ltd."`, quotes included).
+ * holds a bare numeric reference while the real name sits in `ParentName`.
  */
 function resolveDisplayName(organisationName: string | undefined, parentName: string | undefined): string | null {
-    const cleaned = (organisationName ?? '').trim().replace(/^"+|"+$/g, '');
+    const cleaned = stripWrappingQuotes((organisationName ?? '').trim());
     const isBareNumeric = /^\d+$/.test(cleaned);
     if (cleaned.length > 0 && !isBareNumeric) return cleaned;
     return toNullableString(parentName);
@@ -492,7 +508,7 @@ export function sortNewestFirst(statements: readonly NormalizedStatement[]): Nor
         .map((entry) => entry.statement);
 }
 
-/** Gives the 2nd, 3rd... statement with an identical record id a `#2`, `#3` suffix in load order, so none is dropped by the router. */
+/** Gives the 2nd and later statements with an identical record id a `#2`, `#3` suffix in load order, so none is dropped by the router. */
 export function disambiguateRecordIds(statements: readonly NormalizedStatement[]): NormalizedStatement[] {
     const seen = new Map<string, number>();
     return statements.map((statement) => {
@@ -506,16 +522,31 @@ export function disambiguateRecordIds(statements: readonly NormalizedStatement[]
 // Record construction
 // ---------------------------------------------------------------------------
 
+/** Double-quote characters (straight and typographic) that appear inside registered names. */
+const QUOTE_CHARACTERS = /["\u201C\u201D\u201E\u201F]/g;
+
+/**
+ * A name as a compliance analyst would type it into a watchlist: without the quote characters some
+ * registered names carry (`"K" LINE (EUROPE) LIMITED` -> `K LINE (EUROPE) LIMITED`). The substring
+ * guard normalises case, Unicode form and whitespace but not punctuation, so without this alias the
+ * watchlist entry "K Line" could not match 8 real 2026 rows.
+ */
+export function withoutQuoteCharacters(name: string): string {
+    return name.replace(QUOTE_CHARACTERS, '').replace(/\s+/g, ' ').trim();
+}
+
 export function toSourceRecord(statement: NormalizedStatement): SourceRecord {
     const contentFingerprint = computeContentFingerprint(statement);
     const missing = missingDisclosures(statement);
     const names = [statement.organisationName, statement.parentName].filter((n): n is string => n !== null);
+    const aliases = names.map(withoutQuoteCharacters).filter((alias) => alias.length > 0 && !names.includes(alias));
     return {
         recordId: statement.recordId,
         // Derived from the hash of every normalised field except the key, so it changes iff a consumer-visible field did.
         fingerprint: fingerprintOf([contentFingerprint]),
-        // The submitting organisation and, for group submissions, its parent.
-        watchText: [...new Set(names)].join(' | ') || undefined,
+        // The submitting organisation and, for group submissions, its parent - as published, plus the quote-free
+        // spelling when the published name contains quote characters.
+        watchText: [...new Set([...names, ...aliases])].join(' | ') || undefined,
         payload: {
             // The legacy dataset's own field names (minus event_id / event_type / is_new / scraped_at / record_id,
             // which depend on delta state or are owned by the router).
@@ -567,6 +598,9 @@ export const ukModernSlaveryConnector: Connector<UkModernSlaveryOptions> = {
     description:
         'UK Modern Slavery Statement Registry: the registry\'s official per-year bulk CSV (Open Government Licence v3.0), one record per submitting organisation per statement, newest-updated first. Open download; no credentials.',
     status: 'active',
+    // One registry year alone is 11k-13k rows, above the engine-wide default memory of 5000 ids; below that, ids would be
+    // evicted and re-emitted as first_seen on every run.
+    maxSeenIds: 40_000,
     optionsSchema: ukModernSlaveryOptionsSchema,
 
     async fetch(ctx: ConnectorContext, options: UkModernSlaveryOptions, run: RunParams): Promise<SourceRecord[]> {
