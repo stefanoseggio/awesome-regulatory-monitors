@@ -74,7 +74,8 @@ flowchart LR
   D -->|deltaMode| E[Emit row + bill its own event in one call]
   E --> W[Watchlist match via _guards]
   W -->|valid keyword AND priced AND under caps| H[Bill watchlist-hit]
-  E --> S[Checkpoint delta memory every 25 rows and in finally]
+  E --> J[Delivery journal after every row, then watchlist-hit]
+  E --> S[Full checkpoint every 25 rows and in finally, then clear the journal]
 ```
 
 ### 2.1 Contract
@@ -97,7 +98,7 @@ Memory is one key-value record per source, `state.<namespace>.<source>`, in the 
 
 - **Sizing.** Memory is never smaller than `maxItemsPerSource`, never shrinks below what it already holds, and is capped at 50,000 ids. A connector that declares `maxSeenIds` (UK registry 40,000; ClinicalTrials, ACRA, UAE 20,000) is authoritative.
 - **Namespaces.** `stateNamespace` input, else one per Task (`task-<id>`), else `default`. Two Tasks with different watchlists no longer consume each other's "new" records.
-- **Delivery semantics.** At-least-once. State is checkpointed every 25 emitted rows and in a `finally`, so after an exception the rows already pushed and billed are remembered. After a hard kill (timeout, OOM, migration) at most 25 rows can be delivered again. Exact guarantees in section 2.4.
+- **Delivery semantics.** At-least-once. Memory is checkpointed in full every 25 emitted rows and in a `finally`, and a small **delivery journal** (`journal.<namespace>.<source>`, a few hundred bytes) is rewritten after every row that was pushed and billed. An exception or platform error therefore repeats nothing, and a hard kill (timeout, OOM, migration), which cannot run a `finally`, repeats at most the one row in flight. Before the journal a hard kill repeated, and re-billed, up to 25 rows (section 8.2, RA-7). Exact guarantees in section 2.4.
 
 ### 2.3 Failure semantics
 
@@ -112,12 +113,17 @@ What the installed SDK (`apify` 3.7.2) actually does, read from `charging.js` an
 
 | Property | Behaviour | Consequence here |
 |---|---|---|
-| Row and charge | `pushData(row, event)` pushes the row first, then calls the platform's charge API. **Ordered, not transactional.** | A crash between the two leaves a row delivered and unbilled. A row is never billed without having been pushed. The router never calls `Actor.charge` for a row it pushed (that would double-bill). |
+| Row and charge | `pushData(row, event)` pushes the row first, then calls the platform's charge API. **Ordered, not transactional.** | A crash between the two leaves a row delivered and unbilled (the next run delivers it again and bills it once). A row is never billed without having been pushed. The router never calls `Actor.charge` for a row it pushed (that would double-bill). |
 | Free events | An event with no price is free but is reported as charged. | `emit` pushes plain (no event) when the event has no positive price, so there is no per-row SDK warning; the run summary lists it under `pricing.unpricedEvents`. `hasPositivePrice` accepts only an own, finite, positive price. |
 | Budget limit | The SDK trims a batch to the remaining budget and, on purpose, pushes and bills **one** extra row at the limit. | That row counts as delivered; `eventChargeLimitReached` stops the router; no `watchlist-hit` is billed after it. |
-| Delta memory | Checkpointed every 25 emitted rows and in a `finally`. | An exception or a platform error loses nothing and duplicates nothing. A hard kill (exit 137, no `finally`) re-delivers only the rows after the last checkpoint: 15 of 40 in the test, never more than 25. |
+| Delta memory | Full checkpoint every 25 emitted rows and in a `finally`; **delivery journal** rewritten after every pushed-and-billed row and cleared after each checkpoint; an interrupted run's journal is folded into the memory before the next run classifies anything. | An exception or a platform error repeats nothing. A hard kill (exit 137, no `finally`) repeats **at most the single row in flight**: with the real SDK, kill after a push repeats and re-bills 1 row of 60, kill after the journal write repeats none, and kills at 8 different positions never repeated more than 1 row. Without the journal the same kill repeated and re-billed 15 of 60 rows (75 charges for 60 rows) and could repeat 25. The journal fails closed: if it cannot be read or written the run stops before pushing more billable rows. |
 | Isolation | One record per source and namespace. | Overlapping runs and separate Tasks cannot consume each other's "new" rows. |
+| Hit ordering | The `watchlist-hit` charge is made **after** the journal write. | A kill between the two leaks one unbilled hit (at most $0.15) instead of re-billing a whole row. |
 | Ghost billing | `findKeywordMatch` cannot match on an empty list; `WatchlistHitBiller` needs a proven match **and** a priced event **and** the caps. | Empty, blank and one-letter watchlists produce zero hits and zero `watchlist-hit` charges (tested end to end against the SDK). |
+
+**Residual, cannot be removed without a transaction across the dataset, the charge API and the key-value store (the platform offers none):** one row in flight at the instant of a hard kill can be delivered and billed twice, and a row whose charge call fails after its push is delivered unbilled and delivered again. The alternative, writing the journal before the push, trades that for a possible lost row (never delivered, never billed); the implemented choice keeps the compliance feeds lossless. Dollar exposure per hard kill is tabulated in `docs/audits/` (one row plus its hit).
+
+Per-row cost of the journal: one small key-value write per delivered row (at most 25 entries, a few hundred bytes), independent of the size of the delta memory. Its latency on the platform has not been measured.
 
 Local-mode quirk worth knowing when reading test output: outside the platform the SDK computes how many rows the budget still allows with a price of $1 per event, while the amount it accumulates uses the configured price. The budget scenario therefore prices its event at exactly $1, where both agree.
 
@@ -417,6 +423,7 @@ A second pass over the whole of `master_engines/`, run sequentially by one revie
 | RA-4 | medium | A run where every source failed ended `SUCCEEDED` with an empty dataset, invisible to schedulers and alerting | **Fixed.** `allSourcesFailed` ends the run `FAILED`; partial failure stays isolated |
 | RA-5 | low | `redactUrl` fallback used regular expressions on a string `new URL()` could not parse | **Fixed.** Linear `redactQueryString`, input capped at 4,096 |
 | RA-6 | low | Billing and state atomicity had been argued from the SDK source only | **Verified** with the real SDK (section 2.4) |
+| RA-7 | high | After a hard kill the next run delivered **and billed** every row since the last 25-row checkpoint a second time (real SDK: 75 charges for 60 distinct rows after a kill at row 40; up to 25 repeated rows per kill, so up to 25 x (dearest event + a hit) per kill). The first version of this document described that exposure as re-delivery only and did not say the rows were re-billed | **Fixed.** Per-row delivery journal, recovered before classification, hit charged after the journal write, fail closed. A kill now repeats at most the row in flight (section 2.4). Regression tests: 3 real-SDK scenarios, 8 router, 17 state and adapter tests |
 
 ---
 
@@ -428,7 +435,7 @@ A second pass over the whole of `master_engines/`, run sequentially by one revie
 - **Coverage windows.** ADGM (about 18,700 entities) and DIFC are snapshots capped at 10,000 per run; ACRA reads newest registrations first; unfiltered Orange Book walks are newest-approvals-first.
 - **Per-source mismatch.** `ae_registers` is active but currently yields nothing; BYOK sources (`uspto_ptab`, `epo_opposition`, the optional openFDA key) were not exercised with a real key.
 - **Body-size caps are per request.** The patents connectors and `ai_crawler_signals` set `maxBytes`; the regtech and tender connectors read fixed, public, open-data hosts without one (error bodies are always a 1 KiB preview). A compromised upstream could still return an oversized success body to those; the 1-2 GB run memory is the backstop.
-- **Delivery is at-least-once.** A crash between a push and its charge delivers a row unbilled; a hard kill re-delivers up to 25 rows. Consumers should de-duplicate on `record_id`.
+- **Delivery is at-least-once.** A crash between a push and its charge delivers a row unbilled; a hard kill repeats (and re-bills) at most the one row in flight. Consumers should de-duplicate on `record_id`.
 - **Event-loop cost.** Hostile inputs were measured for every flagged regex (section 8.2); a 512 KB `robots.txt` is parsed without per-rule regex compilation. The 6 bounded patterns are linear or polynomial on inputs capped at 41 to 1,000 characters.
 - **DNS rebinding** cannot be closed in-process.
 
@@ -456,6 +463,58 @@ A second pass over the whole of `master_engines/`, run sequentially by one revie
 4. **Smoke test** one source per engine on the platform, then check `RUN_SUMMARY`: `pricing.unpricedEvents` must be empty, and `watchlist.hitsUnpriced` zero.
 5. **Monitor** `sources[].error`, `sources[].warnings` and `stoppedOnChargeLimit` on every scheduled run.
 6. **Retire legacy Actors** only after customers are migrated, and not before the new pricing is in force.
+
+---
+
+## 12. Market traction diagnosis and consolidation
+
+### 12.1 The October 2026 telemetry: what can and cannot be verified
+
+The engagement brief states: 23 of 28 Actors (82.2 percent) had zero traction and zero revenue in October 2026, the portfolio ran a negative net operating margin of -$2.25 per month "before factoring", superficial metadata changes did not help because of a "Zero-Query Trap" (nobody searches for the niche the Actor serves), and the legacy fleet was split by "geo-legal hyper-fragmentation".
+
+| Statement | Status | Evidence |
+|---|---|---|
+| 23 of 28 Actors had zero traction and zero revenue | **UNVERIFIED** | The figures appear in no file of this repository or of the 37 cloned repositories (searched every non-lockfile for the figures and the terms; no hit). No Apify token was available, so Store and Console analytics could not be read. |
+| "82.2 percent" | **Arithmetic does not match** | 23 / 28 = 82.14 percent, which rounds to **82.1**. Either the percentage or the 23-of-28 count differs from what was measured. |
+| "28 Actors" | **Not reproducible from the corpus** | The registry absorbs 22 legacy repositories; 6 more are unassigned (section 1.2). A 28 count would have to include Store Actors that are not in the corpus. |
+| Net operating margin of -$2.25 per month "before factoring" | **UNVERIFIED, incomplete** | No revenue, plan fee or compute figure is in the corpus, and "before factoring" does not say which items. The number cannot be reproduced or tested. |
+| "Zero-Query Trap" | **Hypothesis, plausible, untested** | Needs Store search impressions and listing views per Actor, which only the account owner can pull. Section 12.3 lists the falsifiable test. |
+| "Geo-legal hyper-fragmentation" | **Structurally visible in the corpus** | 7 provincial Argentine portals were 7 separate Actors; 4 of them cannot run (section 4.2). Counts in 12.2. |
+
+Nothing in sections 1 to 11 depends on these figures. They motivate the consolidation; they are not an input to the code, the pricing or the tests.
+
+### 12.2 What the corpus does verify: the consolidation
+
+Measured from the cloned repositories and this package (lines of TypeScript/JavaScript/Python excluding `node_modules`, fixtures and lockfiles; "test" means a path containing `test`):
+
+| Metric | Legacy fleet | Master engines |
+|---|---|---|
+| Repositories / Actors | 22 repositories absorbed (one of them, `actor-20`, feeds two engines) | 3 Actors in one package |
+| Per-repository manifest files (`package.json`, Dockerfile, `actor.json`, input schema, README) | 90 | 10 (one shared `package.json` and 3 x 3 generated Actor files) |
+| Source lines, repositories with at least one active connector | 18,093 across 17 repositories | 15,302 (shared runtime 2,378; engines 12,924) |
+| Source lines of repositories that are held-only (not carried over) | 5,958 across 5 repositories (`australia-grantconnect`, `cordoba`, `mendoza`, `pba`, `salta`) | 0 (Cordoba's parser is kept as one dormant file inside the 12,924) |
+| Test lines | 11,736 in the 17 active repositories (5 of them are README-only stubs with no tests) | see section 7 |
+| Connectors built from a README-only stub (51 to 68 lines each: SEC, ACRA, AI crawler, ClinicalTrials, Lombardia) | 5 | 5 implemented from live-verified endpoints |
+
+The source count fell 15 percent while five sources that were stubs became real connectors and the guards, delta memory, billing guard and credential scrubbing were added once instead of per repository. The comparison is rough: the legacy side includes code for sub-sources that were not ported (the held maritime registries in `actor-19`, ADB and IDB in `actor-20`).
+
+Consolidating Store SEO and reviews is a **design intent, not a measured result**: nothing is deployed, the three Store listing texts (README, categories, screenshots) are not written, and the Actor ids are not reserved.
+
+### 12.3 The Zero-Query Trap: a test, not a claim
+
+The three engine names are descriptive phrases ("regtech compliance feed", "LatAm global tender intelligence", "corporate patent intelligence"). Whether people search for them is unknown. To test it before committing more engineering:
+
+1. For each of the 28 Actors the brief counts, export 90 days of Store search impressions, listing views, run starts and revenue (the account owner can read them through the Console or the API).
+2. Compute, for the 5 Actors that had traction, what they share (a named regulator, a named jurisdiction, a named list) against the 23 that did not.
+3. Publish one engine, measure 14 days of impressions and run starts, and compare it with the average of the 23.
+
+If the 23 differ from the 5 mainly by a named, searched entity, the lesson is to name listings after what people search for ("OFAC sanctions monitor") and let the engine behind them stay generic. That is a listing decision; it needs no change to the runtime.
+
+### 12.4 Unit economics of a run (formulas, with assumptions marked)
+
+For an engine with start price s ($ per GB), memory G (GB), R delivered rows at event price p, and the marketplace share m (the generated payloads carry `apifyMarginPercentage: 0.2`, so the Actor owner keeps 0.8): net revenue per run = 0.8 x (s x G + R x p). Compute cost = G x t x c, with t the run time in hours and c the plan's price per GB-hour. **c is an assumption that depends on the account's plan and must be replaced with the real rate.** The run time at which a run stops paying for itself is t* = 0.8 x (s x G + R x p) / (G x c).
+
+For an EMPTY regtech run (s = 0.005, G = 2): net revenue is $0.008, so at an assumed c of $0.25 per GB-hour a run that lasts longer than about 58 seconds loses money. Section 6.6 already flags the start price as 100 times the default; this is its cost side. The full table is in `docs/audits/`.
 
 ---
 
