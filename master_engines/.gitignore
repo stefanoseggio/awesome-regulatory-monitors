@@ -2,3 +2,7 @@ node_modules/
 dist/
 *.tsbuildinfo
 stage/
+# Apify local run storage (datasets, key-value stores, request queues)
+storage/
+apify_storage/
+crawlee_storage/
