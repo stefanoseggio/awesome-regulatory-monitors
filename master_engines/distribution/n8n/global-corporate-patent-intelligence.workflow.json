@@ -1,0 +1,331 @@
+{
+  "name": "Global Corporate & Patent Intelligence - watchlist matches",
+  "nodes": [
+    {
+      "id": "10988e43-2732-5ec2-97a1-71fa0f7548c5",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 1,
+              "triggerAtHour": 6
+            }
+          ]
+        }
+      },
+      "notes": "Runs once a day at 06:00 (workflow timezone). Change the interval to taste: every run that delivers rows is billed."
+    },
+    {
+      "id": "16199b4c-4335-57aa-bdf7-fde209053c5c",
+      "name": "Build run input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// Builds the Actor input for global-corporate-patent-intelligence and cleans the watchlist exactly as the engine does.\n// Edit CONFIG only. This template carries no credential: sources that need one are refused below, and a credential\n// is never accepted inside sourceOptions (Apify only masks top-level secret input fields).\nconst CONFIG = {\n    sources: ['clinicaltrials_orange_book', 'sg_acra'],\n    deltaMode: 'onlyChanged',\n    maxItemsPerSource: 100,\n    watchlistNames: ['Acme Corp'],\n    sourceOptions: {},\n    stateNamespace: 'n8n-patents',\n};\n\n// Copied from distribution/python/src/regulatory_engines/data/engines.json; test/distribution_sync.test.ts fails when these lists drift from it.\nconst ACTIVE_SOURCES = ['uspto_ptab', 'epo_opposition', 'clinicaltrials_orange_book', 'sg_acra', 'ae_registers'];\nconst HELD_SOURCES = [];\nconst REQUIRED_OPTIONS = { uspto_ptab: ['usptoOdpApiKey'], epo_opposition: ['epoOpsConsumerKey', 'epoOpsConsumerSecret'] };\nconst CREDENTIAL_NAMES = ['epoopsconsumerkey', 'epoopsconsumersecret', 'fdaapikey', 'socrataapptoken', 'usptoodpapikey'];\nconst DELTA_MODES = ['all', 'onlyChanged', 'onlyNew'];\n\n// --- watchlist guard: a port of lib/_guards.ts, identical in the three templates ---\nconst MIN_KEYWORD_LENGTH = 2;\nconst MAX_KEYWORD_LENGTH = 200;\nconst MAX_KEYWORDS = 500;\nconst MAX_RAW_KEYWORD_UNITS = 4096;\nconst MAX_CANDIDATES = 5000;\nconst MAX_BARE_STRING_UNITS = 200000;\nconst MAX_NORMALISE_PASSES = 8;\nconst MAX_TOTAL_RAW_UNITS = 200000;\nconst WHITESPACE_CONTROLS = /[\\t\\n\\v\\f\\r\\u0085\\u2028\\u2029]/gu;\nconst INVISIBLE = /[\\u0000-\\u001f\\u007f-\\u009f\\p{Default_Ignorable_Code_Point}\\p{Bidi_Control}]/gu;\nconst WHITESPACE_RUN = /\\s+/gu;\nconst LONE_SURROGATE = /\\p{Surrogate}/u;\n// MAX_COMBINING_RUN (16) + 1 consecutive combining marks: a text with such a run is empty (NFKC reorders marks, which is quadratic in the length of a run).\nconst COMBINING_RUN_TOO_LONG = /\\p{M}{17}/u;\nconst HAS_LETTER_OR_DIGIT = /[\\p{L}\\p{N}]/u;\nconst BARE_STRING_SEPARATORS = /[\\n\\r,;]+/u;\n\nfunction codePointLength(text) {\n    return Array.from(text).length;\n}\n\nfunction cleanOnce(text) {\n    // Before normalize: reordering a long run of marks is quadratic, and no real text contains one.\n    if (COMBINING_RUN_TOO_LONG.test(text)) return '';\n    return text.normalize('NFKC').replace(WHITESPACE_CONTROLS, ' ').replace(INVISIBLE, '').replace(WHITESPACE_RUN, ' ').trim();\n}\n\n// Cleans until the text stops changing, so cleaning twice equals cleaning once (removing an invisible character can expose a sequence NFKC then composes).\n// A text that has not settled after MAX_NORMALISE_PASSES passes is hostile and becomes '', which is never accepted.\nfunction normaliseKeyword(raw) {\n    let current = raw;\n    for (let pass = 0; pass < MAX_NORMALISE_PASSES; pass += 1) {\n        const next = cleanOnce(current);\n        if (next === current) return next;\n        current = next;\n    }\n    return '';\n}\n\n// The text cut to at most max UTF-16 units, without leaving half of a surrogate pair at the end.\nfunction cutUnits(text, max) {\n    if (text.length <= max) return text;\n    const last = text.charCodeAt(max - 1);\n    return text.slice(0, last >= 0xd800 && last <= 0xdbff ? max - 1 : max);\n}\n\nfunction sanitizeKeywordList(input) {\n    try {\n        return sanitizeUnchecked(input);\n    } catch {\n        // A value that cannot be read at all disables the watchlist, never the run.\n        return { keywords: [], rejected: { not_a_string: 1 }, malformedContainer: true };\n    }\n}\n\nfunction sanitizeUnchecked(input) {\n    const result = { keywords: [], rejected: {}, malformedContainer: false };\n    const reject = (reason) => {\n        result.rejected[reason] = (result.rejected[reason] ?? 0) + 1;\n    };\n    if (input === undefined || input === null) return result;\n    let candidates;\n    let bareStringCut = false;\n    if (Array.isArray(input)) {\n        candidates = input;\n    } else if (typeof input === 'string') {\n        const window = cutUnits(input, MAX_BARE_STRING_UNITS);\n        candidates = window.split(BARE_STRING_SEPARATORS);\n        if (window.length < input.length) {\n            // The cut may have truncated the last piece (\"Pfizer Inc\" -> \"Pfizer In\"), which would be accepted as a different keyword: drop it.\n            candidates.pop();\n            bareStringCut = true;\n        }\n    } else {\n        result.malformedContainer = true;\n        return result;\n    }\n    const seen = new Set();\n    const limit = Math.min(candidates.length, MAX_CANDIDATES);\n    let inspected = 0;\n    let totalRawUnits = 0;\n    for (let index = 0; index < limit; index += 1) {\n        const candidate = candidates[index];\n        // Only entries that proceed to Unicode work cost budget: one over the raw cap is rejected in constant time below.\n        if (typeof candidate === 'string' && candidate.length <= MAX_RAW_KEYWORD_UNITS) {\n            totalRawUnits += candidate.length;\n            if (totalRawUnits > MAX_TOTAL_RAW_UNITS) break;\n        }\n        inspected += 1;\n        if (typeof candidate !== 'string') {\n            reject('not_a_string');\n            continue;\n        }\n        if (candidate.length > MAX_RAW_KEYWORD_UNITS) {\n            reject('too_long');\n            continue;\n        }\n        if (LONE_SURROGATE.test(candidate)) {\n            reject('invalid_unicode');\n            continue;\n        }\n        const cleaned = normaliseKeyword(candidate);\n        if (cleaned.length === 0) {\n            reject('empty_after_normalisation');\n            continue;\n        }\n        if (codePointLength(cleaned) < MIN_KEYWORD_LENGTH) {\n            reject('too_short');\n            continue;\n        }\n        if (codePointLength(cleaned) > MAX_KEYWORD_LENGTH) {\n            reject('too_long');\n            continue;\n        }\n        if (!HAS_LETTER_OR_DIGIT.test(cleaned)) {\n            reject('no_letter_or_digit');\n            continue;\n        }\n        const needle = cleaned.toLowerCase();\n        if (seen.has(needle)) {\n            reject('duplicate');\n            continue;\n        }\n        if (result.keywords.length >= MAX_KEYWORDS) {\n            reject('over_limit');\n            continue;\n        }\n        seen.add(needle);\n        result.keywords.push(cleaned);\n    }\n    if (candidates.length > inspected) reject('over_limit');\n    if (bareStringCut) reject('over_limit');\n    return result;\n}\n\nfunction isSupplied(value) {\n    try {\n        if (value === undefined || value === null) return false;\n        if (typeof value === 'string' || Array.isArray(value)) return value.length > 0;\n        if (typeof value === 'object') return Object.keys(value).length > 0;\n        return true;\n    } catch {\n        return true;\n    }\n}\n// --- end watchlist guard ---\n\nfunction fail(message) {\n    throw new Error(`Refused before any run started, nothing was billed: ${message}`);\n}\n\nfunction containsCredentialKey(value) {\n    if (Array.isArray(value)) return value.some(containsCredentialKey);\n    if (value !== null && typeof value === 'object') {\n        return Object.entries(value).some(([key, item]) => CREDENTIAL_NAMES.includes(key.toLowerCase()) || containsCredentialKey(item));\n    }\n    return false;\n}\n\nif (!Array.isArray(CONFIG.sources) || CONFIG.sources.length === 0 || CONFIG.sources.some((id) => typeof id !== 'string' || id.trim() === '')) {\n    fail('CONFIG.sources must be a non-empty list of source id strings.');\n}\nconst sources = [...new Set(CONFIG.sources.map((id) => id.trim().toLowerCase()))];\nfor (const id of sources) {\n    if (HELD_SOURCES.includes(id)) fail(`source \"${id}\" is held: it is registered but refused by the engine.`);\n    if (!ACTIVE_SOURCES.includes(id)) fail(`unknown source \"${id}\". Active sources: ${ACTIVE_SOURCES.join(', ')}.`);\n}\nif (!DELTA_MODES.includes(CONFIG.deltaMode)) fail(`deltaMode must be one of ${DELTA_MODES.join(', ')}.`);\nif (!Number.isInteger(CONFIG.maxItemsPerSource) || CONFIG.maxItemsPerSource < 1 || CONFIG.maxItemsPerSource > 10000) fail('maxItemsPerSource must be an integer from 1 to 10000.');\nif (CONFIG.stateNamespace !== undefined && CONFIG.stateNamespace !== '' && !/^[a-z0-9-]{1,40}$/u.test(CONFIG.stateNamespace)) fail('stateNamespace must be 1-40 characters of a-z, 0-9 and \"-\".');\nif (containsCredentialKey(CONFIG.sourceOptions)) fail('sourceOptions must not contain a credential; this template cannot carry one.');\nconst optionsBySource = new Map();\nfor (const [id, value] of Object.entries(CONFIG.sourceOptions ?? {})) {\n    const key = id.trim().toLowerCase();\n    if (!sources.includes(key)) fail(`sourceOptions has an entry for \"${id}\", which is not a selected source.`);\n    if (optionsBySource.has(key)) fail(`sourceOptions has two entries for \"${key}\".`);\n    if (value === null || typeof value !== 'object' || Array.isArray(value)) fail(`sourceOptions[\"${id}\"] must be an object.`);\n    if (Object.keys(value).length > 0) optionsBySource.set(key, value);\n}\nfor (const id of sources) {\n    const given = optionsBySource.get(id) ?? {};\n    const missing = (REQUIRED_OPTIONS[id] ?? []).filter((name) => given[name] === undefined || given[name] === null || (typeof given[name] === 'string' && given[name].trim() === ''));\n    if (missing.length > 0) fail(`source \"${id}\" requires ${missing.join(', ')}, which this template cannot supply (credentials are never placed in sourceOptions).`);\n}\n\nconst incoming = $input.first()?.json ?? {};\nconst rawWatchlist = incoming.watchlistNames !== undefined ? incoming.watchlistNames : CONFIG.watchlistNames;\nconst watchlist = sanitizeKeywordList(rawWatchlist);\nconst rejectedCount = Object.values(watchlist.rejected).reduce((sum, count) => sum + count, 0);\nif (isSupplied(rawWatchlist) && watchlist.keywords.length === 0) {\n    fail(`the watchlist was supplied but none of it is usable (${watchlist.malformedContainer ? 'unsupported value type' : `${rejectedCount} entries rejected`}); refusing to run unfiltered.`);\n}\n\nconst input = { sources, deltaMode: CONFIG.deltaMode, maxItemsPerSource: CONFIG.maxItemsPerSource };\nif (optionsBySource.size > 0) input.sourceOptions = Object.fromEntries(optionsBySource);\nif (watchlist.keywords.length > 0) input.watchlistNames = watchlist.keywords;\nif (CONFIG.stateNamespace) input.stateNamespace = CONFIG.stateNamespace;\n\nreturn [{ json: { input, watchlist: { accepted: watchlist.keywords.length, rejected: rejectedCount, rejectedByReason: watchlist.rejected } } }];\n"
+      },
+      "notes": "Edit CONFIG at the top: sources, delta mode, per-source row limit, watchlist, state namespace. A watchlist that cleans down to nothing stops the workflow instead of running unfiltered."
+    },
+    {
+      "id": "a375ffae-a273-5714-b3de-d20695542fc0",
+      "name": "Start Apify run",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apify.com/v2/acts/YOUR_APIFY_USERNAME~global-corporate-patent-intelligence/runs",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "maxTotalChargeUsd",
+              "value": "5"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.input) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": null,
+          "name": "Apify API token"
+        }
+      },
+      "notes": "Replace YOUR_APIFY_USERNAME with the Apify account that published the Actor. maxTotalChargeUsd is the hard spending cap for this run in USD: edit it here. Do NOT enable Retry On Fail on this node: a retried POST can start a second billable run."
+    },
+    {
+      "id": "4063f777-501e-5467-ae66-fb8aeea31d7f",
+      "name": "Wait before polling",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        660,
+        300
+      ],
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": 30,
+        "unit": "seconds"
+      }
+    },
+    {
+      "id": "0e1518cf-95a7-5b21-b616-3fcff4fd0b62",
+      "name": "Get run status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        300
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.apify.com/v2/actor-runs/{{ $json.data.id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": null,
+          "name": "Apify API token"
+        }
+      }
+    },
+    {
+      "id": "0cede811-de8e-5856-8e68-2c0e44a0f421",
+      "name": "Run still going?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "8a8419c0-fa19-5756-b625-211acedff299",
+              "leftValue": "={{ (!['SUCCEEDED', 'FAILED', 'TIMED-OUT', 'ABORTED'].includes($json.data.status) && $runIndex < 120) ? 'poll' : 'done' }}",
+              "rightValue": "poll",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "notes": "True (no final status yet: not SUCCEEDED, FAILED, TIMED-OUT or ABORTED, and fewer than 120 polls so far) goes back to the Wait node; False leaves the loop and reads the dataset. At 30 s per poll the loop waits at most 60 minutes; a run still going after that is read as it stands and keeps running on Apify under its spending cap."
+    },
+    {
+      "id": "f004a7e5-ac00-5fe8-a726-3bc56101d741",
+      "name": "Get dataset items",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1320,
+        400
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.apify.com/v2/datasets/{{ $json.data.defaultDatasetId }}/items",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "format",
+              "value": "json"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": null,
+          "name": "Apify API token"
+        }
+      }
+    },
+    {
+      "id": "1ea3d384-d0ac-5f84-acc7-df4abdc529e9",
+      "name": "Keep watchlist matches",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        400
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "89ddeef8-25d3-50cf-b412-cc27f7274113",
+              "leftValue": "={{ String($json.is_watchlist_match === true) }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "b7fed1d2-a457-5df6-a9d9-aac82f9c3d7a",
+      "name": "Deliver matches downstream",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1760,
+        400
+      ],
+      "parameters": {},
+      "notes": "Connect your own nodes here (Slack, email, a ticket, a webhook). Each item is one delivered record whose is_watchlist_match is true."
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Build run input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build run input": {
+      "main": [
+        [
+          {
+            "node": "Start Apify run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Start Apify run": {
+      "main": [
+        [
+          {
+            "node": "Wait before polling",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait before polling": {
+      "main": [
+        [
+          {
+            "node": "Get run status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get run status": {
+      "main": [
+        [
+          {
+            "node": "Run still going?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run still going?": {
+      "main": [
+        [
+          {
+            "node": "Wait before polling",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get dataset items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get dataset items": {
+      "main": [
+        [
+          {
+            "node": "Keep watchlist matches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keep watchlist matches": {
+      "main": [
+        [
+          {
+            "node": "Deliver matches downstream",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

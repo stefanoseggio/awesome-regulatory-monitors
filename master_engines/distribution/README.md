@@ -1,0 +1,242 @@
+# Distribution: Python SDK, LangChain tools and n8n templates
+
+Programmatic ways to call the three Master Engine Apify Actors, built so that the TypeScript code stays the single source
+of truth for source ids, held reasons, prices, limits and the watchlist guard.
+
+| Path | What it is |
+|---|---|
+| [`python/`](python/) | `regulatory-engines` (import `regulatory_engines`): a safety-first wrapper around the official `apify-client`, plus optional LangChain tools |
+| [`n8n/`](n8n/) | One workflow template per engine: schedule, run, poll, filter watchlist matches |
+| `python/src/regulatory_engines/data/engines.json` | **Generated.** Engines, sources, held reasons, credential fields, event prices, limits, the watchlist guard's constants and the code point ranges it removes |
+| `python/tests/fixtures/guard_parity.json` | **Generated.** Inputs and the TypeScript guard's output for each, for the Python port |
+
+The three Actors: `global-regtech-compliance-feed`, `latam-global-tender-intelligence`, `global-corporate-patent-intelligence`.
+
+> **Status.** Nothing here has been run against the Apify platform. The Actors are not yet published, so no Actor id is
+> reserved and no price is in force: the owner (your Apify username) and the Actor ids are yours to supply. See
+> [What is NOT verified](#what-is-not-verified).
+
+## Install
+
+Python 3.11 or newer (the floor of `apify-client` 3.x). The package is not on PyPI; install it from this repository:
+
+```bash
+python3 -m venv .venv && . .venv/bin/activate
+pip install -e "distribution/python"                # SDK only
+pip install -e "distribution/python[langchain]"     # + the LangChain tools
+pip install -e "distribution/python[dev]"           # + pytest and langchain-core, to run the tests
+```
+
+Dependencies: `apify-client>=3.3,<4` (the call signatures were read from 3.3.0, the only release in that range; the 3.x line renamed keywords of 2.x),
+`pydantic>=2.11,<3` (the floor `apify-client` 3.3.0 itself sets), and for the extra `langchain-core>=1.0,<2`. Tested with Python 3.11.17, 3.12.3 and 3.13.16, each with `apify-client` 3.3.0,
+`pydantic` 2.14.1 and `langchain-core` 1.6.12, and once on Python 3.11.17 with the oldest allowed `pydantic` 2.11.0 and `langchain-core` 1.0.0; other versions inside those ranges are not tested.
+
+n8n needs no install: import a file from `n8n/` (see [n8n](#n8n)).
+
+## Quick start
+
+### Python SDK
+
+```python
+from regulatory_engines import REGTECH, RegulatoryEngines, estimate_worst_case_usd
+
+engines = RegulatoryEngines(owner="your-apify-username")      # token from the APIFY_TOKEN environment variable
+
+print(estimate_worst_case_usd(REGTECH, rows=200, sources=["ofac", "sec_enforcement"]))   # upper bound, from the event catalog
+
+run = engines.run(
+    REGTECH,
+    sources=["ofac", "sec_enforcement"],
+    max_total_charge_usd=2.00,          # REQUIRED, no default: the hard spending cap handed to the platform
+    delta_mode="onlyChanged",           # all | onlyChanged | onlyNew
+    max_items_per_source=200,           # 1..10000
+    watchlist_names=["Acme Corp", "Banco Santander"],
+    state_namespace="weekly-sanctions", # give each distinct job its own delta memory
+)
+run.raise_for_status()                  # SUCCEEDED, otherwise RunFailedError
+print(run.summary())                    # the RUN_SUMMARY record
+for hit in run.watchlist_hits():        # EngineRow models; connector fields are in hit.extras
+    print(hit.source, hit.record_id, hit.matched_watchlist_keyword)
+```
+
+* `engines.prepare(...)` takes the same arguments as `run` (except `wait`) and returns the validated request without calling the API (a dry run);
+  `prepared.redacted_input()` is safe to print.
+* `run(..., wait=False)` starts the run and returns at once; `run.wait_for_finish()` then `run.items()`. `run(..., wait=True)` (the default) blocks until the run reaches a final status:
+  `apify-client`'s `call` is used without a wait limit. To bound the wait use `wait=False` and `run.wait_for_finish(timeout_secs=...)`; the spending cap applies either way.
+* Credentials for the bring-your-own-key sources go in `credentials=`, never in `source_options=`:
+  `engines.run(PATENTS, sources=["uspto_ptab"], max_total_charge_usd=3, credentials={"usptoOdpApiKey": key})`.
+* `run.confirmed_max_total_charge_usd` is the cap the platform reports for the run; compare it with what you passed.
+* `RegulatoryEngines(client=...)` accepts any `ApifyClient`-compatible object; that is how the tests run offline.
+
+### LangChain
+
+```python
+from regulatory_engines import RegulatoryEngines
+from regulatory_engines.langchain_tools import build_tools
+
+engines = RegulatoryEngines(owner="your-apify-username")
+tools = build_tools(engines, max_total_charge_usd=1.00, max_rows=50)     # one StructuredTool per engine
+# give `tools` to an agent; the model chooses sources, watchlist_names, delta_mode and max_items_per_source
+```
+
+* The spending cap is fixed here and is not an argument of any tool: the model cannot raise it, and an argument the schema does
+  not define (such as `max_total_charge_usd`) is refused, not ignored.
+* `sources` is limited to the engine's active sources; a held source is never offered. Sources that need a credential or a mandatory option
+  (`uspto_ptab`, `epo_opposition`, `ai_crawler_signals`) are flagged "currently unavailable" in the tool description and refused (nothing started, nothing billed) unless the
+  application passes `credentials={engine_slug: {...}}` / `source_options={engine_slug: {...}}` to `build_tools`; those never reach the model.
+* The watchlist runs in strict mode, so a watchlist that cleans down to nothing is an error the model reads, not an unfiltered run.
+* The cap is per tool call (one run), not a budget for the conversation: an agent that calls a tool 20 times can spend 20 times the cap. Bound the number of tool calls in your agent loop.
+* The rows are third-party text (respondent names, notice titles, registry entries) and go into the model's context as they are: treat the tool output as untrusted input.
+* The answer is cut to `max_rows` rows with a note. Truncation limits what the model reads, not what is billed: every row the run delivered was billed.
+* Without `langchain-core`, `import regulatory_engines` works and `import regulatory_engines.langchain_tools` raises an `ImportError` that names the extra.
+
+### n8n
+
+Each file in [`n8n/`](n8n/) is one workflow:
+
+```
+Schedule Trigger -> Build run input (Code) -> Start Apify run (HTTP POST) -> Wait before polling -> Get run status (HTTP GET)
+   -> Run still going? (IF) --true--> Wait before polling            (the loop)
+                            --false-> Get dataset items (HTTP GET) -> Keep watchlist matches (Filter) -> Deliver matches downstream (NoOp)
+```
+
+| File | Actor | Default sources |
+|---|---|---|
+| `global-regtech-compliance-feed.workflow.json` | `global-regtech-compliance-feed` | `ofac`, `world_bank_debarred` |
+| `latam-global-tender-intelligence.workflow.json` | `latam-global-tender-intelligence` | `world_bank_notices`, `ar_santafe` |
+| `global-corporate-patent-intelligence.workflow.json` | `global-corporate-patent-intelligence` | `clinicaltrials_orange_book`, `sg_acra` |
+
+Set up:
+
+1. In n8n create a credential of type **Header Auth** named exactly `Apify API token`: header name `Authorization`, value `Bearer <your Apify API token>`.
+   The token lives in n8n's credential store; no file in this repository contains one.
+2. Import the workflow (Workflows, Import from File). Open each of the three HTTP Request nodes and confirm the `Apify API token` credential is selected.
+3. In **Start Apify run** replace `YOUR_APIFY_USERNAME` in the URL with the Apify account that published the Actor, and set the
+   **`maxTotalChargeUsd`** query parameter (the hard spending cap for each run, in USD; the templates ship with `5`).
+   **Do not enable Retry On Fail on that node**: a retried POST could start a second billable run.
+4. In **Build run input** edit `CONFIG` (sources, delta mode, per-source row limit, watchlist, state namespace). The node applies the
+   same watchlist cleaning as the engine (a JavaScript port of `lib/_guards.ts`: the same rejection reasons and caps, with the cleaning repeated until the text stops changing), refuses held, unknown and credential-needing
+   sources before any call, and stops the workflow if a watchlist you supplied cleans down to nothing.
+5. Connect your own nodes after **Deliver matches downstream** (Slack, email, a ticket, a webhook). Activate the workflow.
+
+How the loop ends: **Wait before polling** waits a fixed 30 seconds. **Run still going?** sends the item back to the Wait node while the
+run has no final status (it is not `SUCCEEDED`, `FAILED`, `TIMED-OUT` or `ABORTED`) **and** fewer than 120 polls have happened (about an hour); otherwise it takes the false branch to the dataset.
+A run still going after that is read as it stands and keeps running on Apify under its spending cap. Raise the 120 in the IF expression for longer runs.
+
+Honest notes on the templates:
+
+* They carry no credential, so the bring-your-own-key sources (`uspto_ptab`, `epo_opposition`) and `ai_crawler_signals` (which needs `domains`)
+  are refused by the Code node. Adding a credential means putting a secret field into the request body from an n8n credential, which is deliberately not done here.
+* The node types and versions are the long-standing core nodes `scheduleTrigger` 1.2, `code` 2, `httpRequest` 4.2, `wait` 1.1, `if` 2,
+  `filter` 2 and `noOp` 1. The parameter shapes of the Schedule Trigger (`days` interval), the IF and Filter condition builder, and the
+  credential reference (`{"id": null, "name": "Apify API token"}`, resolved by name) are written from the documented shapes and **have never been imported into n8n**.
+  Where a shape was uncertain the simplest documented one was used: the IF and Filter compare strings (`'poll'` and `'true'`) instead of using a boolean operator.
+  If n8n rejects or rewrites a node on import, fix it in the editor and tell us.
+* The run is started on `/v2/acts/<owner>~<slug>/runs` (the documented REST path). The Python client addresses the same Actor on `/v2/actors/...`; both are expected to work, neither was called live.
+* The dataset response is an array, which the HTTP Request node splits into one item per row; an empty dataset produces no items, so nothing is delivered.
+* The template does not tell a `SUCCEEDED` run from a `FAILED`, `TIMED-OUT` or `ABORTED` one: the loop ends on any final status and the dataset is read either way, so the rows a run delivered before it stopped
+  (all of them billed) go downstream. Add an IF on `data.status` before **Get dataset items** if a failed run must stop the workflow.
+
+## Safety model
+
+Every rule is enforced client-side **before** any API call, so a refused request starts nothing and bills nothing.
+
+* **A required spending cap.** `max_total_charge_usd` is a required keyword with no default and must be a finite number greater than zero
+  (`SpendingCapError` otherwise: `None`, `0`, negatives, `NaN`, `inf`, booleans and strings are all refused). It is passed to the platform as `maxTotalChargeUsd`
+  (as a `Decimal` that prints in plain notation, checked on the wire in the tests). Passing it to the platform is all this package can do:
+  the platform enforces the cap, and `run.confirmed_max_total_charge_usd` shows what it reports back.
+* **Held and unknown sources are refused client-side.** An unknown engine, an unknown source, a source of another engine, an empty or bare-string `sources`, and
+  any held source raise a specific exception; `HeldSourceError.reason` carries the reason recorded in `engines.json` (generated from the registry).
+  One held source rejects the whole run, as the engine's own preflight does. Source ids are normalised and de-duplicated like the router does.
+* **Watchlist sanitisation parity.** The watchlist goes through a Python port of `lib/_guards.ts`. Per keyword, in this order: it must be a string (`not_a_string`); at most `4096` UTF-16 units,
+  checked before any Unicode work because NFKC is quadratic on adversarial combining marks (`too_long`); well-formed Unicode, a lone surrogate is `invalid_unicode`; cleaned to a fixed point of NFKC,
+  whitespace controls to a space, removal of every `Default_Ignorable_Code_Point` and `Bidi_Control` character plus the C0/C1 controls (zero-width characters, soft hyphen, bidi marks, Hangul fillers,
+  variation selectors, tag characters and the rest), whitespace runs collapsed and ends trimmed (`empty_after_normalisation`); 2 to 200 code points (`too_short`, `too_long`); at least one letter or number
+  (`no_letter_or_digit`); case-insensitive de-duplication, first spelling wins (`duplicate`); at most 500 accepted (`over_limit`). At most `5000` entries are inspected and the rest is reported as one
+  `over_limit` entry (`(N further entries not inspected)`). A bare string is first cut to `200000` UTF-16 units (never in the middle of a surrogate pair), then split on newline, carriage return, comma and
+  semicolon only (their fullwidth look-alikes are not separators). Matching cuts the haystack to `8192` UTF-16 units before it is cleaned. Non-strings are dropped, never coerced.
+  The removed characters are not decided by Python: `engines.json` carries the 19 inclusive code point ranges (4,239 code points on Unicode 16.0) that the generator computes on Node from the same property
+  escapes as the guard, and the port builds its expression from them. The cleaning is repeated until the text stops changing, at most `8` passes (a text that has not settled becomes empty and is never matched;
+  real text settles in at most 3), so the guard is idempotent: sanitising the keywords a sanitise returned accepts all of them and rejects nothing. That is why the client no longer cleans the list a second time.
+  Nothing in the port raises: a container that cannot be read disables the watchlist (`unsupported value type`), an element that cannot be read is one rejected entry.
+  The port is held to the TypeScript guard by `python/tests/fixtures/guard_parity.json`: 460 sanitiser inputs (about 140 named hostile cases, among them every defect class the guard was rewritten for, plus 320 seeded),
+  325 normaliser and 235 matcher cases, each with the output of the TypeScript guard, asserted byte for byte, including the log previews of rejected values. The sanitiser corpus names every removed code point once
+  (a letter plus the character, one entry each) so that no entry of the generated table can be wrong unnoticed. A one-off differential fuzz (script not committed) of 45,200 generated hostile inputs (arrays of mixed
+  types, bare strings with separators, lists past 5,000 entries, strings past 4,096 and past 200,000 units, haystacks past 8,192 units, every Unicode whitespace, control, default-ignorable, bidi, variation selector, combining
+  mark, lone surrogate, astral letter, fullwidth form and digit alphabet) found no difference between the TypeScript guard, this port on Python 3.11, 3.12 and 3.13, and the n8n guard on Node 20.20.0, 21.7.3 and 22.22.0,
+  apart from the two Unicode-version cases described under "What is NOT verified". The same differential run catches 20 of 21 hand-made faults in the port and the template (the one it cannot see is a Python string that holds the two
+  halves of a surrogate pair as separate code points, which serialises like the one astral character; the pytest parity cases compare Python values and do catch it).
+  If you pass a non-empty watchlist that sanitises to nothing, `run()` emits a `WatchlistSanitisedToEmptyWarning` (or raises `WatchlistSanitisedToEmptyError` with
+  `strict_watchlist=True`) instead of silently running unfiltered. The cleaned keywords are what is sent.
+* **Credentials.** They map to the engine's top-level secret input fields (`fdaApiKey`, `socrataAppToken`, `usptoOdpApiKey`, `epoOpsConsumerKey`, `epoOpsConsumerSecret`), because Apify
+  only masks top-level secret fields. A credential inside `source_options` (at any depth) is refused, an unknown field is refused, and a credential aimed at a source that is not selected is refused rather than sent.
+  A source that needs a credential or a mandatory option is refused until it is supplied.
+* **No token logging.** The token is read from the argument or `APIFY_TOKEN`, held in a wrapper whose `repr`, `str` and `format` are redacted and which refuses to be pickled or copied.
+  `repr` and `str` of the client, runs, rows, prepared requests and every exception are tested not to contain it, an error that comes back from the client is re-raised as `EngineApiError`
+  with the token and this call's credentials scrubbed (plain, URL-encoded and base64 forms) and the original exception not chained (neither `__cause__` nor `__context__` leads to it, and no traceback frame holds it),
+  and the real `apify-client` logging at DEBUG is tested to carry neither. The scrubbing replaces exact text: a token that an error message upper-cases, reverses or hex-encodes is not recognised.
+  `engines.client` is the underlying `ApifyClient`, which keeps the token in the clear (`engines.client.token`): do not log that object's attributes.
+* **Run status.** `run()` returns the run whatever its status; `run.raise_for_status()` raises for `FAILED`, `TIMED-OUT` and `ABORTED`. Reading rows from a run that did not succeed warns, because rows delivered before the failure were billed.
+* **Delta memory.** With `state_namespace=None` every API-started run shares the engine's `default` memory, so runs with different watchlists or delta modes would consume each other's "new" records. Give each job its own namespace.
+
+`estimate_worst_case_usd(engine, rows, sources=None, watchlist_hits=True)` is an upper bound derived from the committed event catalog (start event per GB, the dearest event of the selected sources for every row,
+and watchlist hits up to the Actor's per-run hit cap). It is for choosing a cap, not a prediction.
+
+## How the data stays in sync
+
+`python/src/regulatory_engines/data/engines.json` and `python/tests/fixtures/guard_parity.json` are written by `scripts/generate_distribution_data.ts` from the engine registries,
+`pricing/event_catalog.ts`, `EngineInputSchema` and `lib/_guards.ts` (its constants, and the removed code point ranges computed on Node). `test/distribution_sync.test.ts` fails when a committed file differs from what the generator writes now, cross-checks
+`engines.json` against the registries and the committed `.actor/input_schema.json` files, runs the real guard on every one of the 1,112,064 non-surrogate code points to prove the removed ranges exact (a change to the guard's pattern fails that test),
+and validates every n8n template (below). The Python tests assert that the Python constants equal the generated limits and that the compiled removal expression is exactly the generated ranges.
+
+What `test/distribution_sync.test.ts` checks in each n8n template: valid JSON; unique node names and ids; only the vetted node types at their versions; exactly one trigger; every connection source and
+target names an existing node; every node reachable from the trigger and the only dead end is `Deliver matches downstream`; the loop is bounded (the Wait node has a fixed interval, the IF has a false branch that
+leaves the loop, every cycle passes through the Wait node, the IF caps the polls, and the longest wait is at most two hours); the run-start node is a POST to `acts/<owner>~<this engine's slug>/runs` with a
+positive `maxTotalChargeUsd` and no retry; every HTTP node uses the Header Auth credential referenced by name only; no string looks like a token, a bearer header or a long base64 run; and the Code node is
+**executed** in an isolated context against the whole guard corpus, against held, unknown and credential-needing sources, credentials in `sourceOptions`, and bad modes, limits and namespaces.
+
+## What is NOT verified
+
+* **Nothing here has been run against the Apify platform.** No Actor from this repository has been started through the Python SDK, the LangChain tools or n8n. The Actors are not yet published; their ids are not reserved and the prices in `engines.json` are the repository's proposal, not prices in force.
+  The Python tests use an injected double and, for the wire-level tests, the real `apify-client` over a fake transport (what the library would send, never a socket).
+* **The n8n templates are statically validated only.** They have never been imported into n8n and never executed there; only their Code node is executed, in Node's `vm`, outside n8n's own sandbox. The parameter shapes listed above are the uncertain part.
+* Whether the platform applies `maxTotalChargeUsd` to these Actors, what it echoes back in `options.maxTotalChargeUsd`, and whether a run that fails preflight is still charged the start event: all expected from the pricing design, none observed.
+* `owner` must be supplied; there is no default and no Actor-id lookup.
+* `apify-client` other than 3.3.0 (there is no other release in the allowed range), `langchain-core` other than 1.6.12 and 1.0.0, and `pydantic` other than 2.14.1 and 2.11.0 were not run.
+* **Unicode tables differ between the two sides.** The TypeScript guard runs on Node 22.22.0 (Unicode 16.0); the port uses Python's `unicodedata` for NFKC, lower-casing and the letter-or-number test (14.0 on 3.11, 15.0 on 3.12, 15.1 on 3.13).
+  What is *removed* does not depend on `unicodedata`: it comes from the ranges in `engines.json`. A one-off probe over all 1,114,112 code points (NFKC, lower-casing and the letter-or-number test, each inside `a<char>b`; the probe script is
+  not committed) found **no disagreement on any code point both versions assign**. The only differences are code points Python's tables do not assign yet: for NFKC 98, 36 and 36, for lower-casing 125, 63 and 63, for letter-or-number
+  9,392, 5,004 and 4,382 (3.11, 3.12, 3.13). So on an older Python the client can drop, or leave unnormalised, a keyword made of characters assigned in newer Unicode versions. A keyword the client drops is never sent, so the Actor cannot
+  rescue it: it shows only in the `logging` warning and in `engines.prepare(...).watchlist.rejected` (reason `no_letter_or_digit` when every character is unassigned). One it leaves unnormalised is normalised by the Actor's own pass.
+  The fuzz above met it twice, by accident (random surrogate halves joined into random astral characters): U+31DDB and U+313A5, in CJK Unified Ideographs Extension H (assigned in Unicode 15.0), are letters for the TypeScript guard and Python 3.12
+  and 3.13 but unassigned for Python 3.11, which changed the verdict on one keyword each (accepted against rejected as `no_letter_or_digit`; rejected as `over_limit` against rejected as `no_letter_or_digit`); those are the only two differences in 45,200 inputs, and the generator was then restricted to characters assigned in Unicode 14. The committed corpus is built to avoid this: a test asserts that every character in it is assigned in the running Python's Unicode data (removed code points excepted, several of which are deliberately unassigned), which on Python 3.11 means
+  Unicode 14.0, and a one-off probe over the 4,467 non-surrogate characters of the corpus found identical NFKC (alone and inside `a<char>b`), lower-casing and category on 3.11, 3.12 and 3.13. A character first assigned after Unicode 14.0 is
+  therefore **not** exercised by the parity tests, and the port is not verified for it.
+* **The n8n Code node uses the property escapes of the Node that runs n8n**, not of Node 22. The removed ranges came out identical on Node 20.20.0 (Unicode 16.0), 21.7.3 (15.1) and 22.22.0 (16.0), the three versions that were run; a Node that
+  ships an older Unicode could remove fewer code points, and one that ships a newer Unicode could remove more.
+* **Worst-case cost of the guard.** It bounds each entry (4,096 units), the list (5,000 entries) and the haystack (8,192 units), not their product. A crafted list of 5,000 entries of 4,096 units each, made of combining marks in descending
+  combining class so that NFKC has to reorder them (20.5 million units), took 86 s of synchronous CPU in the TypeScript guard on Node 22.22.0 (about 18 ms an entry), and one 8,191-unit haystack of that shape took 64 ms there. The Python port needed
+  3.6 s (3.11) and 4.0 s (3.13) for the same list and 1.4 to 1.6 ms for the haystack. The n8n Code node runs the same JavaScript as the TypeScript guard but only ever cleans the watchlist written in its own `CONFIG`. One-off timings on this machine, not committed.
+* Source options (`source_options`) are validated by the Actor, not client-side; only credential placement and mandatory options are checked here.
+* The LangChain tools were exercised with `StructuredTool.invoke` against the fake client, not inside an agent loop with a model.
+
+## Regenerating the data files
+
+Run from `master_engines/` after any change to a registry, the pricing catalog, `EngineInputSchema` or `lib/_guards.ts`:
+
+```bash
+npx tsx scripts/generate_distribution_data.ts           # rewrites both files
+npx tsx scripts/generate_distribution_data.ts --check   # exits 1 when a committed file is stale, writes nothing
+```
+
+then run the Python port's tests, which fail if the port no longer reproduces the regenerated corpus, and the sync test.
+
+## Running the tests
+
+```bash
+cd master_engines
+npx vitest run test/distribution_sync.test.ts
+npx tsc --noEmit
+python3 -m venv /path/to/venv && /path/to/venv/bin/pip install -e "distribution/python[dev]"
+/path/to/venv/bin/python -m pytest distribution/python
+```

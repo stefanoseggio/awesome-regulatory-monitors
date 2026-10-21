@@ -1,0 +1,47 @@
+[build-system]
+requires = ["hatchling>=1.21"]
+build-backend = "hatchling.build"
+
+[project]
+name = "regulatory-engines"
+dynamic = ["version"]
+description = "Python SDK and LangChain tools for the three Master Engine Apify Actors (regtech compliance, tender intelligence, corporate and patent intelligence) with a client-side spending cap and watchlist guard."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+keywords = ["apify", "regtech", "sanctions", "procurement", "patents", "langchain", "n8n"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "License :: OSI Approved :: Apache Software License",
+    "Typing :: Typed",
+]
+dependencies = [
+    # Call signatures (ActorClient.call/start, RunClient, DatasetClient.iterate_items, KeyValueStoreClient.get_record) were
+    # read from 3.3.0. The 3.x line changed the keyword names of the 2.x line (timeout_secs/wait_secs became run_timeout/wait_duration).
+    "apify-client>=3.3,<4",
+    # apify-client 3.3.0 itself requires pydantic>=2.11, so a lower floor could never be installed next to it.
+    "pydantic>=2.11,<3",
+]
+
+[project.optional-dependencies]
+langchain = ["langchain-core>=1.0,<2"]
+dev = [
+    "pytest>=8",
+    "langchain-core>=1.0,<2",
+]
+
+[tool.hatch.version]
+path = "src/regulatory_engines/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/regulatory_engines"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/regulatory_engines", "tests", "README.md", "pyproject.toml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
