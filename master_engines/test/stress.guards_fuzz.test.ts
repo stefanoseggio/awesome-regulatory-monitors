@@ -305,24 +305,30 @@ function dress(rng: Rng, text: string, pools: WeightedPools): string {
 //   3  well-formed Unicode: a lone surrogate is rejected as invalid_unicode
 //   4  cleaned to a FIXED POINT of: NFKC, line breaks and tabs become a space, removal of the C0/C1 controls and of every
 //      Default_Ignorable_Code_Point and Bidi_Control character, whitespace runs collapse to one space, ends trimmed;
-//      a text that has not settled after 8 passes counts as empty
+//      a text that has not settled after 8 passes counts as empty; a text with a run of MORE than 16 consecutive
+//      combining marks (before any pass) counts as empty (NFKC reordering is quadratic in the length of a run)
 //   5  length >= 2 code points after cleaning
 //   6  length <= 200 code points
 //   7  contains at least one letter or number
 //   8  de-duplicated case-insensitively, first spelling wins
 //   9  at most 500 accepted, the rest rejected as over_limit
-//  10  at most 5,000 entries inspected; the remainder is reported as ONE over_limit entry
-//   a bare string is cut to 200,000 units and split on LF, CR, comma and semicolon (ASCII only); a non-array,
-//   non-string value is a malformed container. A haystack is cut to 8,192 units before cleaning.
+//  10  at most 5,000 entries inspected, and the string entries of at most 4,096 units that are inspected add up to at most
+//      200,000 UTF-16 units (a longer entry costs nothing: it is rejected at once); the remainder is reported as ONE over_limit entry
+//   a bare string is cut to 200,000 units and split on LF, CR, comma and semicolon (ASCII only); when it WAS cut, the last
+//   piece (possibly truncated) is dropped and one over_limit entry is appended after the 'further entries' one;
+//   a non-array, non-string value is a malformed container. A haystack longer than 8,192 units is searched only up to
+//   the last White_Space character inside the window (none: not searched), then cleaned.
 
 const REF_MIN_CODE_POINTS = 2;
 const REF_MAX_CODE_POINTS = 200;
 const REF_MAX_ACCEPTED = 500;
 const REF_MAX_RAW_UNITS = 4096;
 const REF_MAX_CANDIDATES = 5000;
+const REF_MAX_TOTAL_RAW_UNITS = 200_000;
 const REF_MAX_BARE_UNITS = 200_000;
 const REF_MAX_HAYSTACK_UNITS = 8192;
 const REF_MAX_PASSES = 8;
+const REF_MAX_COMBINING_RUN = 16;
 
 /** Characters that become a space before removal: line breaks and tabs. */
 const REF_LINE_BREAKS_AND_TABS = new Set<number>([0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x85, 0x2028, 0x2029]);
@@ -367,8 +373,25 @@ function refIsSpaceLike(cp: number): boolean {
     return REF_LINE_BREAKS_AND_TABS.has(cp) || REF_WHITESPACE.has(cp);
 }
 
+const REF_MARK = /^\p{Mark}$/u;
+
+/** True when the text holds MORE than REF_MAX_COMBINING_RUN consecutive combining marks (General_Category M). */
+function refHasLongMarkRun(text: string): boolean {
+    let run = 0;
+    for (const ch of text) {
+        if (REF_MARK.test(ch)) {
+            run += 1;
+            if (run > REF_MAX_COMBINING_RUN) return true;
+        } else {
+            run = 0;
+        }
+    }
+    return false;
+}
+
 /** One cleaning pass. */
 function refCleanOnce(raw: string): string {
+    if (refHasLongMarkRun(raw)) return '';
     let out = '';
     let gap = false;
     for (const ch of raw.normalize('NFKC')) {
@@ -408,6 +431,15 @@ function refCut(text: string, max: number): string {
     if (text.length <= max) return text;
     const last = text.charCodeAt(max - 1);
     return text.slice(0, last >= 0xd800 && last <= 0xdbff ? max - 1 : max);
+}
+
+/** The searched part of a haystack: whole if short, else up to the last White_Space character inside the 8,192-unit window, else nothing. */
+function refCutHaystack(text: string): string {
+    if (text.length <= REF_MAX_HAYSTACK_UNITS) return text;
+    for (let end = REF_MAX_HAYSTACK_UNITS; end > 0; end -= 1) {
+        if (refIsSpaceLike(text.charCodeAt(end))) return text.slice(0, end);
+    }
+    return '';
 }
 
 function refHasLoneSurrogate(text: string): boolean {
@@ -459,24 +491,45 @@ interface RefResult {
     firstValid: Map<string, string>;
 }
 
-function refCandidates(input: unknown): unknown[] | null {
-    if (input === undefined || input === null) return [];
-    if (Array.isArray(input)) return Array.from(input as unknown[]);
-    if (typeof input === 'string') return refSplit(refCut(input, REF_MAX_BARE_UNITS));
+interface RefCandidates {
+    items: unknown[];
+    bareStringCut: boolean;
+}
+
+function refCandidates(input: unknown): RefCandidates | null {
+    if (input === undefined || input === null) return { items: [], bareStringCut: false };
+    if (Array.isArray(input)) return { items: Array.from(input as unknown[]), bareStringCut: false };
+    if (typeof input === 'string') {
+        const window = refCut(input, REF_MAX_BARE_UNITS);
+        const items = refSplit(window);
+        if (window.length < input.length) {
+            items.pop();
+            return { items, bareStringCut: true };
+        }
+        return { items, bareStringCut: false };
+    }
     return null;
 }
 
 function refSanitize(input: unknown): RefResult {
     const out: RefResult = { keywords: [], needles: [], reasons: [], malformed: false, firstValid: new Map() };
-    const candidates = refCandidates(input);
-    if (candidates === null) {
+    const found = refCandidates(input);
+    if (found === null) {
         out.malformed = true;
         return out;
     }
+    const candidates = found.items;
     const taken = new Set<string>();
-    const inspected = Math.min(candidates.length, REF_MAX_CANDIDATES);
-    for (let index = 0; index < inspected; index += 1) {
+    const limit = Math.min(candidates.length, REF_MAX_CANDIDATES);
+    let inspected = 0;
+    let totalRaw = 0;
+    for (let index = 0; index < limit; index += 1) {
         const candidate = candidates[index];
+        if (typeof candidate === 'string' && candidate.length <= REF_MAX_RAW_UNITS) {
+            totalRaw += candidate.length;
+            if (totalRaw > REF_MAX_TOTAL_RAW_UNITS) break;
+        }
+        inspected += 1;
         if (typeof candidate !== 'string') {
             out.reasons.push('not_a_string');
             continue;
@@ -514,13 +567,14 @@ function refSanitize(input: unknown): RefResult {
         }
     }
     if (candidates.length > inspected) out.reasons.push('over_limit');
+    if (found.bareStringCut) out.reasons.push('over_limit');
     return out;
 }
 
 function refFind(haystack: unknown, ref: RefResult): string | null {
     if (ref.needles.length === 0) return null;
     if (typeof haystack !== 'string') return null;
-    const text = refClean(refCut(haystack, REF_MAX_HAYSTACK_UNITS)).toLowerCase();
+    const text = refClean(refCutHaystack(haystack)).toLowerCase();
     for (let i = 0; i < ref.needles.length; i += 1) {
         if (text.includes(ref.needles[i] as string)) return ref.keywords[i] as string;
     }
@@ -1427,7 +1481,7 @@ describe('PART 2 property tests over hostile generated inputs', () => {
             const list = r.prod;
             if (!list) continue;
             bump('P6.cases');
-            const candidates = refCandidates(r.fuzz.input) ?? [];
+            const candidates = refCandidates(r.fuzz.input)?.items ?? [];
             let next = 0;
             for (const candidate of candidates) {
                 if (next < list.keywords.length && typeof candidate === 'string' && refClean(candidate) === list.keywords[next]) next += 1;
@@ -1669,6 +1723,128 @@ describe('PART 2 regression tests for the guard defects found by this suite (all
             expect(sanitizeKeywordList([`ab${invisible}cd`]).keywords, `ab${esc(invisible)}cd`).toEqual(['abcd']);
         }
     });
+
+    it('D11 a run of more than 16 consecutive combining marks makes a text empty, exactly at the boundary, for a keyword and for a haystack', () => {
+        const marks = (n: number): string => '\u0301'.repeat(n);
+        expect(sanitizeKeywordList([`ab${marks(16)}`]).keywords).toEqual([`ab${marks(16)}`]);
+        const over = sanitizeKeywordList([`ab${marks(17)}`]);
+        expect(over.keywords).toEqual([]);
+        expect(over.rejected.map((r) => r.reason)).toEqual(['empty_after_normalisation']);
+        const acme = sanitizeKeywordList(['acme']);
+        expect(findKeywordMatch(`acme ${marks(16)}`, acme)).toBe('acme');
+        // fail closed: a haystack with a hostile run is never matched, even where the keyword stands outside the run
+        expect(findKeywordMatch(`acme ${marks(17)}`, acme)).toBeNull();
+        expect(findKeywordMatch(`${marks(17)} acme`, acme)).toBeNull();
+        // runs separated by a letter are separate runs
+        expect(findKeywordMatch(`acme ${`x${marks(16)}`.repeat(50)}`, acme)).toBe('acme');
+    });
+
+    it('D11b the quadratic-reordering attack costs milliseconds: 5,000 entries of two letters and 4,090 marks of descending combining class', () => {
+        const run = (n: number): string => '\u0345'.repeat(Math.floor(n / 3)) + '\u0300'.repeat(Math.floor(n / 3)) + '\u0316'.repeat(n - 2 * Math.floor(n / 3));
+        const entry = `ab${run(4090)}`;
+        const started = performance.now();
+        const list = sanitizeKeywordList(Array.from({ length: 5_000 }, () => entry));
+        expect(list.keywords).toEqual([]);
+        // 4,092 units each: 48 entries fit the 200,000-unit budget, the 49th crosses it and is not inspected
+        expect(list.rejected.filter((r) => r.reason === 'empty_after_normalisation')).toHaveLength(48);
+        expect(list.rejected.at(-1)).toEqual({ value: '(4952 further entries not inspected)', reason: 'over_limit' });
+        // the densest shape the run cap still allows: a letter followed by 16 marks, repeated to the raw cap
+        const group = `a${'\u0345'.repeat(6)}${'\u0300'.repeat(5)}${'\u0316'.repeat(5)}`;
+        const dense = group.repeat(Math.floor(4_096 / group.length));
+        sanitizeKeywordList(Array.from({ length: 5_000 }, () => dense));
+        findKeywordMatch(group.repeat(480), sanitizeKeywordList(['acme']));
+        expect(performance.now() - started, 'two hostile lists of 5,000 entries and one haystack').toBeLessThan(1_000);
+    });
+
+    it('D12 a bare string longer than 200,000 units is cut and its last piece, which the cut may have truncated, is dropped and reported', () => {
+        const cutMarker = { value: '(bare string cut at 200000 units; its last entry was dropped)', reason: 'over_limit' };
+        const truncated = sanitizeKeywordList(`${' '.repeat(199_990)},Pfizer Inc`);
+        expect(truncated.keywords).toEqual([]);
+        expect(truncated.rejected.at(-1)).toEqual(cutMarker);
+        // pieces that end before the cut are kept; only the piece the cut ends in goes
+        const kept = sanitizeKeywordList(`Pfizer Inc,Acme Corp,${','.repeat(199_975)},Globex Corp`);
+        expect(kept.keywords).toEqual(['Pfizer Inc', 'Acme Corp']);
+        expect(kept.rejected.at(-1)).toEqual(cutMarker);
+        // exactly 200,000 units is not cut: nothing dropped, no marker
+        const exact = sanitizeKeywordList(`Pfizer Inc,Acme Corp,${','.repeat(200_000 - 'Pfizer Inc,Acme Corp,'.length - 11)}Globex Corp`);
+        expect(exact.keywords).toEqual(['Pfizer Inc', 'Acme Corp', 'Globex Corp']);
+        expect(exact.rejected).toEqual([]);
+        // a window that ends in the first half of a surrogate pair is still cut cleanly
+        const pair = sanitizeKeywordList(`ab,${'x'.repeat(199_996)}\u{1f600}${'y'.repeat(10)}`);
+        expect(pair.keywords).toEqual(['ab']);
+        expect(pair.rejected.at(-1)).toEqual(cutMarker);
+    });
+
+    it('D13 a haystack longer than 8,192 units is searched only up to the last whitespace inside the window: no accent can be dropped at the cut', () => {
+        const accepted = sanitizeKeywordList(['cafe']);
+        // the full text cleans to "...café": a hit on "cafe" would be a false positive
+        expect(findKeywordMatch(`${'z'.repeat(8_188)}cafe\u0301`, accepted)).toBeNull();
+        expect(findKeywordMatch(`${'z'.repeat(8_188)}cafe\u0301 `, accepted)).toBeNull();
+        // a window with no whitespace at all is not searched
+        expect(findKeywordMatch(`cafe${'z'.repeat(9_000)}`, accepted)).toBeNull();
+        // whitespace inside the window: the text before it is searched, the keyword is found
+        expect(findKeywordMatch(`cafe ${'z'.repeat(9_000)}`, accepted)).toBe('cafe');
+        // the cut falls on whitespace characters other than U+0020 too
+        for (const space of ['\u00a0', '\u2028', '\u3000', '\t', '\n']) {
+            expect(findKeywordMatch(`cafe${space}${'z'.repeat(9_000)}`, accepted), `cut at U+${space.codePointAt(0)?.toString(16)}`).toBe('cafe');
+        }
+        // U+FEFF and ZWSP are removed by cleaning, so they are NOT safe cut points
+        expect(findKeywordMatch(`cafe\ufeff${'z'.repeat(9_000)}`, accepted)).toBeNull();
+        expect(findKeywordMatch(`cafe\u200b${'z'.repeat(9_000)}`, accepted)).toBeNull();
+        // exactly at the limit: a text of 8,192 units is searched whole; 8,193 is cut at the last whitespace
+        expect(findKeywordMatch(`${'z'.repeat(8_192 - 5)} cafe`, accepted)).toBe('cafe');
+        expect(findKeywordMatch(`${'z'.repeat(8_192 - 4)} cafe`, accepted)).toBeNull();
+        expect(findKeywordMatch(`${'z'.repeat(8_192 - 5)} cafe `, accepted)).toBe('cafe');
+    });
+
+    it('D14 a rejected value is previewed at 57 units without ever ending in half of a surrogate pair', () => {
+        const tooLong = `${'x'.repeat(56)}\u{1f600}${'y'.repeat(200)}`;
+        const list = sanitizeKeywordList([tooLong]);
+        const value = list.rejected[0]?.value ?? '';
+        expect(value).toBe(`${'x'.repeat(56)}...`);
+        expect(/[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/u.test(value)).toBe(false);
+        const whole = sanitizeKeywordList([`${'x'.repeat(55)}\u{1f600}${'y'.repeat(200)}`]);
+        expect(whole.rejected[0]?.value).toBe(`${'x'.repeat(55)}\u{1f600}...`);
+    });
+
+    it('D15 the string entries of a list may add up to 200,000 units: the entry that would cross the budget and everything after it is not inspected, reported once', () => {
+        const entries = (count: number, units: number): string[] => Array.from({ length: count }, (_, i) => `${i}`.padEnd(units, 'x'));
+        // exactly 200,000 units (100 entries of 2,000): all inspected, no marker
+        const exact = sanitizeKeywordList(entries(100, 2_000));
+        expect(exact.rejected).toHaveLength(100);
+        expect(exact.rejected.every((r) => r.reason === 'too_long')).toBe(true);
+        // one entry more crosses the budget: not inspected, one marker
+        const over = sanitizeKeywordList(entries(101, 2_000));
+        expect(over.rejected).toHaveLength(101);
+        expect(over.rejected.at(-1)).toEqual({ value: '(1 further entries not inspected)', reason: 'over_limit' });
+        // 4,092 units each: 48 fit, the 49th crosses
+        const wide = sanitizeKeywordList(entries(49, 4_092));
+        expect(wide.rejected.filter((r) => r.reason === 'too_long')).toHaveLength(48);
+        expect(wide.rejected.at(-1)).toEqual({ value: '(1 further entries not inspected)', reason: 'over_limit' });
+        // a valid keyword after the budget is spent is never accepted
+        const late = sanitizeKeywordList([...entries(49, 4_092), 'late keyword']);
+        expect(late.keywords).toEqual([]);
+        expect(late.rejected.at(-1)).toEqual({ value: '(2 further entries not inspected)', reason: 'over_limit' });
+    });
+
+    it('D15b entries over the 4,096-unit raw cap cost no budget (they are rejected at once), and neither do non-string entries', () => {
+        const huge = 'x'.repeat(4_097);
+        const all = sanitizeKeywordList(Array.from({ length: 5_000 }, () => huge));
+        expect(all.rejected).toHaveLength(5_000);
+        expect(all.rejected.every((r) => r.reason === 'too_long')).toBe(true);
+        const more = sanitizeKeywordList(Array.from({ length: 5_001 }, () => huge));
+        expect(more.rejected.at(-1)).toEqual({ value: '(1 further entries not inspected)', reason: 'over_limit' });
+        const mixed = sanitizeKeywordList([...Array.from({ length: 1_000 }, () => null), ...Array.from({ length: 1_000 }, () => 7), 'acme corp']);
+        expect(mixed.keywords).toEqual(['acme corp']);
+        expect(mixed.rejected).toHaveLength(2_000);
+    });
+
+    it('D15c a hostile list of 5,000 entries of 4,096 plain units costs at most a couple of hundred milliseconds', () => {
+        const started = performance.now();
+        const entry = 'caf\u00e9 '.repeat(800).slice(0, 4_096);
+        sanitizeKeywordList(Array.from({ length: 5_000 }, () => entry));
+        expect(performance.now() - started).toBeLessThan(1_000);
+    });
 });
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -1863,8 +2039,13 @@ addHostile('ab + 4,094 ZWSP is exactly 4,096 units', [`ab${'\u{200b}'.repeat(409
 addHostile('ab + 4,095 ZWSP is 4,097 units', [`ab${'\u{200b}'.repeat(4095)}`], [], ['too_long']);
 addHostile('a + 1000 LF + b', [`a${'\n'.repeat(1000)}b`], ['a b']);
 addHostile('100 x (a + grave) composes to 100 cp', ['a\u{300}'.repeat(100)], ['\u{e0}'.repeat(100)]);
-addHostile('a + 150 ypogegrammeni', [`a${'\u{345}'.repeat(150)}`], [`a${'\u{345}'.repeat(150)}`]);
-addHostile('a + 250 ypogegrammeni', [`a${'\u{345}'.repeat(250)}`], [], ['too_long']);
+addHostile('a + 16 ypogegrammeni (the longest run of combining marks that is allowed)', [`a${'\u{345}'.repeat(16)}`], [`a${'\u{345}'.repeat(16)}`]);
+addHostile('a + 17 ypogegrammeni (one mark too many: the text counts as empty)', [`a${'\u{345}'.repeat(17)}`], [], ['empty_after_normalisation']);
+addHostile('three groups of a + 16 marks are separate runs', [`${`a${'\u{345}'.repeat(16)}`.repeat(3)}`], [`${`a${'\u{345}'.repeat(16)}`.repeat(3)}`]);
+addHostile('a + 150 ypogegrammeni is a hostile run, not a too_long keyword', [`a${'\u{345}'.repeat(150)}`], [], ['empty_after_normalisation']);
+addHostile('a + 250 ypogegrammeni is a hostile run, not a too_long keyword', [`a${'\u{345}'.repeat(250)}`], [], ['empty_after_normalisation']);
+addHostile('a + 17 marks separated by ZWSP: removal in pass 1 makes the run, and pass 2 refuses it', [`a${'\u{345}\u{200b}'.repeat(17)}`], [], ['empty_after_normalisation']);
+addHostile('a + 16 marks separated by ZWSP: the run after removal is still allowed', [`a${'\u{345}\u{200b}'.repeat(16)}`], [`a${'\u{345}'.repeat(16)}`]);
 section('Bare-string separators');
 addHostile('bare ab,cd', 'ab,cd', ['ab', 'cd']);
 addHostile('bare ab;cd', 'ab;cd', ['ab', 'cd']);
@@ -2681,17 +2862,16 @@ describe('PART 3 attacker scenarios through runEngine', () => {
         expect(h.rows.filter((r) => r.is_watchlist_match)).toHaveLength(500);
     });
 
-    it('a 1 MB single-token string as the watchlist is one too_long candidate: nothing accepted, nothing charged', async () => {
+    it('a 1 MB single-token string as the watchlist is cut, its only (truncated) piece is dropped and reported once: nothing accepted, nothing charged', async () => {
         const oneMegabyte = 'x'.repeat(1024 * 1024);
         const records = makeRecords(['xxxx', oneMegabyte, 'x', 'Acme Corp', '']);
         const h = makeHarness();
         const summary = await run(records, oneMegabyte, h);
         expectNoWatchlistEffect(h, summary, records, '1 MB single token');
+        // The bare string is cut at 200,000 units; its only piece may be truncated, so it is dropped and reported once.
         expect(summary.watchlist.rejected).toBe(1);
         const list = sanitizeKeywordList(oneMegabyte);
-        expect(list.rejected).toHaveLength(1);
-        expect(list.rejected[0]?.reason).toBe('too_long');
-        expect(list.rejected[0]?.value.length).toBeLessThanOrEqual(60);
+        expect(list.rejected).toEqual([{ value: '(bare string cut at 200000 units; its last entry was dropped)', reason: 'over_limit' }]);
     });
 
     it('a 1 MB string of one-letter pieces ("a,a,a,...") yields nothing accepted and nothing charged', async () => {
@@ -2700,8 +2880,8 @@ describe('PART 3 attacker scenarios through runEngine', () => {
         const h = makeHarness();
         const summary = await run(records, flood, h);
         expectNoWatchlistEffect(h, summary, records, '1 MB single-letter flood');
-        // 200,000 units are read (100,000 pieces), 5,000 are inspected, the rest is one over_limit entry
-        expect(summary.watchlist.rejected).toBe(5_001);
+        // 200,000 units are read (100,000 pieces), 5,000 are inspected, the rest is one over_limit entry, the cut another
+        expect(summary.watchlist.rejected).toBe(5_002);
     });
 
     it('a 1 MB string of blanks, zero-width characters or punctuation yields nothing accepted and nothing charged', async () => {
@@ -2719,8 +2899,8 @@ describe('PART 3 attacker scenarios through runEngine', () => {
         const h = makeHarness();
         const summary = await run(records, flood, h);
         expect(summary.watchlist.accepted).toBe(1);
-        // 4,999 duplicates among the 5,000 inspected pieces, plus the single over_limit entry for the rest
-        expect(summary.watchlist.rejected).toBe(5_000);
+        // 4,999 duplicates among the 5,000 inspected pieces, plus one over_limit entry for the rest and one for the cut
+        expect(summary.watchlist.rejected).toBe(5_001);
         expect(h.rows.map((r) => r.is_watchlist_match)).toEqual([true, false, true]);
         expect(hitCharges(h)).toBe(2);
     });

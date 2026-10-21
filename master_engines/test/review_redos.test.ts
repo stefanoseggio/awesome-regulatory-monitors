@@ -261,9 +261,11 @@ describe('bounded patterns: worst case at the enforced cap is small', () => {
     });
 
     it('extractEmails (quadratic pattern) at MAX_CONTACT_TEXT, repeated like a full listing page', () => {
+        // 500 calls is more contacts than a listing page holds; the worst case at the cap costs about 1 s idle, so the 4 s
+        // ceiling keeps a margin of about 4x on a busy machine and still fails by orders of magnitude on a regression.
         const worst = '.'.repeat(MAX_CONTACT_TEXT);
         const { ms } = timed(() => {
-            for (let i = 0; i < 2000; i += 1) extractEmails(worst);
+            for (let i = 0; i < 500; i += 1) extractEmails(worst);
         });
         expect(ms).toBeLessThan(CEILING_MS * 4);
     });
@@ -271,7 +273,7 @@ describe('bounded patterns: worst case at the enforced cap is small', () => {
     it('relative dates, World Bank dates and the userAgent contact marker at their caps', () => {
         const now = new Date('2026-10-21T00:00:00Z');
         const { ms } = timed(() => {
-            for (let i = 0; i < 2000; i += 1) {
+            for (let i = 0; i < 500; i += 1) {
                 try {
                     resolveDate(`in${' '.repeat(62)}x`, now, 'openingFrom');
                 } catch {

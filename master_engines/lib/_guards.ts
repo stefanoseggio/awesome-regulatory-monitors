@@ -36,6 +36,10 @@
  *     seconds, and the 200 code point cap below is only meaningful after normalisation)
  *   - well-formed Unicode: a lone surrogate is rejected as `invalid_unicode` (it would match half
  *     of an astral character, so a hit could be billed for text that does not contain the keyword)
+ *   - no run of more than {@link MAX_COMBINING_RUN} (16) consecutive combining marks: NFKC reorders marks by combining
+ *     class, which is quadratic in the length of a run (a 4,090-mark run costs 16 ms, so a list of 5,000 of them
+ *     would cost 82 s). Real text never has such a run (Vietnamese stacks 3, Hebrew with cantillation 4, Tibetan
+ *     about 10). A text with one is treated as empty: never matched, never billed.
  *   - cleaned to a FIXED POINT of: NFKC, whitespace controls to a space, removal of every
  *     Default_Ignorable_Code_Point and Bidi_Control character plus the C0/C1 controls (zero-width
  *     characters, soft hyphen, bidi marks, variation selectors, Hangul fillers, tag characters...),
@@ -49,11 +53,19 @@
  *                                             punctuated)
  *   - de-duplicated case-insensitively; the first spelling wins
  *   - at most {@link MAX_KEYWORDS} (500) accepted; the rest are rejected as `over_limit`
- *   - at most {@link MAX_CANDIDATES} (5,000) entries are inspected; the remainder is not read and
- *     is reported as ONE `over_limit` entry (a 9 MB list of 2-character entries cannot burn CPU or memory)
+ *   - at most {@link MAX_CANDIDATES} (5,000) entries are inspected, and the string entries of at most
+ *     {@link MAX_RAW_KEYWORD_UNITS} units that are inspected add up to at most
+ *     {@link MAX_TOTAL_RAW_UNITS} (200,000) UTF-16 units (longer entries are rejected at once and cost nothing); the remainder is not read and is reported as ONE
+ *     `over_limit` entry (a 9 MB list of 2-character entries, or 5,000 entries of 4,096 units, cannot burn CPU or
+ *     memory: the per-entry, per-list and per-haystack caps alone do not bound their product)
  *
  * A bare string is split on the ASCII line feed, carriage return, comma and semicolon only; their
- * fullwidth look-alikes are not separators.
+ * fullwidth look-alikes are not separators. If it is longer than {@link MAX_BARE_STRING_UNITS} it is cut there and the
+ * last piece, which the cut may have truncated ("Pfizer Inc" -> "Pfizer In"), is dropped and reported.
+ *
+ * A haystack longer than {@link MAX_HAYSTACK_UNITS} is searched only up to the last whitespace character inside that
+ * window: nothing composes across whitespace, so the searched text is exactly a prefix of what the whole text cleans
+ * to (a cut in the middle of a word could drop a combining accent and create a hit the full text would not give).
  *
  * `sanitizeKeywordList` and `findKeywordMatch` never throw, even for a revoked or hostile Proxy.
  */
@@ -67,10 +79,14 @@ export const MAX_RAW_KEYWORD_UNITS = 4096;
 export const MAX_CANDIDATES = 5000;
 /** A bare-string watchlist is cut here before it is split (about 20 average entries per accepted keyword slot). */
 export const MAX_BARE_STRING_UNITS = 200_000;
+/** The string entries of one list may add up to this many UTF-16 units; later entries are not inspected. */
+export const MAX_TOTAL_RAW_UNITS = 200_000;
 /** Haystacks (record text) are cut to this many UTF-16 units before normalisation. Names and titles are far shorter. */
 export const MAX_HAYSTACK_UNITS = 8192;
 /** Cleaning passes before a text is declared unstable (hostile). Real text settles in at most 3. */
 export const MAX_NORMALISE_PASSES = 8;
+/** Longest run of consecutive combining marks a text may contain (see COMBINING_RUN_TOO_LONG). */
+export const MAX_COMBINING_RUN = 16;
 
 export type KeywordRejectionReason =
     | 'not_a_string'
@@ -109,6 +125,9 @@ const WHITESPACE_CONTROLS = /[\t\n\v\f\r\u0085\u2028\u2029]/gu;
  */
 const INVISIBLE = /[\u0000-\u001f\u007f-\u009f\p{Default_Ignorable_Code_Point}\p{Bidi_Control}]/gu;
 const LONE_SURROGATE = /\p{Surrogate}/u;
+/** MAX_COMBINING_RUN + 1 consecutive combining marks. A literal (not built from the constant) so the ReDoS gate analyses it. */
+const COMBINING_RUN_TOO_LONG = /\p{M}{17}/u;
+const WHITE_SPACE_UNIT = /\p{White_Space}/u;
 const HAS_LETTER_OR_DIGIT = /[\p{L}\p{N}]/u;
 const BARE_STRING_SEPARATORS = /[\n\r,;]+/u;
 
@@ -130,10 +149,12 @@ function preview(value: unknown): string {
             text = '[unreadable value]';
         }
     }
-    return text.length > 60 ? `${text.slice(0, 57)}...` : text;
+    return text.length > 60 ? `${cutUnits(text, 57)}...` : text;
 }
 
 function cleanOnce(text: string): string {
+    // Before normalize: reordering a long run of marks is quadratic, and no real text contains one.
+    if (COMBINING_RUN_TOO_LONG.test(text)) return '';
     return text.normalize('NFKC').replace(WHITESPACE_CONTROLS, ' ').replace(INVISIBLE, '').replace(WHITESPACE_RUN, ' ').trim();
 }
 
@@ -150,6 +171,19 @@ export function normaliseKeyword(raw: string): string {
         const next = cleanOnce(current);
         if (next === current) return next;
         current = next;
+    }
+    return '';
+}
+
+/**
+ * The part of a haystack that is searched: all of it up to {@link MAX_HAYSTACK_UNITS} units, otherwise the text up to
+ * the last whitespace character inside that window (nothing composes across whitespace, so the result is exactly a
+ * prefix of what the whole text would clean to). A window without any whitespace is not searched at all.
+ */
+function cutHaystack(haystack: string): string {
+    if (haystack.length <= MAX_HAYSTACK_UNITS) return haystack;
+    for (let end = MAX_HAYSTACK_UNITS; end > 0; end -= 1) {
+        if (WHITE_SPACE_UNIT.test(haystack.charAt(end))) return haystack.slice(0, end);
     }
     return '';
 }
@@ -189,21 +223,37 @@ function sanitizeUnchecked(input: unknown): SanitizedKeywordList {
     if (input === undefined || input === null) return result;
 
     let candidates: unknown[];
+    let bareStringCut = false;
     if (Array.isArray(input)) {
         candidates = input;
     } else if (typeof input === 'string') {
         // A bare string is split on separators. An empty/blank string yields one blank
         // candidate that is then rejected, which is exactly the point.
-        candidates = cutUnits(input, MAX_BARE_STRING_UNITS).split(BARE_STRING_SEPARATORS);
+        const window = cutUnits(input, MAX_BARE_STRING_UNITS);
+        candidates = window.split(BARE_STRING_SEPARATORS);
+        if (window.length < input.length) {
+            // The cut may have truncated the last piece ("Pfizer Inc" -> "Pfizer In"), which would be accepted as a
+            // different keyword: drop it.
+            candidates.pop();
+            bareStringCut = true;
+        }
     } else {
         result.malformedContainer = true;
         return result;
     }
 
     const seen = new Set<string>();
-    const inspected = Math.min(candidates.length, MAX_CANDIDATES);
-    for (let index = 0; index < inspected; index += 1) {
+    const limit = Math.min(candidates.length, MAX_CANDIDATES);
+    let inspected = 0;
+    let totalRawUnits = 0;
+    for (let index = 0; index < limit; index += 1) {
         const candidate = candidates[index];
+        // Only entries that proceed to Unicode work cost budget: one over the raw cap is rejected in constant time below.
+        if (typeof candidate === 'string' && candidate.length <= MAX_RAW_KEYWORD_UNITS) {
+            totalRawUnits += candidate.length;
+            if (totalRawUnits > MAX_TOTAL_RAW_UNITS) break;
+        }
+        inspected += 1;
         if (typeof candidate !== 'string') {
             result.rejected.push({ value: preview(candidate), reason: 'not_a_string' });
             continue;
@@ -251,6 +301,9 @@ function sanitizeUnchecked(input: unknown): SanitizedKeywordList {
     if (candidates.length > inspected) {
         result.rejected.push({ value: `(${candidates.length - inspected} further entries not inspected)`, reason: 'over_limit' });
     }
+    if (bareStringCut) {
+        result.rejected.push({ value: `(bare string cut at ${MAX_BARE_STRING_UNITS} units; its last entry was dropped)`, reason: 'over_limit' });
+    }
     return result;
 }
 
@@ -265,14 +318,14 @@ function sanitizeUnchecked(input: unknown): SanitizedKeywordList {
  *   - the loop re-checks `needle.length >= MIN_KEYWORD_LENGTH` so a hand-built
  *     {@link SanitizedKeywordList} that bypassed {@link sanitizeKeywordList}
  *     (for example in a test or a future caller) still cannot match on "".
- *   - only the first {@link MAX_HAYSTACK_UNITS} UTF-16 units of the haystack are searched.
+ *   - only the first {@link MAX_HAYSTACK_UNITS} UTF-16 units of the haystack are searched (cut at whitespace).
  */
 export function findKeywordMatch(haystack: unknown, list: SanitizedKeywordList): string | null {
     if (list.needles.length === 0) return null;
     if (typeof haystack !== 'string' || haystack.length === 0) return null;
 
     // Cut before normalising (quadratic in the worst case); text beyond the cut is simply not searched.
-    const text = normaliseKeyword(cutUnits(haystack, MAX_HAYSTACK_UNITS)).toLowerCase();
+    const text = normaliseKeyword(cutHaystack(haystack)).toLowerCase();
     if (text.length === 0) return null;
 
     for (let i = 0; i < list.needles.length; i += 1) {
