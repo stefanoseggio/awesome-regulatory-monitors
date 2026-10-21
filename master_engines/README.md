@@ -104,12 +104,20 @@ npm run typecheck          # tsc --noEmit, strict
 npm test                   # vitest; fixtures, plus real-SDK scenarios in child processes (no network)
 npm install --no-save recheck && npm run audit:redos   # static ReDoS gate over every regex; exits non-zero on a new unbounded pattern
 npx tsx scripts/generate_actor_files.ts
-npx tsx scripts/generate_pricing_payloads.ts --now=<ISO instant> [--paying-users=false] [--strict]
+npx tsx scripts/generate_pricing_payloads.ts --now=<ISO instant> [--paying-users=false] [--strict] [--out=<dir>]
 npx tsx scripts/stage_actor.ts <engine-slug> [--out=<dir>]   # self-contained build context for `apify push`
 ```
 
 `stage_actor` was verified end to end: stage, `npm ci`, `npm run build` with the reduced `tsconfig`, then a local run
-of the built engine against the live SEC feed.
+of the built engine against the live SEC feed. The staged contexts were also built with Docker from their unchanged
+Dockerfiles and the three images were run against live public sources.
+
+**Deployment.** [`docs/deployment/production_deployment_runbook.md`](../docs/deployment/production_deployment_runbook.md)
+has the exact commands (stage, `apify login`, `apify push`, the pricing `PUT /v2/actors/{actorId}` with the 14-day
+notice of Store Publishing Terms 9.4, read-back, smoke tests), the five decisions that need an owner, and the evidence.
+Its pricing commands are executed by `test/deployment_runbook.test.ts` against a local stand-in for the Apify API.
+The reference files in `pricing/payloads/` carry the day they were generated: a deployment generates its own with
+`--out` and never sends them.
 
 Live smoke runs from a sandbox behind an egress proxy need `NODE_USE_ENV_PROXY=1` for Node's global `fetch`.
 
