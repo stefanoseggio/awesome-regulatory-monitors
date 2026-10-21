@@ -1,0 +1,139 @@
+{
+  "meta": {
+    "disclaimer": "Do not rely on openFDA to make decisions regarding medical care. While we make every effort to ensure that data is accurate, you should assume all results are unvalidated. We may limit or otherwise restrict your access to the API in line with our Terms of Service.",
+    "terms": "https://open.fda.gov/terms/",
+    "license": "https://open.fda.gov/license/",
+    "last_updated": "2026-10-20",
+    "results": {
+      "skip": 0,
+      "limit": 4,
+      "total": 32
+    }
+  },
+  "results": [
+    {
+      "approval_date": "20260406",
+      "product_number": "001",
+      "products": [
+        {
+          "active_ingredients": [
+            {
+              "name": "DAPAGLIFLOZIN",
+              "strength": "10MG"
+            },
+            {
+              "name": "SAXAGLIPTIN HYDROCHLORIDE",
+              "strength": "EQ 5MG BASE"
+            }
+          ],
+          "brand_name": "DAPAGLIFLOZIN AND SAXAGLIPTIN HYDROCHLORIDE",
+          "application_name": "MSN",
+          "application_type": "A",
+          "application_number": "211533",
+          "therapeutic_equivalence_codes": [
+            "AB"
+          ],
+          "reference_listed_drug": false,
+          "reference_standard": true,
+          "marketing_status": "HUMAN PRESCRIPTION DRUG",
+          "application_full_name": "MSN LABORATORIES PRIVATE LTD",
+          "dosage_form": "TABLET",
+          "route": "ORAL"
+        }
+      ]
+    },
+    {
+      "approval_date": "20260406",
+      "product_number": "001",
+      "products": [
+        {
+          "active_ingredients": [
+            {
+              "name": "DAPAGLIFLOZIN",
+              "strength": "10MG"
+            },
+            {
+              "name": "SAXAGLIPTIN HYDROCHLORIDE",
+              "strength": "EQ 5MG BASE"
+            }
+          ],
+          "brand_name": "DAPAGLIFLOZIN AND SAXAGLIPTIN HYDROCHLORIDE",
+          "application_name": "TORRENT",
+          "application_type": "A",
+          "application_number": "211537",
+          "therapeutic_equivalence_codes": [
+            "AB"
+          ],
+          "reference_listed_drug": false,
+          "reference_standard": false,
+          "marketing_status": "HUMAN PRESCRIPTION DRUG",
+          "application_full_name": "TORRENT PHARMACEUTICALS LTD",
+          "dosage_form": "TABLET",
+          "route": "ORAL"
+        }
+      ]
+    },
+    {
+      "approval_date": "20230809",
+      "product_number": "001",
+      "products": [
+        {
+          "active_ingredients": [
+            {
+              "name": "METFORMIN HYDROCHLORIDE",
+              "strength": "500MG"
+            },
+            {
+              "name": "SAXAGLIPTIN HYDROCHLORIDE",
+              "strength": "EQ 5MG BASE"
+            }
+          ],
+          "brand_name": "SAXAGLIPTIN AND METFORMIN HYDROCHLORIDE",
+          "application_name": "DR REDDYS LABS SA",
+          "application_type": "A",
+          "application_number": "207678",
+          "therapeutic_equivalence_codes": [
+            "AB"
+          ],
+          "reference_listed_drug": false,
+          "reference_standard": false,
+          "marketing_status": "HUMAN PRESCRIPTION DRUG",
+          "application_full_name": "DR REDDYS LABORATORIES SA",
+          "dosage_form": "TABLET, EXTENDED RELEASE",
+          "route": "ORAL"
+        }
+      ]
+    },
+    {
+      "approval_date": "20230809",
+      "product_number": "002",
+      "products": [
+        {
+          "active_ingredients": [
+            {
+              "name": "METFORMIN HYDROCHLORIDE",
+              "strength": "1GM"
+            },
+            {
+              "name": "SAXAGLIPTIN HYDROCHLORIDE",
+              "strength": "EQ 2.5MG BASE"
+            }
+          ],
+          "brand_name": "SAXAGLIPTIN AND METFORMIN HYDROCHLORIDE",
+          "application_name": "DR REDDYS LABS SA",
+          "application_type": "A",
+          "application_number": "207678",
+          "therapeutic_equivalence_codes": [
+            "AB"
+          ],
+          "reference_listed_drug": false,
+          "reference_standard": false,
+          "marketing_status": "HUMAN PRESCRIPTION DRUG",
+          "application_full_name": "DR REDDYS LABORATORIES SA",
+          "dosage_form": "TABLET, EXTENDED RELEASE",
+          "route": "ORAL"
+        }
+      ]
+    }
+  ]
+}

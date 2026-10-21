@@ -1,0 +1,12 @@
+{
+    "$schema": "https://apify.com/schemas/v1/actor.ide.json",
+    "actorSpecification": 1,
+    "name": "global-corporate-patent-intelligence",
+    "title": "Global Corporate & Patent Intelligence - PTAB, EPO, trials, company registers",
+    "description": "One Actor for corporate and IP change monitoring: USPTO PTAB trials and EPO opposition watch (bring your own keys), ClinicalTrials.gov + FDA Orange Book, Singapore ACRA and UAE (ADGM/DIFC) registers. Receive only new or changed records.",
+    "version": "0.1",
+    "buildTag": "latest",
+    "minMemoryMbytes": 1024,
+    "maxMemoryMbytes": 1024,
+    "inputSchema": "./input_schema.json"
+}

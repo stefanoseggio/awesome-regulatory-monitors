@@ -1,0 +1,112 @@
+{
+    "$schema": "https://apify.com/schemas/v1/input.ide.json",
+    "title": "latam-global-tender-intelligence configuration",
+    "type": "object",
+    "schemaVersion": 1,
+    "properties": {
+        "sources": {
+            "title": "Sources to run",
+            "type": "array",
+            "description": "Source ids to run in this execution. Held sources are not selectable: au_grantconnect, adb_procurement, idb_procurement, ar_cordoba, ar_salta, ar_mendoza, ar_pba.",
+            "editor": "select",
+            "items": {
+                "type": "string",
+                "enum": [
+                    "ar_santafe",
+                    "ar_tucuman",
+                    "ar_entrerios",
+                    "cl_diario_oficial",
+                    "eu_ted",
+                    "us_florida",
+                    "world_bank_notices",
+                    "it_lombardia_grants"
+                ],
+                "enumTitles": [
+                    "Province of Santa Fe (Argentina) Gestiones de Compra: public tenders / purchasing process…",
+                    "Province of Tucumán (Argentina) public tenders (licitaciones públicas / privadas, concurs…",
+                    "Province of Entre Ríos (Argentina) Unidad Central de Contrataciones: licitaciones, solici…",
+                    "Chile Diario Oficial (electronic edition): laws, decrees, resolutions and notices publish…",
+                    "EU TED procurement notices (contract notices and award notices, all EU member states) via…",
+                    "State of Florida MyFloridaMarketPlace Vendor Information Portal: every state-agency solic…",
+                    "World Bank procurement notices (invitations for bids, expressions of interest, general pr…",
+                    "Regione Lombardia regional grants and tenders register (\"Anagrafica dei bandi regionali\",…"
+                ]
+            },
+            "default": [
+                "ar_santafe"
+            ],
+            "minItems": 1
+        },
+        "sourceOptions": {
+            "title": "Per-source options",
+            "type": "object",
+            "description": "Options keyed by source id, e.g. {\"us_florida\": {\"includeContactDetails\": true}}. Each source validates its own slice and rejects unknown keys. Put credentials in the secret fields below, not here.",
+            "editor": "json",
+            "default": {}
+        },
+        "deltaMode": {
+            "title": "Delta mode",
+            "type": "string",
+            "description": "onlyChanged = new and changed records (default). onlyNew = new records only. all = every record, unchanged ones included.",
+            "editor": "select",
+            "enum": [
+                "all",
+                "onlyChanged",
+                "onlyNew"
+            ],
+            "enumTitles": [
+                "All records (snapshot)",
+                "New and changed records",
+                "New records only"
+            ],
+            "default": "onlyChanged"
+        },
+        "stateNamespace": {
+            "title": "Delta memory namespace",
+            "type": "string",
+            "description": "Keeps delta memory separate between Tasks (different watchlists, filters or delta modes would otherwise consume each other's \"new\" records). Leave empty to use one namespace per Task, or \"default\" for ad-hoc runs. 1-40 characters: a-z, 0-9, \"-\".",
+            "editor": "textfield"
+        },
+        "maxItemsPerSource": {
+            "title": "Max records per source",
+            "type": "integer",
+            "description": "Upper bound on records taken from each source in one run.",
+            "minimum": 1,
+            "maximum": 10000,
+            "default": 500
+        },
+        "watchlistNames": {
+            "title": "Watchlist keywords",
+            "type": "array",
+            "description": "Case-insensitive substrings matched against each record's names. Entries shorter than 2 characters, blank or punctuation-only entries are ignored. With no valid keyword nothing matches and the watchlist-hit event is never charged.",
+            "editor": "stringList",
+            "default": []
+        },
+        "maxWatchlistHitsPerRun": {
+            "title": "Max billable watchlist hits per run",
+            "type": "integer",
+            "description": "Hard ceiling on watchlist-hit events charged in one run.",
+            "minimum": 0,
+            "maximum": 100000,
+            "default": 200
+        },
+        "maxWatchlistSpendUsd": {
+            "title": "Max watchlist-hit spend per run (USD)",
+            "type": "number",
+            "description": "Hard ceiling on USD charged for watchlist-hit in one run.",
+            "minimum": 0,
+            "maximum": 10000,
+            "default": 50
+        },
+        "socrataAppToken": {
+            "title": "Socrata app token (optional)",
+            "type": "string",
+            "description": "Bring-your-own credential for it_lombardia_grants. Stored encrypted by Apify and never logged.",
+            "editor": "textfield",
+            "isSecret": true
+        }
+    },
+    "required": [
+        "sources"
+    ]
+}

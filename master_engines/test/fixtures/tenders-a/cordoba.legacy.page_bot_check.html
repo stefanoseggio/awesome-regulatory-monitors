@@ -1,0 +1,25 @@
+<!--
+Hand-built minimal fixture, not a live capture: encodes the "the request technically succeeded
+(would-be HTTP 200) but the response is not the real results page at all" case that
+hasResultsGrid()/isSuspectedFetchFailure guard against - e.g. a bot-check interstitial, a
+session-expired redirect, or an unrelated site-structure change.
+
+Unlike test/fixtures/page_no_results.html (a genuine 0-tender day: #gv IS present, just with no
+data rows), this fixture has no #gv element whatsoever, which is the actual structural signal
+hasResultsGrid() checks for - both fixtures parse to 0 rows via parseGrid(), which is exactly
+why a bare row-count check can't tell them apart.
+-->
+<html>
+<head><title>Sesion expirada</title></head>
+<body>
+<form method="post" action="./ConsultaPublicaCotizacion.aspx?TIPO_CONSULTA_PUBLICA=LI" id="form1">
+<input type="hidden" name="__VIEWSTATE" id="__VIEWSTATE" value="expired" />
+<input type="hidden" name="__VIEWSTATEGENERATOR" id="__VIEWSTATEGENERATOR" value="00000000" />
+<input type="hidden" name="__EVENTVALIDATION" id="__EVENTVALIDATION" value="expired" />
+<div class="mensaje-error">
+    Su sesion ha expirado o la pagina solicitada no esta disponible. Por favor, vuelva a
+    intentarlo.
+</div>
+</form>
+</body>
+</html>

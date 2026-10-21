@@ -1,0 +1,73 @@
+{
+    "pricingInfos": [
+        {
+            "pricingModel": "PAY_PER_EVENT",
+            "pricingPerEvent": {
+                "actorChargeEvents": {
+                    "apify-actor-start": {
+                        "eventTitle": "Actor Start",
+                        "eventDescription": "Charged when the Actor starts running. Number of events charged depends on Actor memory (one event per GB, minimum one event).",
+                        "eventPriceUsd": 0.005,
+                        "isOneTimeEvent": true
+                    },
+                    "vessel-record": {
+                        "eventTitle": "Sanctioned vessel record",
+                        "eventDescription": "One OFAC SDN sanctioned-vessel record delivered to the dataset.",
+                        "eventPriceUsd": 0.0005,
+                        "isPrimaryEvent": true
+                    },
+                    "debarment-record": {
+                        "eventTitle": "Debarment / sanction record",
+                        "eventDescription": "One World Bank \"Other Sanctions\" record delivered to the dataset.",
+                        "eventPriceUsd": 0.003
+                    },
+                    "statement-new": {
+                        "eventTitle": "New modern slavery statement",
+                        "eventDescription": "A UK Modern Slavery Statement Registry statement never delivered before.",
+                        "eventPriceUsd": 0.02
+                    },
+                    "statement-updated": {
+                        "eventTitle": "Updated modern slavery statement",
+                        "eventDescription": "A previously delivered UK statement whose content changed, or one re-sent unchanged by a full-snapshot run.",
+                        "eventPriceUsd": 0.01
+                    },
+                    "enforcement-release": {
+                        "eventTitle": "New SEC enforcement release",
+                        "eventDescription": "A SEC litigation release or administrative proceeding not delivered before.",
+                        "eventPriceUsd": 0.05
+                    },
+                    "enforcement-update": {
+                        "eventTitle": "Updated SEC enforcement release",
+                        "eventDescription": "A previously delivered SEC release whose content changed, or one re-sent unchanged by a full-snapshot run.",
+                        "eventPriceUsd": 0.02
+                    },
+                    "crawler-signal": {
+                        "eventTitle": "AI crawler permission snapshot",
+                        "eventDescription": "A domain's AI-crawler permission and Content-Signal state delivered for the first time.",
+                        "eventPriceUsd": 0.015
+                    },
+                    "crawler-signal-change": {
+                        "eventTitle": "AI crawler signal change",
+                        "eventDescription": "A previously delivered domain whose crawler permissions, Content-Signal or llms.txt changed, or one re-sent unchanged by a full-snapshot run.",
+                        "eventPriceUsd": 0.006
+                    },
+                    "recall-record": {
+                        "eventTitle": "Drug safety record",
+                        "eventDescription": "One FDA enforcement or EMA safety record delivered to the dataset.",
+                        "eventPriceUsd": 0.001
+                    },
+                    "watchlist-hit": {
+                        "eventTitle": "Watchlist hit",
+                        "eventDescription": "Charged once for each delivered regulatory record whose text matches a keyword of the caller's own watchlist. Never charged when no valid keyword was supplied.",
+                        "eventPriceUsd": 0.15
+                    }
+                }
+            },
+            "minimalMaxTotalChargeUsd": 0.16,
+            "apifyMarginPercentage": 0.2,
+            "createdAt": "2026-10-21T00:00:00.000Z",
+            "startedAt": "2026-11-04T00:00:00.000Z",
+            "reasonForChange": "Consolidation of single-source Actors into global-regtech-compliance-feed: each legacy source keeps its own per-record price as a separate event, and the start event is set to $0.005."
+        }
+    ]
+}

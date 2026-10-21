@@ -1,0 +1,25 @@
+{
+    "engine": "global-regtech-compliance-feed",
+    "policy": "Apify Store Publishing Terms section 9.4 (verified); the brief cited 2.2.4.2, which is \"Specific Prohibitions\".",
+    "noticeDays": 14,
+    "hasPayingUsers": true,
+    "submittedAt": "2026-10-21T00:00:00.000Z",
+    "effectiveAt": "2026-11-04T00:00:00.000Z",
+    "changeLimit": "At most 1 price-increasing change per month per Actor; a pending change cannot be cancelled or edited.",
+    "startEventPriceUsd": 0.005,
+    "startEventPerRunUsd": 0.01,
+    "memoryMbytes": 2048,
+    "reasonForChange": "Consolidation of single-source Actors into global-regtech-compliance-feed: each legacy source keeps its own per-record price as a separate event, and the start event is set to $0.005.",
+    "provisionalEvents": [
+        "crawler-signal"
+    ],
+    "operatorStatedEvents": [
+        "watchlist-hit"
+    ],
+    "notes": [
+        "The default apify-actor-start price is $0.00005; 0.005 is 100x that. Apify only recommends keeping the default; it documents no maximum.",
+        "With 2048 MB the start event is charged 2 time(s) per run = $0.01, even when a run delivers no records.",
+        "apify-default-dataset-item is intentionally absent: with it priced, pushData(item, eventName) bills both events per row.",
+        "startedAt must be re-computed from the real submission time before sending; regenerate with --now=<ISO instant>."
+    ]
+}

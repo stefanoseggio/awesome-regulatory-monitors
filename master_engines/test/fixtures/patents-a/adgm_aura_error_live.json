@@ -1,0 +1,20 @@
+{
+  "_fixtureNote": "REAL upstream reply, captured live 2026-10-21 from POST https://newreg.adgm.com/s/sfsites/aura?r=1&aura.ApexAction.execute=1 (legacy search string, blank name, aura.token=null, fresh bootstrap). Only the `actions` array is kept; the Aura `context` / `perfSummary` blocks (framework metadata, ~3 KB) were dropped. This is the ADGM outage signature recorded in the legacy docs/monitoring/UAE_OUTAGE_PLAYBOOK.md.",
+  "actions": [
+    {
+      "id": "1;a",
+      "state": "ERROR",
+      "returnValue": {
+        "cacheable": false
+      },
+      "error": [
+        {
+          "exceptionType": "System.NullPointerException",
+          "isUserDefinedException": false,
+          "message": "null input to JSON parser",
+          "stackTrace": "(System Code)\nClass.RASearchUtil.getSearchResponseForPR: line 2889, column 1"
+        }
+      ]
+    }
+  ]
+}

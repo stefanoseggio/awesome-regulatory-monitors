@@ -1,0 +1,702 @@
+{
+  "schemaVersion": 1,
+  "generatedBy": "scripts/generate_distribution_data.ts",
+  "limits": {
+    "deltaModes": [
+      "all",
+      "onlyChanged",
+      "onlyNew"
+    ],
+    "defaultDeltaMode": "onlyChanged",
+    "maxItemsPerSource": {
+      "min": 1,
+      "max": 10000,
+      "default": 500
+    },
+    "stateNamespacePattern": "^[a-z0-9-]{1,40}$",
+    "watchlist": {
+      "minKeywordLength": 2,
+      "maxKeywordLength": 200,
+      "maxKeywords": 500,
+      "maxRawKeywordUnits": 4096,
+      "maxCandidates": 5000,
+      "maxBareStringUnits": 200000,
+      "maxHaystackUnits": 8192,
+      "maxNormalisePasses": 8,
+      "maxCombiningRun": 16,
+      "maxTotalRawUnits": 200000,
+      "removedRanges": [
+        [
+          0,
+          31
+        ],
+        [
+          127,
+          159
+        ],
+        [
+          173,
+          173
+        ],
+        [
+          847,
+          847
+        ],
+        [
+          1564,
+          1564
+        ],
+        [
+          4447,
+          4448
+        ],
+        [
+          6068,
+          6069
+        ],
+        [
+          6155,
+          6159
+        ],
+        [
+          8203,
+          8207
+        ],
+        [
+          8234,
+          8238
+        ],
+        [
+          8288,
+          8303
+        ],
+        [
+          12644,
+          12644
+        ],
+        [
+          65024,
+          65039
+        ],
+        [
+          65279,
+          65279
+        ],
+        [
+          65440,
+          65440
+        ],
+        [
+          65520,
+          65528
+        ],
+        [
+          113824,
+          113827
+        ],
+        [
+          119155,
+          119162
+        ],
+        [
+          917504,
+          921599
+        ]
+      ],
+      "whiteSpaceRanges": [
+        [
+          9,
+          13
+        ],
+        [
+          32,
+          32
+        ],
+        [
+          133,
+          133
+        ],
+        [
+          160,
+          160
+        ],
+        [
+          5760,
+          5760
+        ],
+        [
+          8192,
+          8202
+        ],
+        [
+          8232,
+          8233
+        ],
+        [
+          8239,
+          8239
+        ],
+        [
+          8287,
+          8287
+        ],
+        [
+          12288,
+          12288
+        ]
+      ]
+    },
+    "defaultMaxWatchlistHitsPerRun": 200,
+    "defaultMaxWatchlistSpendUsd": 50
+  },
+  "engines": {
+    "global-regtech-compliance-feed": {
+      "slug": "global-regtech-compliance-feed",
+      "title": "Global RegTech Compliance Feed - sanctions, enforcement, debarment, recalls",
+      "description": "One Actor, six regulatory delta sources: OFAC sanctioned vessels, World Bank sanctions, UK Modern Slavery statements, SEC enforcement releases, AI-crawler permission signals and FDA/EMA drug-safety records. Choose sources per run, keep per-source options, and receive only new or changed records.",
+      "memoryMbytes": 2048,
+      "startEvent": "apify-actor-start",
+      "startPriceUsd": 0.005,
+      "credentialFields": {
+        "fdaApiKey": {
+          "source": "fda_ema_recalls",
+          "option": "fdaApiKey"
+        }
+      },
+      "sources": [
+        {
+          "id": "ofac",
+          "status": "active",
+          "description": "US Treasury OFAC SDN list, sdnType=Vessel entries (also absorbs delta-registry-ofac-sanctions-stub), optionally cross-referenced by IMO number against the UN Security Council Consolidated List. Open, unauthenticated feeds; no credentials.",
+          "heldReason": null,
+          "requiredOptions": [],
+          "billing": {
+            "first_seen": "vessel-record",
+            "updated": "vessel-record",
+            "unchanged": "vessel-record"
+          }
+        },
+        {
+          "id": "world_bank_debarred",
+          "status": "active",
+          "description": "World Bank \"Other Sanctions\" table (Table 2 of the debarred-firms page: letters of reprimand, conditional non-debarment and similar). Does NOT include the main debarment register (Table 1), which is only available from an undocumented gateway and is out of scope. Open static HTML; no credentials.",
+          "heldReason": null,
+          "requiredOptions": [],
+          "billing": {
+            "first_seen": "debarment-record",
+            "updated": "debarment-record",
+            "unchanged": "debarment-record"
+          }
+        },
+        {
+          "id": "uk_modern_slavery",
+          "status": "active",
+          "description": "UK Modern Slavery Statement Registry: the registry's official per-year bulk CSV (Open Government Licence v3.0), one record per submitting organisation per statement, newest-updated first. Open download; no credentials.",
+          "heldReason": null,
+          "requiredOptions": [],
+          "billing": {
+            "first_seen": "statement-new",
+            "updated": "statement-updated",
+            "unchanged": "statement-updated"
+          }
+        },
+        {
+          "id": "sec_enforcement",
+          "status": "active",
+          "description": "SEC litigation releases and administrative proceedings from SEC.gov's own RSS feeds (25-item recency window each): release number, date, link and parsed respondent(s). Statute/sanction extraction and EDGAR CIK linking of the legacy actor are not ported (see connector header).",
+          "heldReason": null,
+          "requiredOptions": [],
+          "billing": {
+            "first_seen": "enforcement-release",
+            "updated": "enforcement-update",
+            "unchanged": "enforcement-update"
+          }
+        },
+        {
+          "id": "ai_crawler_signals",
+          "status": "active",
+          "description": "Per-domain AI-crawler permissions from robots.txt (RFC 9309 group matching for 18 tracked bots), Cloudflare Content-Signal categories, and /llms.txt + /llms-full.txt presence and SHA-256. Domains are supplied by the caller (hostnames only, SSRF-guarded, max 200).",
+          "heldReason": null,
+          "requiredOptions": [
+            "domains"
+          ],
+          "billing": {
+            "first_seen": "crawler-signal",
+            "updated": "crawler-signal-change",
+            "unchanged": "crawler-signal-change"
+          }
+        },
+        {
+          "id": "fda_ema_recalls",
+          "status": "active",
+          "description": "US FDA drug enforcement (recall) records from openFDA and EU EMA Direct Healthcare Professional Communications, newest first, in the legacy 18-field UMS envelope plus native fields. Select regulators with subSources; optional dateRange, fdaClassification and BYOK fdaApiKey.",
+          "heldReason": null,
+          "requiredOptions": [],
+          "billing": {
+            "first_seen": "recall-record",
+            "updated": "recall-record",
+            "unchanged": "recall-record"
+          }
+        },
+        {
+          "id": "paris_mou_thetis",
+          "status": "held",
+          "description": "Paris MoU / EMSA THETIS port-state-control detentions.",
+          "heldReason": "THETIS (portal.emsa.europa.eu) redirects every request, including its robots.txt, to a Keycloak OpenID Connect login. A login wall: rejected by the no-login-bypass rule (legacy verification 2026-09).",
+          "requiredOptions": [],
+          "billing": null
+        },
+        {
+          "id": "tokyo_mou_apcis",
+          "status": "held",
+          "description": "Tokyo MoU APCIS port-state-control database.",
+          "heldReason": "The public APCIS search form contains a CAPTCHA input (name=\"captcha\"). Rejected by the no-CAPTCHA-solving rule (legacy verification 2026-09).",
+          "requiredOptions": [],
+          "billing": null
+        },
+        {
+          "id": "imo_gisis",
+          "status": "held",
+          "description": "IMO GISIS public module.",
+          "heldReason": "Not used: gisis.imo.org robots.txt disallows /Members/, /Secretariat/ and /WebServices/, and the Public module is session/registration-gated for actual search. No open bulk feed was verified.",
+          "requiredOptions": [],
+          "billing": null
+        }
+      ],
+      "events": [
+        {
+          "name": "vessel-record",
+          "title": "Sanctioned vessel record",
+          "priceUsd": 0.0005,
+          "basis": "legacy-readme"
+        },
+        {
+          "name": "debarment-record",
+          "title": "Debarment / sanction record",
+          "priceUsd": 0.003,
+          "basis": "legacy-readme"
+        },
+        {
+          "name": "statement-new",
+          "title": "New modern slavery statement",
+          "priceUsd": 0.02,
+          "basis": "legacy-readme"
+        },
+        {
+          "name": "statement-updated",
+          "title": "Updated modern slavery statement",
+          "priceUsd": 0.01,
+          "basis": "legacy-readme"
+        },
+        {
+          "name": "enforcement-release",
+          "title": "New SEC enforcement release",
+          "priceUsd": 0.05,
+          "basis": "legacy-readme"
+        },
+        {
+          "name": "enforcement-update",
+          "title": "Updated SEC enforcement release",
+          "priceUsd": 0.02,
+          "basis": "legacy-readme"
+        },
+        {
+          "name": "crawler-signal",
+          "title": "AI crawler permission snapshot",
+          "priceUsd": 0.015,
+          "basis": "provisional"
+        },
+        {
+          "name": "crawler-signal-change",
+          "title": "AI crawler signal change",
+          "priceUsd": 0.006,
+          "basis": "legacy-readme"
+        },
+        {
+          "name": "recall-record",
+          "title": "Drug safety record",
+          "priceUsd": 0.001,
+          "basis": "legacy-readme"
+        },
+        {
+          "name": "watchlist-hit",
+          "title": "Watchlist hit",
+          "priceUsd": 0.15,
+          "basis": "operator-stated"
+        }
+      ],
+      "recordLevelEvents": [],
+      "watchlistHit": {
+        "event": "watchlist-hit",
+        "priceUsd": 0.15
+      }
+    },
+    "latam-global-tender-intelligence": {
+      "slug": "latam-global-tender-intelligence",
+      "title": "LatAm & Global Tender Intelligence - public procurement delta feed",
+      "description": "One Actor for public tenders and grants: Argentine provincial portals (Santa Fe, Tucuman, Entre Rios), Chile Diario Oficial, EU TED, Florida MFMP, World Bank notices and Regione Lombardia grants. Held sources (ar_cordoba, ar_salta, ar_mendoza, ar_pba, au_grantconnect, ADB, IDB) are refused with their reason.",
+      "memoryMbytes": 1024,
+      "startEvent": "apify-actor-start",
+      "startPriceUsd": 0.005,
+      "credentialFields": {
+        "socrataAppToken": {
+          "source": "it_lombardia_grants",
+          "option": "socrataAppToken"
+        }
+      },
+      "sources": [
+        {
+          "id": "ar_santafe",
+          "status": "active",
+          "description": "Province of Santa Fe (Argentina) Gestiones de Compra: public tenders / purchasing processes from the register's own JSON listing (AP open for bids, ET in progress, CO concluded) plus the public detail page (rubros, documents, deadlines, contact). Open data (CC BY-SA 2.5 AR), no credentials, no proxy.",
+          "heldReason": null,
+          "requiredOptions": [],
+          "billing": {
+            "first_seen": "tender-detail",
+            "updated": "tender-detail",
+            "unchanged": "tender-detail"
+          }
+        },
+        {
+          "id": "ar_tucuman",
+          "status": "active",
+          "description": "Province of Tucum\u00e1n (Argentina) public tenders (licitaciones p\u00fablicas / privadas, concursos de precios, contrataciones directas) across apertura pr\u00f3xima, en adjudicaci\u00f3n and adjudicadas, with full rengl\u00f3n breakdown, montos and pliego PDF link. Open server-rendered portal, no credentials, no proxy.",
+          "heldReason": null,
+          "requiredOptions": [],
+          "billing": {
+            "first_seen": "tender-detail",
+            "updated": "tender-detail",
+            "unchanged": "tender-detail"
+          }
+        },
+        {
+          "id": "ar_entrerios",
+          "status": "active",
+          "description": "Province of Entre R\u00edos (Argentina) Unidad Central de Contrataciones: licitaciones, solicitudes de cotizaci\u00f3n and contrataciones directas (procedimiento, objeto, destino, organismo, estado) from one server-rendered POST. No credentials, no proxy. Needs an HttpClient with raw-byte access because the portal serves Windows-1252 bytes labelled UTF-8.",
+          "heldReason": null,
+          "requiredOptions": [],
+          "billing": {
+            "first_seen": "tender-detail",
+            "updated": "tender-detail",
+            "unchanged": "tender-detail"
+          }
+        },
+        {
+          "id": "cl_diario_oficial",
+          "status": "active",
+          "description": "Chile Diario Oficial (electronic edition): laws, decrees, resolutions and notices published TODAY in the selected sections (normas generales, particulares, judiciales, avisos destacados, empresas y cooperativas, marcas y patentes, miner\u00eda), with issuing ministry / agency, description and the official PDF link. Open site, no credentials, no proxy; requires plain (non-impersonating) HTTP.",
+          "heldReason": null,
+          "requiredOptions": [],
+          "billing": {
+            "first_seen": "tender-detail",
+            "updated": "tender-detail",
+            "unchanged": "tender-detail"
+          }
+        },
+        {
+          "id": "eu_ted",
+          "status": "active",
+          "description": "EU TED procurement notices (contract notices and award notices, all EU member states) via the official anonymous TED Search API, filtered by a TED expert-search query. No credentials.",
+          "heldReason": null,
+          "requiredOptions": [],
+          "billing": {
+            "first_seen": "notice-new",
+            "updated": "notice-updated",
+            "unchanged": "notice-updated"
+          }
+        },
+        {
+          "id": "us_florida",
+          "status": "active",
+          "description": "State of Florida MyFloridaMarketPlace Vendor Information Portal: every state-agency solicitation (ITB, RFP, ITN, RFI, RSQ, single source, intent-to-award, grants, public meetings), with the portal's own filters applied server-side. Also absorbs delta-registry-florida-tenders-stub. Unauthenticated public JSON endpoints; no credentials.",
+          "heldReason": null,
+          "requiredOptions": [],
+          "billing": {
+            "first_seen": "tender-detail",
+            "updated": "tender-detail",
+            "unchanged": "tender-detail"
+          }
+        },
+        {
+          "id": "world_bank_notices",
+          "status": "active",
+          "description": "World Bank procurement notices (invitations for bids, expressions of interest, general procurement notices, contract-award announcements) from the unauthenticated search.worldbank.org procnotices API. ADB and IDB, which the legacy actor deferred, are not included. No credentials.",
+          "heldReason": null,
+          "requiredOptions": [],
+          "billing": {
+            "first_seen": "notice-record",
+            "updated": "notice-record",
+            "unchanged": "notice-record"
+          }
+        },
+        {
+          "id": "it_lombardia_grants",
+          "status": "active",
+          "description": "Regione Lombardia regional grants and tenders register (\"Anagrafica dei bandi regionali\", Socrata dataset bukx-h2uy on dati.lombardia.it, CC BY 4.0), with a derived UPCOMING / OPEN / CLOSED status. Implemented from the legacy README plus live endpoint verification (the legacy repo has no source). The README's 14-category policy-area taxonomy is not reproduced. Optional BYOK Socrata app token.",
+          "heldReason": null,
+          "requiredOptions": [],
+          "billing": {
+            "first_seen": "grant-new",
+            "updated": "grant-updated",
+            "unchanged": "grant-updated"
+          }
+        },
+        {
+          "id": "au_grantconnect",
+          "status": "held",
+          "description": "Australian Government GrantConnect Grant Awards register (grants.gov.au). HELD: the site only serves browser-impersonating clients.",
+          "heldReason": "grants.gov.au (CloudFront) answers HTTP 403 to every honestly identified request, including /robots.txt (live-verified 2026-10-21); the legacy actor only gets through by presenting a Chrome User-Agent and a Chrome TLS fingerprint (impit), which the compliance doctrine forbids as fingerprint spoofing. GrantConnect has no API, CSV feed or RSS for awards. Unblock with written permission or an official channel for automated access.",
+          "requiredOptions": [],
+          "billing": null
+        },
+        {
+          "id": "adb_procurement",
+          "status": "held",
+          "description": "Asian Development Bank procurement notices.",
+          "heldReason": "adb.org sits behind a Cloudflare bot-detection/WAF challenge on every path tested, including robots.txt and its RSS feeds (HTTP 403). Working around it is forbidden by the compliance doctrine (no WAF bypass, no fingerprint spoofing).",
+          "requiredOptions": [],
+          "billing": null
+        },
+        {
+          "id": "idb_procurement",
+          "status": "held",
+          "description": "Inter-American Development Bank procurement notices.",
+          "heldReason": "The IDB notices page renders only through an embedded Power BI report, and the structured CKAN API at data.iadb.org is disallowed by that host's own robots.txt (/api/, /datastore/dump/, /file/download/, /dataset/download/). Neither route is compliant for a robots-respecting plain-fetch connector.",
+          "requiredOptions": [],
+          "billing": null
+        },
+        {
+          "id": "ar_cordoba",
+          "status": "held",
+          "description": "Province of Cordoba (Argentina) Compras Publicas licitaciones, webecommerce.cba.gov.ar. HELD: cannot be selected.",
+          "heldReason": "webecommerce.cba.gov.ar blocks non-residential, non-Argentine traffic at the network level (legacy cordoba-compras-monitor AGENTS.md lines 86-88: the failure is at TCP level and the portal blocks non-Argentina/non-residential traffic, same as PBAC; SECURITY.md and README.md state the actor requires a paid Residential + Argentina Apify Proxy group, and that proxied path was never independently verified from the real container). The shared HTTP client has no proxy support and the compliance doctrine does not route around a network-level access block.",
+          "requiredOptions": [],
+          "billing": null
+        },
+        {
+          "id": "ar_salta",
+          "status": "held",
+          "description": "Province of Salta (Argentina) public tenders and awards, compras.salta.gob.ar. HELD: cannot be selected.",
+          "heldReason": "held by portfolio decision (operator-designated held source); no technical constraint documented in the legacy repo",
+          "requiredOptions": [],
+          "billing": null
+        },
+        {
+          "id": "ar_mendoza",
+          "status": "held",
+          "description": "Province of Mendoza (Argentina) COMPR.AR procurement processes, comprar.mendoza.gov.ar. HELD: cannot be selected.",
+          "heldReason": "held by portfolio decision (operator-designated held source); no technical constraint documented in the legacy repo",
+          "requiredOptions": [],
+          "billing": null
+        },
+        {
+          "id": "ar_pba",
+          "status": "held",
+          "description": "Province of Buenos Aires (Argentina) PBAC procurement portal, pbac.cgp.gba.gov.ar. HELD: cannot be selected.",
+          "heldReason": "pbac.cgp.gba.gov.ar blocks non-residential, non-Argentine traffic at the network level (legacy pba-tenders-monitor AGENTS.md \"CRITICAL: PBAC blocks non-residential-Argentina traffic\", verified 2026-09-04: every request from Apify's cloud with no proxy or a datacenter proxy timed out after 30 s across 4 retries, 0 successes in two cloud runs; only a paid Residential proxy with countryCode AR succeeded, which is how the legacy actor runs). The shared HTTP client has no proxy support and the compliance doctrine does not route around a network-level access block.",
+          "requiredOptions": [],
+          "billing": null
+        }
+      ],
+      "events": [
+        {
+          "name": "tender-detail",
+          "title": "Tender record",
+          "priceUsd": 0.003,
+          "basis": "legacy-readme"
+        },
+        {
+          "name": "tender-summary",
+          "title": "Tender summary record",
+          "priceUsd": 0.001,
+          "basis": "legacy-readme"
+        },
+        {
+          "name": "notice-record",
+          "title": "Procurement notice",
+          "priceUsd": 0.001,
+          "basis": "legacy-readme"
+        },
+        {
+          "name": "notice-new",
+          "title": "New EU TED notice",
+          "priceUsd": 0.02,
+          "basis": "legacy-readme"
+        },
+        {
+          "name": "notice-updated",
+          "title": "Updated EU TED notice",
+          "priceUsd": 0.01,
+          "basis": "legacy-readme"
+        },
+        {
+          "name": "grant-new",
+          "title": "New Lombardia grant call",
+          "priceUsd": 0.02,
+          "basis": "legacy-readme"
+        },
+        {
+          "name": "grant-updated",
+          "title": "Updated Lombardia grant call",
+          "priceUsd": 0.008,
+          "basis": "provisional"
+        },
+        {
+          "name": "watchlist-hit",
+          "title": "Watchlist hit",
+          "priceUsd": 0.15,
+          "basis": "operator-stated"
+        }
+      ],
+      "recordLevelEvents": [
+        "tender-summary"
+      ],
+      "watchlistHit": {
+        "event": "watchlist-hit",
+        "priceUsd": 0.15
+      }
+    },
+    "global-corporate-patent-intelligence": {
+      "slug": "global-corporate-patent-intelligence",
+      "title": "Global Corporate & Patent Intelligence - PTAB, EPO, trials, company registers",
+      "description": "One Actor for corporate and IP change monitoring: USPTO PTAB trials and EPO opposition watch (bring your own keys), ClinicalTrials.gov + FDA Orange Book, Singapore ACRA and UAE (ADGM/DIFC) registers. Receive only new or changed records.",
+      "memoryMbytes": 1024,
+      "startEvent": "apify-actor-start",
+      "startPriceUsd": 0.005,
+      "credentialFields": {
+        "usptoOdpApiKey": {
+          "source": "uspto_ptab",
+          "option": "usptoOdpApiKey"
+        },
+        "epoOpsConsumerKey": {
+          "source": "epo_opposition",
+          "option": "epoOpsConsumerKey"
+        },
+        "epoOpsConsumerSecret": {
+          "source": "epo_opposition",
+          "option": "epoOpsConsumerSecret"
+        },
+        "fdaApiKey": {
+          "source": "clinicaltrials_orange_book",
+          "option": "fdaApiKey"
+        }
+      },
+      "sources": [
+        {
+          "id": "uspto_ptab",
+          "status": "active",
+          "description": "USPTO Patent Trial and Appeal Board trial proceedings (IPR / PGR / CBM / DER) from the USPTO Open Data Portal, newest petition first. BYOK: needs your own USPTO ODP API key.",
+          "heldReason": null,
+          "requiredOptions": [
+            "usptoOdpApiKey"
+          ],
+          "billing": {
+            "first_seen": "patent-proceeding",
+            "updated": "patent-proceeding",
+            "unchanged": "patent-proceeding"
+          }
+        },
+        {
+          "id": "epo_opposition",
+          "status": "active",
+          "description": "EPO Open Patent Services legal-status lookup for a watchlist of EP publication numbers, reporting opposition-family legal events. BYOK: needs your own EPO OPS consumer key and secret (OAuth2 client credentials).",
+          "heldReason": null,
+          "requiredOptions": [
+            "epoOpsConsumerKey",
+            "epoOpsConsumerSecret"
+          ],
+          "billing": {
+            "first_seen": "patent-proceeding",
+            "updated": "patent-proceeding",
+            "unchanged": "patent-proceeding"
+          }
+        },
+        {
+          "id": "clinicaltrials_orange_book",
+          "status": "active",
+          "description": "ClinicalTrials.gov v2 studies (newest update first) and FDA Orange Book products with their patent and exclusivity data (openFDA, newest approval first), in the legacy actor-24 vocabulary. Select registries with subSources; narrow with condition, orangeBookQuery, sponsors, keywords, updatedWithin; optional BYOK fdaApiKey.",
+          "heldReason": null,
+          "requiredOptions": [],
+          "billing": {
+            "first_seen": "clinical-record",
+            "updated": "clinical-record",
+            "unchanged": "clinical-record"
+          }
+        },
+        {
+          "id": "sg_acra",
+          "status": "active",
+          "description": "Singapore ACRA register of corporate entities from data.gov.sg (monthly extract, 27 first-letter shards), newest registrations first, in the legacy singapore-acra-registry-monitor vocabulary. Select shards with shardSelection; narrow with entityNames, entityStatusFilter, ssicCodeFilter.",
+          "heldReason": null,
+          "requiredOptions": [],
+          "billing": {
+            "first_seen": "sg-entity-new",
+            "updated": "sg-entity-updated",
+            "unchanged": "sg-entity-updated"
+          }
+        },
+        {
+          "id": "ae_registers",
+          "status": "active",
+          "description": "UAE corporate registers - ADGM (Abu Dhabi Global Market) and DIFC (Dubai International Financial Centre) public entity registers, anonymous, with bilingual-safe names and registration / licence status. Dubai Pulse mainland licences are held (unverified wire protocol).",
+          "heldReason": null,
+          "requiredOptions": [],
+          "billing": {
+            "first_seen": "uae-entity-new",
+            "updated": "uae-entity-updated",
+            "unchanged": "uae-entity-updated"
+          }
+        }
+      ],
+      "events": [
+        {
+          "name": "patent-proceeding",
+          "title": "Patent enforcement proceeding",
+          "priceUsd": 0.002,
+          "basis": "legacy-readme"
+        },
+        {
+          "name": "clinical-record",
+          "title": "Clinical trial / Orange Book record",
+          "priceUsd": 0.002,
+          "basis": "legacy-readme"
+        },
+        {
+          "name": "uae-entity-new",
+          "title": "New UAE register entity",
+          "priceUsd": 0.02,
+          "basis": "legacy-readme"
+        },
+        {
+          "name": "uae-entity-updated",
+          "title": "Updated UAE register entity",
+          "priceUsd": 0.01,
+          "basis": "provisional"
+        },
+        {
+          "name": "sg-entity-new",
+          "title": "New Singapore ACRA entity",
+          "priceUsd": 0.03,
+          "basis": "legacy-readme"
+        },
+        {
+          "name": "sg-entity-updated",
+          "title": "Updated Singapore ACRA entity",
+          "priceUsd": 0.01,
+          "basis": "provisional"
+        },
+        {
+          "name": "watchlist-hit",
+          "title": "Watchlist hit",
+          "priceUsd": 0.15,
+          "basis": "operator-stated"
+        }
+      ],
+      "recordLevelEvents": [],
+      "watchlistHit": {
+        "event": "watchlist-hit",
+        "priceUsd": 0.15
+      }
+    }
+  }
+}

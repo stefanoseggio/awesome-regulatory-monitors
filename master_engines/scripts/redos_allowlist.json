@@ -1,0 +1,38 @@
+[
+    {
+        "file": "global-regtech-compliance-feed/connectors/ofac.ts",
+        "pattern": "IMO[^0-9]{0,40}?(\\d{7})\\b",
+        "bound": "Bounded repetition: at most 41 characters scanned per start position, so the cost is O(41 * n), linear in the text length. The analyser cannot treat 40 as a constant.",
+        "enforcedBy": "OFAC IMO pattern (bounded repetition)"
+    },
+    {
+        "file": "global-regtech-compliance-feed/connectors/secEnforcement.ts",
+        "pattern": "(?:https?:\\/\\/\\S+|[\\w.+-]+@[\\w-]+\\.[\\w.-]+)",
+        "bound": "Only ever applied to the userAgent option, which is capped at 200 characters (USER_AGENT_MAX) before the pattern runs.",
+        "enforcedBy": "SEC userAgent option"
+    },
+    {
+        "file": "global-regtech-compliance-feed/connectors/worldBankDebarred.ts",
+        "pattern": "([A-Za-z]+)\\s+(\\d{1,2}),?\\s+(\\d{4})",
+        "bound": "Applied to capLength(value, 256): quadratic on at most 256 characters.",
+        "enforcedBy": "World Bank sanction date"
+    },
+    {
+        "file": "latam-global-tender-intelligence/connectors/arSantaFe.ts",
+        "pattern": "[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}",
+        "bound": "Applied to capLength(value, MAX_CONTACT_TEXT) with MAX_CONTACT_TEXT = 1000: about 10^6 steps worst case (1.4 ms measured).",
+        "enforcedBy": "extractEmails (quadratic pattern) at MAX_CONTACT_TEXT"
+    },
+    {
+        "file": "latam-global-tender-intelligence/connectors/arSantaFe.ts",
+        "pattern": "^(.*?)\\s+N[º°o.]*\\s*(\\S+?)\\/(\\d{4})\\s*$",
+        "bound": "A title longer than MAX_TITLE_PARSE_LENGTH = 200 is never passed to the pattern: cubic on at most 200 characters.",
+        "enforcedBy": "parseTitle (cubic pattern) at MAX_TITLE_PARSE_LENGTH"
+    },
+    {
+        "file": "latam-global-tender-intelligence/connectors/arSantaFe.ts",
+        "pattern": "^(?:(\\+|-|in\\s+)\\s*)?(\\d+)\\s*(day|week|month|year)s?(?:\\s+ago)?$",
+        "bound": "A value longer than 64 characters is never passed to the pattern (capLength(v, 64) === v).",
+        "enforcedBy": "relative dates, World Bank dates and the userAgent contact marker at their caps"
+    }
+]

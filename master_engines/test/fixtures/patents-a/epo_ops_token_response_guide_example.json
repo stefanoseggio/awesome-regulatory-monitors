@@ -1,0 +1,13 @@
+{
+  "_fixtureNote": "DOCUMENTATION EXAMPLE, NOT A LIVE RESPONSE. The 200 reply of POST https://ops.epo.org/3.2/auth/accesstoken exactly as the public EPO OPS Reference Guide v 1.3.20 (June 2024, p.36) prints it; the access_token is the guide's placeholder, not a real token.",
+  "issued_at": "1364247843353",
+  "application_name": "511d82a3-aa0e-4775-ba48-05ccd9275c56",
+  "scope": "core",
+  "status": "approved",
+  "expires_in": "1199",
+  "api_product_list": "[ops-prod]",
+  "token_type": "Bearer",
+  "access_token": "4AWoepfVNgf09DRmimEnGdXcgoFU",
+  "organization_name": "epo",
+  "refresh_count": "0"
+}

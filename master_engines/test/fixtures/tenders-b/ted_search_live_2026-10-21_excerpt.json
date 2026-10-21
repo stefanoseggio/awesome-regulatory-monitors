@@ -1,0 +1,220 @@
+{
+  "notices": [
+    {
+      "notice-identifier": "52d740c8-2435-4714-acc3-6bca47d46400",
+      "notice-type": "can-standard",
+      "publication-number": "718666-2026",
+      "result-value-notice": "3012300",
+      "legal-basis": [
+        "32014L0025"
+      ],
+      "organisation-country-buyer": [
+        "POL"
+      ],
+      "winner-country": [
+        "POL"
+      ],
+      "winner-size": [
+        "large"
+      ],
+      "winner-identifier": [
+        "5270023255"
+      ],
+      "procedure-type": "open",
+      "classification-cpv": [
+        "50316000",
+        "50324100",
+        "72267000",
+        "72318000",
+        "50316000",
+        "72267000",
+        "50324100",
+        "72318000"
+      ],
+      "publication-date": "2026-10-19+02:00",
+      "buyer-name": {
+        "pol": [
+          "Miejskie Przedsiębiorstwo Komunikacyjne – Łódź Spółka z ograniczoną odpowiedzialnością"
+        ]
+      },
+      "links": {
+        "htmlDirect": {
+          "ENG": "https://ted.europa.eu/en/notice/718666-2026/html"
+        },
+        "html": {
+          "ENG": "https://ted.europa.eu/en/notice/-/detail/718666-2026"
+        }
+      },
+      "organisation-name-buyer": {
+        "pol": [
+          "Miejskie Przedsiębiorstwo Komunikacyjne – Łódź Spółka z ograniczoną odpowiedzialnością"
+        ]
+      },
+      "notice-title": {
+        "eng": "Poland – Maintenance and repair of ticket-issuing machinery – Świadczenie usługi serwisowej i eksploatacyjnej mobilnych automatów biletowych EMtest oraz utrzymanie platformy programowo - sprzętowej wraz z transmisją danych"
+      },
+      "result-value-cur-notice": "PLN"
+    },
+    {
+      "notice-identifier": "f66d301c-02ee-4db1-bd67-b7a990cbfacf",
+      "notice-type": "can-standard",
+      "publication-number": "719137-2026",
+      "estimated-value-lot": [
+        "77952",
+        "97440"
+      ],
+      "result-value-notice": "116436.16",
+      "legal-basis": [
+        "32014L0024"
+      ],
+      "organisation-country-buyer": [
+        "PRT"
+      ],
+      "winner-country": [
+        "PRT",
+        "PRT"
+      ],
+      "estimated-value-cur-lot": [
+        "EUR"
+      ],
+      "winner-size": [
+        "medium",
+        "small"
+      ],
+      "winner-identifier": [
+        "504243926",
+        "514880201"
+      ],
+      "procedure-type": "open",
+      "classification-cpv": [
+        "72253000",
+        "72253000",
+        "72253000"
+      ],
+      "publication-date": "2026-10-19+02:00",
+      "buyer-name": {
+        "por": [
+          "Estrutura de Missão «Recuperar Portugal»"
+        ]
+      },
+      "links": {
+        "htmlDirect": {
+          "ENG": "https://ted.europa.eu/en/notice/719137-2026/html"
+        },
+        "html": {
+          "ENG": "https://ted.europa.eu/en/notice/-/detail/719137-2026"
+        }
+      },
+      "organisation-name-buyer": {
+        "por": [
+          "Estrutura de Missão «Recuperar Portugal»"
+        ]
+      },
+      "notice-title": {
+        "eng": "Portugal – Helpdesk and support services – Aquisição de serviços especializados de suporte técnico em regime de outsourcing: Admin Azure em 365, Microinformática, Gestão de Projeto e Contratos, com recurso a automatismos desenvolvidos em power apps e power automate"
+      },
+      "result-value-cur-notice": "EUR"
+    },
+    {
+      "notice-identifier": "a37b8c4f-6c53-4177-8214-a914cb9adb36",
+      "deadline-receipt-tender-date-lot": [
+        "2026-11-20+02:00"
+      ],
+      "notice-type": "cn-standard",
+      "publication-number": "718668-2026",
+      "estimated-value-lot": [
+        "298270.00"
+      ],
+      "legal-basis": [
+        "32014L0024"
+      ],
+      "organisation-country-buyer": [
+        "BGR"
+      ],
+      "estimated-value-cur-lot": [
+        "EUR"
+      ],
+      "procedure-type": "open",
+      "classification-cpv": [
+        "48730000",
+        "48730000",
+        "72260000",
+        "72261000",
+        "48000000"
+      ],
+      "publication-date": "2026-10-19+02:00",
+      "buyer-name": {
+        "bul": [
+          "ИНФОРМАЦИОННО ОБСЛУЖВАНЕ АД"
+        ]
+      },
+      "links": {
+        "htmlDirect": {
+          "ENG": "https://ted.europa.eu/en/notice/718668-2026/html"
+        },
+        "html": {
+          "ENG": "https://ted.europa.eu/en/notice/-/detail/718668-2026"
+        }
+      },
+      "organisation-name-buyer": {
+        "bul": [
+          "ИНФОРМАЦИОННО ОБСЛУЖВАНЕ АД"
+        ]
+      },
+      "notice-title": {
+        "eng": "Bulgaria – Security software package – „Осигуряване на система за мрежово откриване, разследване и реагиране на кибер заплахи и подновяване на софтуерно решение за одит и анализ на промените в ИКИ средите за нуждите на Министерство на външните работи (МВнР)“"
+      }
+    },
+    {
+      "notice-identifier": "afe1c4d0-a2a8-453f-b78b-65c2e93b7aec",
+      "deadline-receipt-tender-date-lot": [
+        "2026-11-25+01:00"
+      ],
+      "notice-type": "cn-standard",
+      "publication-number": "718679-2026",
+      "legal-basis": [
+        "32014L0024"
+      ],
+      "organisation-country-buyer": [
+        "NLD"
+      ],
+      "procedure-type": "open",
+      "classification-cpv": [
+        "48311000",
+        "48000000",
+        "72263000",
+        "72267000",
+        "72268000",
+        "48311000",
+        "48000000",
+        "72263000",
+        "72267000",
+        "72268000"
+      ],
+      "publication-date": "2026-10-19+02:00",
+      "buyer-name": {
+        "nld": [
+          "Raad van State"
+        ]
+      },
+      "links": {
+        "htmlDirect": {
+          "ENG": "https://ted.europa.eu/en/notice/718679-2026/html"
+        },
+        "html": {
+          "ENG": "https://ted.europa.eu/en/notice/-/detail/718679-2026"
+        }
+      },
+      "organisation-name-buyer": {
+        "nld": [
+          "Raad van State"
+        ]
+      },
+      "notice-title": {
+        "eng": "Netherlands – Document management software package – Europese openbare aanbesteding 'Levering, implementatie, beheer en onderhoud van een Record Management Applicatie (RMA)'"
+      }
+    }
+  ],
+  "totalNoticeCount": 689,
+  "timedOut": false
+}

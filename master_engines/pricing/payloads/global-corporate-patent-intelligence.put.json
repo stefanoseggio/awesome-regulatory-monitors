@@ -1,0 +1,58 @@
+{
+    "pricingInfos": [
+        {
+            "pricingModel": "PAY_PER_EVENT",
+            "pricingPerEvent": {
+                "actorChargeEvents": {
+                    "apify-actor-start": {
+                        "eventTitle": "Actor Start",
+                        "eventDescription": "Charged when the Actor starts running. Number of events charged depends on Actor memory (one event per GB, minimum one event).",
+                        "eventPriceUsd": 0.005,
+                        "isOneTimeEvent": true
+                    },
+                    "patent-proceeding": {
+                        "eventTitle": "Patent enforcement proceeding",
+                        "eventDescription": "One USPTO PTAB trial or EPO opposition-related legal event delivered to the dataset.",
+                        "eventPriceUsd": 0.002,
+                        "isPrimaryEvent": true
+                    },
+                    "clinical-record": {
+                        "eventTitle": "Clinical trial / Orange Book record",
+                        "eventDescription": "One new or changed ClinicalTrials.gov study or FDA Orange Book record delivered.",
+                        "eventPriceUsd": 0.002
+                    },
+                    "uae-entity-new": {
+                        "eventTitle": "New UAE register entity",
+                        "eventDescription": "An ADGM or DIFC registration never delivered before.",
+                        "eventPriceUsd": 0.02
+                    },
+                    "uae-entity-updated": {
+                        "eventTitle": "Updated UAE register entity",
+                        "eventDescription": "A previously delivered ADGM/DIFC entity whose status or content changed, or one re-sent unchanged by a full-snapshot run.",
+                        "eventPriceUsd": 0.01
+                    },
+                    "sg-entity-new": {
+                        "eventTitle": "New Singapore ACRA entity",
+                        "eventDescription": "An ACRA-registered entity never delivered before.",
+                        "eventPriceUsd": 0.03
+                    },
+                    "sg-entity-updated": {
+                        "eventTitle": "Updated Singapore ACRA entity",
+                        "eventDescription": "A previously delivered ACRA entity whose status or content changed, or one re-sent unchanged by a full-snapshot run.",
+                        "eventPriceUsd": 0.01
+                    },
+                    "watchlist-hit": {
+                        "eventTitle": "Watchlist hit",
+                        "eventDescription": "Charged once for each delivered corporate or patent record whose text matches a keyword of the caller's own watchlist. Never charged when no valid keyword was supplied.",
+                        "eventPriceUsd": 0.15
+                    }
+                }
+            },
+            "minimalMaxTotalChargeUsd": 0.16,
+            "apifyMarginPercentage": 0.2,
+            "createdAt": "2026-10-21T00:00:00.000Z",
+            "startedAt": "2026-11-04T00:00:00.000Z",
+            "reasonForChange": "Consolidation of single-source Actors into global-corporate-patent-intelligence: each legacy source keeps its own per-record price as a separate event, and the start event is set to $0.005."
+        }
+    ]
+}

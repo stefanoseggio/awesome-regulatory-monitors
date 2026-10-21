@@ -1,0 +1,110 @@
+{
+  "_fixtureNote": "SYNTHETIC, NOT A REAL UPSTREAM RESPONSE. Shaped by the USPTO ODP PTAB Trials 'Search Proceedings' field set recorded in the legacy actor (patentTrialProceedingDataBag, trialMetaData.*, patentOwnerData / regularPetitionerData / respondentData / derivationPetitionerData). Proceeding 1 uses the sample values of the legacy actor's test/umsNormalizer.test.ts and README. Proceeding 2 exercises the respondentData / derivationPetitionerData fallbacks and a termination. Proceeding 3 omits most fields, has a numeric technologyCenterNumber and padded / blank names. Proceeding 4 has no trialNumber and must be skipped. No ODP key is held by this codebase, so no authenticated response could be captured.",
+  "patentTrialProceedingDataBag": [
+    {
+      "trialNumber": "IPR2024-00123",
+      "trialRecordIdentifier": null,
+      "lastModifiedDateTime": "2024-07-10T12:00:00Z",
+      "trialMetaData": {
+        "trialTypeCode": "IPR",
+        "trialStatusCategory": "Instituted",
+        "trialLastModifiedDate": "2024-07-10",
+        "petitionFilingDate": "2024-01-15",
+        "trialLastModifiedDateTime": "2024-07-10T12:00:00Z",
+        "accordedFilingDate": "2024-01-20",
+        "institutionDecisionDate": "2024-07-10",
+        "latestDecisionDate": "2024-07-10",
+        "terminationDate": null,
+        "fileDownloadURI": "https://api.uspto.gov/api/v1/patent/trials/documents/IPR2024-00123/download"
+      },
+      "patentOwnerData": {
+        "patentNumber": "10123456",
+        "applicationNumberText": "15123456",
+        "realPartyInInterestName": "Acme Widgets Inc.",
+        "grantDate": "2018-11-13",
+        "patentOwnerName": "Acme Widgets Inc.",
+        "inventorName": "John Inventor",
+        "counselName": null,
+        "technologyCenterNumber": "2600",
+        "groupArtUnitNumber": "2611"
+      },
+      "regularPetitionerData": {
+        "patentNumber": "10123456",
+        "applicationNumberText": null,
+        "realPartyInInterestName": "Globex Corp",
+        "grantDate": null,
+        "patentOwnerName": null,
+        "inventorName": null,
+        "counselName": "Jane Counsel",
+        "technologyCenterNumber": null,
+        "groupArtUnitNumber": null
+      },
+      "respondentData": null,
+      "derivationPetitionerData": null
+    },
+    {
+      "trialNumber": "DER2025-00007",
+      "trialRecordIdentifier": null,
+      "lastModifiedDateTime": "2025-03-02T08:30:00Z",
+      "trialMetaData": {
+        "trialTypeCode": "DER",
+        "trialStatusCategory": "Terminated-Settled",
+        "trialLastModifiedDate": null,
+        "petitionFilingDate": "2025-01-10",
+        "trialLastModifiedDateTime": null,
+        "accordedFilingDate": "2025-01-14",
+        "institutionDecisionDate": null,
+        "latestDecisionDate": "2025-03-01",
+        "terminationDate": "2025-03-01",
+        "fileDownloadURI": null
+      },
+      "patentOwnerData": null,
+      "regularPetitionerData": null,
+      "respondentData": {
+        "patentNumber": "9876543",
+        "applicationNumberText": null,
+        "realPartyInInterestName": "Initech Holdings LLC",
+        "grantDate": null,
+        "patentOwnerName": "Initech LLC",
+        "inventorName": null,
+        "counselName": null,
+        "technologyCenterNumber": "3700",
+        "groupArtUnitNumber": null
+      },
+      "derivationPetitionerData": {
+        "patentNumber": "9876543",
+        "applicationNumberText": "14999999",
+        "realPartyInInterestName": "Umbrella Research Ltd",
+        "grantDate": null,
+        "patentOwnerName": null,
+        "inventorName": null,
+        "counselName": "Counsel & Partners",
+        "technologyCenterNumber": null,
+        "groupArtUnitNumber": null
+      }
+    },
+    {
+      "trialNumber": "PGR2026-00002",
+      "trialMetaData": {
+        "trialTypeCode": "PGR",
+        "trialStatusCategory": "Pending",
+        "petitionFilingDate": "2026-09-30"
+      },
+      "patentOwnerData": {
+        "patentNumber": "11222333",
+        "patentOwnerName": "  Hooli Devices, Inc.  ",
+        "realPartyInInterestName": "",
+        "technologyCenterNumber": 1600
+      },
+      "regularPetitionerData": {
+        "realPartyInInterestName": "Pied Piper Systems"
+      }
+    },
+    {
+      "trialMetaData": {
+        "trialTypeCode": "IPR",
+        "trialStatusCategory": "Pending"
+      }
+    }
+  ]
+}
