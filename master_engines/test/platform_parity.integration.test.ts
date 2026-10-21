@@ -167,8 +167,9 @@ describe.concurrent('platform parity: a plain run at home', () => {
             expect(first.result?.summary?.totalEmitted).toBe(6);
             expect(deliveredIds(platform)).toEqual(['r0', 'r1', 'r2', 'r3', 'r4', 'r5']);
 
-            // The delta memory was LISTED through the platform client (a keys request that succeeded).
-            expect(platform.requestsMatching({ method: 'GET', path: /\/keys$/ }).map((r) => r.status)).toEqual([200]);
+            // The delta memory of the source was read BY NAME through the platform client (404: a fresh store has none); no listing needed.
+            expect(platform.requestsMatching({ method: 'GET', key: key('state', 'stub') }).map((r) => r.status)).toEqual([404]);
+            expect(platform.requestsMatching({ method: 'GET', path: /\/keys$/ })).toEqual([]);
             // State: one record for the source, remembering every delivered id.
             expect(kv.json<{ seenIds: string[] }>(key('state', 'stub'))?.seenIds.slice().sort()).toEqual(['r0', 'r1', 'r2', 'r3', 'r4', 'r5']);
             // Journal: rewritten after each delivered row (one PUT per row), then cleared by a null write, which is a DELETE.
@@ -206,18 +207,34 @@ describe.concurrent('platform parity: a plain run at home', () => {
         });
     });
 
-    it('(a4) memory that spans several pages of the key listing is read completely, and keys of other namespaces are ignored', async () => {
-        await withPlatform({ maxKeysPerPage: 2 }, async (platform) => {
+    it('(a4) memory is read by name: a listing that hides every record does not make a source read as never seen', async () => {
+        await withPlatform({ maxKeysPerPage: 2, listingHides: () => true }, async (platform) => {
             const kv = platform.kv(STORE);
             const ids = ['s1', 's2', 's3', 's4', 's5'];
             for (const id of ids) kv.setJson(key('state', id), stateRecord([`${id}-0`, `${id}-1`]));
-            // Keys of other namespaces and kinds that sort BEFORE ours: a listing that stops at the first page sees only these.
+            // Keys of other namespaces and kinds are never read: the router asks for the records of its own sources only.
             for (const other of ['journal.aaa.s1', 'lease.aaa.s1', 'state.aaa.s1', 'state.aaa.s2', 'state.ns0.s1']) kv.setJson(other, {});
             const sources = Object.fromEntries(ids.map((id) => [id, rows(`${id}-`, 2)]));
             const result = await runChild(platform, { runId: 'run-1', sources });
             expect(result.result?.ok, why(result)).toBe(true);
             expect(result.result?.summary?.totalEmitted, 'every source must have found its memory').toBe(0);
             expect(platform.dataset.items).toEqual([]);
+            expect(platform.requestsMatching({ method: 'GET', path: /\/keys$/ }), 'a run needs no listing').toEqual([]);
+        });
+    });
+
+    it('(a5) the listing fallback of load() reads every page of the listing and ignores keys of other namespaces; load(sources) finds records the listing hides', async () => {
+        await withPlatform({ maxKeysPerPage: 2, listingHides: (k) => k === key('state', 's4') }, async (platform) => {
+            const kv = platform.kv(STORE);
+            const ids = ['s1', 's2', 's3', 's4', 's5'];
+            for (const id of ids) kv.setJson(key('state', id), stateRecord([`${id}-0`]));
+            // Keys of other namespaces and kinds that sort BEFORE ours: a listing that stops at the first page sees only these.
+            for (const other of ['journal.aaa.s1', 'lease.aaa.s1', 'state.aaa.s1', 'state.aaa.s2', 'state.ns0.s1']) kv.setJson(other, {});
+            const result = await runChild(platform, { runId: 'run-1', sources: Object.fromEntries(ids.map((id) => [id, []])), env: { ENTRY: 'load' } });
+            expect(result.result?.ok, why(result)).toBe(true);
+            const loaded = result.result as unknown as { listed: string[]; named: string[] };
+            expect(loaded.listed, 'every page of the listing, minus the record it hides').toEqual(['s1', 's2', 's3', 's5']);
+            expect(loaded.named).toEqual(ids);
             expect(platform.requestsMatching({ method: 'GET', path: /\/keys$/ }).length, 'the listing was paginated').toBeGreaterThan(1);
         });
     });

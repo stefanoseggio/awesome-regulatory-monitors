@@ -3,7 +3,7 @@
  * failure paths. Each test names the finding it pins (F-01 .. F-10). They are written to the behaviour the code must have; the
  * review's reproductions showed the opposite on the code before the fixes.
  */
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
 import { ApifyDeltaStore, ApifyLeaseStorage, ApifyRunLiveness, isUnparsableRecordError } from '../lib/apify_adapters.js';
@@ -551,5 +551,163 @@ describe('the lease record type is unchanged for readers of an old record', () =
         const old: Partial<LeaseRecord> = { runId: 'old', heartbeatAt: '2026-10-21T09:59:00.000Z' };
         storage.poke('ofac', old);
         await expect(leasesFor(storage, 'run-b', c, { settleMs: 0 }).acquire(['ofac'])).rejects.toBeInstanceOf(LeaseConflictError);
+    });
+});
+
+describe('LEASE-01 delta memory is not written by a run that was overtaken while it was blocked in its last push', () => {
+    /** Run A pushes `total` rows; while A is inside the push of row `at`, the clock jumps past the stale limit and B takes the lease. */
+    async function overtakenDuringPush(total: number, at: number) {
+        const c = fakeClock();
+        const storage = new InMemoryLeaseStorage();
+        const store = new InMemoryDeltaStore();
+        const rows: Array<Record<string, unknown>> = [];
+        const h = harness({ store, rows });
+        h.sinks.leases = leasesFor(storage, 'run-a', c, { settleMs: 0, staleAfterMs: 15 * 60_000, renewEveryMs: 60 * 60_000 });
+        let pushed = 0;
+        const innerEmit = h.sinks.emit;
+        h.sinks.emit = async (row, eventName) => {
+            const result = await innerEmit(row, eventName);
+            pushed += 1;
+            if (pushed === at) {
+                c.advance(20 * 60_000);
+                storage.poke('a', { runId: 'run-b', acquiredAt: c.now().toISOString(), heartbeatAt: c.now().toISOString() });
+            }
+            return result;
+        };
+        const outcome = await runEngine(engineOf(connector('a', async () => ids(total).map((id) => rec(id)))), { sources: ['a'] }, { sinks: h.sinks, ctx, clock }).catch((e: unknown) => e);
+        return { outcome, store, rows, storage };
+    }
+
+    it('overtaken during the push of the LAST row: no memory is written over the new holder, the journal keeps the rows, and the run fails with LeaseLostError', async () => {
+        // renewEveryMs is an hour, so no renewIfDue check happens after that push: only the check before the memory write can see it
+        const { outcome, store, rows, storage } = await overtakenDuringPush(3, 3);
+        expect(outcome).toBeInstanceOf(LeaseLostError);
+        expect(rows).toHaveLength(3);
+        expect(store.peek().sources.a, 'A wrote no memory').toBeUndefined();
+        expect(store.peekJournal('a'), 'the journal still holds the delivered rows, so the next run folds them in').toHaveLength(3);
+        expect(store.saves).toBe(0);
+        expect(storage.peek('a')).toMatchObject({ runId: 'run-b' });
+    });
+
+    it('overtaken during the push of the 25th row: the checkpoint is not written, nothing after it is pushed', async () => {
+        const { outcome, store, rows } = await overtakenDuringPush(40, 25);
+        expect(outcome).toBeInstanceOf(LeaseLostError);
+        expect(rows).toHaveLength(25);
+        expect(store.peek().sources.a).toBeUndefined();
+        expect(store.peekJournal('a')).toHaveLength(25);
+    });
+
+    it('a lease that is still ours changes nothing: memory is written at the checkpoint and at the end, the journal is cleared', async () => {
+        const c = fakeClock();
+        const storage = new InMemoryLeaseStorage();
+        const store = new InMemoryDeltaStore();
+        const h = harness({ store });
+        h.sinks.leases = leasesFor(storage, 'run-a', c, { settleMs: 0 });
+        const summary = await runEngine(engineOf(connector('a', async () => ids(30).map((id) => rec(id)))), { sources: ['a'] }, { sinks: h.sinks, ctx, clock });
+        expect(summary.totalEmitted).toBe(30);
+        expect(store.peek().sources.a?.seenIds).toHaveLength(30);
+        expect(store.peekJournal('a')).toEqual([]);
+        expect(storage.peek('a')).toBeUndefined();
+    });
+});
+
+describe('LEASE-03 a heartbeat tick that is reading when the run releases cannot bring the lease back', () => {
+    it('release waits for the tick, the tick writes nothing, and the record stays removed', async () => {
+        const inner = new InMemoryLeaseStorage();
+        // A read that returns the value it saw BEFORE it was delayed: the tick holds a stale copy while release removes the record.
+        const slowReads: LeaseStorage = {
+            async read(source) {
+                const value = await inner.read(source);
+                await new Promise((resolve) => setTimeout(resolve, 40));
+                return value;
+            },
+            write: (source, record) => inner.write(source, record),
+            remove: (source) => inner.remove(source),
+        };
+        const a = new RunLeases(slowReads, { runId: 'run-a', namespace: 'default', settleMs: 0, renewEveryMs: 10, heartbeat: true });
+        await a.acquire(['ofac']);
+        await new Promise((resolve) => setTimeout(resolve, 20)); // a tick has started and is inside its slow read
+        const writesBefore = inner.writes;
+        await a.release();
+        expect(inner.peek('ofac')).toBeUndefined();
+        await new Promise((resolve) => setTimeout(resolve, 120));
+        expect(inner.peek('ofac'), 'a late heartbeat must not recreate the released lease').toBeUndefined();
+        expect(inner.writes, 'no heartbeat was written by the tick that was running at release').toBe(writesBefore);
+    });
+});
+
+describe('LEASE-03b a heartbeat that is being written when the run releases lands before the removal, not after it', () => {
+    it('release waits for the write in flight, then removes the record', async () => {
+        const inner = new InMemoryLeaseStorage();
+        const slowWrites: LeaseStorage = {
+            read: (source) => inner.read(source),
+            async write(source, record) {
+                await new Promise((resolve) => setTimeout(resolve, 40)); // the heartbeat is on its way to the store ...
+                return inner.write(source, record);
+            },
+            remove: (source) => inner.remove(source),
+        };
+        const a = new RunLeases(slowWrites, { runId: 'run-a', namespace: 'default', settleMs: 0, renewEveryMs: 10, heartbeat: true });
+        await a.acquire(['ofac']);
+        await new Promise((resolve) => setTimeout(resolve, 25)); // ... a tick has passed its read and is inside its write
+        await a.release(); // ... when the run ends
+        await new Promise((resolve) => setTimeout(resolve, 120));
+        expect(inner.peek('ofac'), 'a heartbeat that landed after the removal would block the next run until it goes stale').toBeUndefined();
+    });
+});
+
+describe('LEASE-04 a failed acquire leaves no lease behind, even for a source that was still being written', () => {
+    it('the source whose write lands after another source failed is removed too', async () => {
+        const inner = new InMemoryLeaseStorage();
+        const storage: LeaseStorage = {
+            read: (source) => inner.read(source),
+            async write(source, record) {
+                if (source === 'b') throw new Error('write failed for b');
+                await new Promise((resolve) => setTimeout(resolve, 40)); // the write of 'a' is slow and lands after b has failed
+                return inner.write(source, record);
+            },
+            remove: (source) => inner.remove(source),
+        };
+        const a = new RunLeases(storage, { runId: 'run-a', namespace: 'default', settleMs: 0 });
+        await expect(a.acquire(['a', 'b'])).rejects.toThrow('write failed for b');
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        expect(inner.peek('a'), 'no orphan lease that would block every run for the stale period').toBeUndefined();
+        expect(inner.peek('b')).toBeUndefined();
+    });
+});
+
+describe('LEASE-06 the status of another run is allowed ten seconds, then it is unknown', () => {
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it('a status call that never answers resolves as unknown after 10 s; one that answers in time is used', async () => {
+        vi.useFakeTimers();
+        const hung = new ApifyRunLiveness(() => new Promise(() => undefined));
+        const pending = hung.check('r');
+        await vi.advanceTimersByTimeAsync(9_999);
+        let settled = false;
+        void pending.then(() => {
+            settled = true;
+        });
+        await vi.advanceTimersByTimeAsync(0);
+        expect(settled, 'not before the limit').toBe(false);
+        await vi.advanceTimersByTimeAsync(1);
+        await expect(pending).resolves.toBe('unknown');
+        const quick = new ApifyRunLiveness(async () => ({ status: 'RUNNING' }));
+        await expect(quick.check('r')).resolves.toBe('live');
+    });
+
+    it('with a hung status call a stale heartbeat still decides: the lease is taken instead of the start stalling', async () => {
+        vi.useFakeTimers();
+        const c = fakeClock();
+        const storage = new InMemoryLeaseStorage();
+        await leasesFor(storage, 'holder', c, { settleMs: 0 }).acquire(['ofac']);
+        c.advance(20 * 60_000);
+        const second = leasesFor(storage, 'second', c, { settleMs: 0, liveness: new ApifyRunLiveness(() => new Promise(() => undefined)) });
+        const acquired = second.acquire(['ofac']);
+        await vi.advanceTimersByTimeAsync(10_000);
+        await acquired;
+        expect(storage.peek('ofac')).toMatchObject({ runId: 'second' });
     });
 });

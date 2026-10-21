@@ -287,7 +287,7 @@ export async function runEngine(engine: EngineDefinition, rawInput: unknown, dep
     const leases = sinks.leases;
     if (leases) await leases.acquire(selected.map(({ connector }) => connector.id));
     try {
-        let state = await sinks.store.load();
+        let state = await sinks.store.load(selected.map(({ connector }) => connector.id));
         const sourceSummaries: SourceRunSummary[] = [];
         let totalEmitted = 0;
         let stoppedOnChargeLimit = false;
@@ -357,6 +357,9 @@ export async function runEngine(engine: EngineDefinition, rawInput: unknown, dep
             const processed: ProcessedRecord[] = [];
             const memoryCap = effectiveMaxSeenIds(connector.maxSeenIds, input.maxItemsPerSource, state.sources[connector.id]?.seenIds.length ?? 0);
             const writeState = async (): Promise<void> => {
+                // A run that was blocked in its last push for longer than the lease allows may have been overtaken since the check before
+                // that push: look now, before this run's older view is written over the memory of the run that took over.
+                if (leases?.verify) await leases.verify();
                 const entry = state.sources[connector.id];
                 if (sinks.store.saveSource && entry) await sinks.store.saveSource(connector.id, entry);
                 else await sinks.store.save(state);
@@ -402,6 +405,9 @@ export async function runEngine(engine: EngineDefinition, rawInput: unknown, dep
             let unserialisable = 0;
             let oversized = 0;
             let leaseLostError: LeaseLostError | undefined;
+            // The lease found lost by the last write, when the loop itself ended without an error: the run must still end as failed.
+            let lostAtFinalWrite: LeaseLostError | undefined;
+            let loopFailed = false;
 
             try {
                 for (const record of records) {
@@ -484,6 +490,7 @@ export async function runEngine(engine: EngineDefinition, rawInput: unknown, dep
                     }
                 }
             } catch (error) {
+                loopFailed = true;
                 if (error instanceof LeaseLostError) leaseLostError = error;
                 throw error;
             } finally {
@@ -497,12 +504,19 @@ export async function runEngine(engine: EngineDefinition, rawInput: unknown, dep
                         await persist();
                     } catch (saveError) {
                         const reason = scrub(saveError instanceof Error ? saveError.message : String(saveError));
-                        ctx.log.error(`[${connector.id}] could not persist delta memory: ${reason}`);
-                        // Visible to the caller: the run may still end SUCCEEDED because the delivery journal covers the rows.
-                        if (summary.warnings.length < 50) summary.warnings.push(`could not persist delta memory: ${reason}`.slice(0, 500));
+                        if (saveError instanceof LeaseLostError) {
+                            // Overtaken while the last rows were being pushed: nothing was written, the other run owns the memory now.
+                            ctx.log.error(`[${connector.id}] ${reason} The delta memory and the delivery journal of this source were left as they are.`);
+                            if (!loopFailed) lostAtFinalWrite = saveError;
+                        } else {
+                            ctx.log.error(`[${connector.id}] could not persist delta memory: ${reason}`);
+                            // Visible to the caller: the run may still end SUCCEEDED because the delivery journal covers the rows.
+                            if (summary.warnings.length < 50) summary.warnings.push(`could not persist delta memory: ${reason}`.slice(0, 500));
+                        }
                     }
                 }
             }
+            if (lostAtFinalWrite) throw lostAtFinalWrite;
             if (unserialisable > 0) sourceCtx.log.warning(`${unserialisable} row(s) skipped: the payload cannot be serialised to JSON (they will be tried again on the next run).`);
             if (oversized > 0) sourceCtx.log.warning(`${oversized} row(s) skipped: the payload is larger than ${MAX_ROW_BYTES} bytes, which the platform refuses to store in one dataset item (they will be tried again on the next run).`);
         }

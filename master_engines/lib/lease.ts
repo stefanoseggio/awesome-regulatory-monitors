@@ -9,7 +9,8 @@
  *
  * HOW. One small record per (namespace, source) in the same key-value store as the memory. A run takes the lease of
  * every selected source before it reads any state, renews it while it works, and releases it when it ends. A run that
- * finds a lease held by another LIVE run refuses to start, before any request or billable event, and says so.
+ * finds a lease held by another LIVE run refuses to start, before it makes any request to a source or pushes (and bills) any row,
+ * and says so. (The platform's own start event for the run has been charged by then: it is charged when the Actor starts.)
  *   - Liveness of a holder: the platform's run status when it can be read (a holder in READY, RUNNING, TIMING-OUT or
  *     ABORTING is live; any other status, or a run that no longer exists, is dead, so the lease of a killed run does not
  *     block anyone); otherwise a heartbeat: the holder is live while its lease was renewed less than `staleAfterMs` ago.
@@ -17,7 +18,9 @@
  *   - Two runs that start at the same instant both write; each then waits `settleMs`, reads the record back, and the one
  *     whose id is not in it backs off.
  *   - A run whose lease has been taken over (it was suspended for longer than `staleAfterMs`) stops at its next check,
- *     before it pushes another row. A record that has DISAPPEARED counts as taken over too: the only thing that removes
+ *     before it pushes another row. The check before a push reads the store at most every `renewEveryMs` (the rest of the time
+ *     it only looks at what an earlier check or the timer found), and the lease is read again before EVERY write of the delta
+ *     memory (`verify`), so an overtaken run never writes its older view over the memory of the run that took over. A record that has DISAPPEARED counts as taken over too: the only thing that removes
  *     a lease is the release of the run that took it over, so an absent record at renewal means this run was overtaken
  *     and that run has already finished.
  *   - With `heartbeat: true` a timer renews the lease while the run is busy in one long `connector.fetch` (a connector
@@ -64,7 +67,7 @@ export interface LeaseConflict {
     heartbeatAt: string;
 }
 
-/** Another live run holds a lease this run needs. Raised before any request or billable event. */
+/** Another live run holds a lease this run needs. Raised before any request to a source and before any row is pushed or billed. */
 export class LeaseConflictError extends FatalConfigError {
     constructor(
         readonly conflicts: readonly LeaseConflict[],
@@ -97,6 +100,12 @@ export interface RunLeasePort {
     acquire(sources: readonly string[]): Promise<void>;
     /** Refreshes the heartbeat when it is due; throws {@link LeaseLostError} when a lease is no longer this run's. */
     renewIfDue(): Promise<void>;
+    /**
+     * Reads every held lease NOW (not only when a renewal is due) and throws {@link LeaseLostError} when one is no longer this
+     * run's. The router calls it before it writes the delta memory, so that a run that was overtaken while it was blocked in its
+     * last push cannot write its older view over the memory of the run that took the lease.
+     */
+    verify?(): Promise<void>;
     /** Releases every lease this run still holds. */
     release(): Promise<void>;
 }
@@ -138,6 +147,10 @@ export class RunLeases implements RunLeasePort {
     private lostError: LeaseLostError | undefined;
     private timer: ReturnType<typeof setInterval> | undefined;
     private timerBusy = false;
+    /** The renewal the timer is running now, so that `release` can wait for it instead of racing it. */
+    private tick: Promise<void> | undefined;
+    /** Set when `release` starts: nothing writes a heartbeat after that. */
+    private closing = false;
     private readonly now: () => Date;
     private readonly sleep: (ms: number) => Promise<void>;
     private readonly staleAfterMs: number;
@@ -191,19 +204,21 @@ export class RunLeases implements RunLeasePort {
         }
         this.lastRenewMs = this.now().getTime();
         this.lostError = undefined;
+        this.closing = false;
         if (this.options.heartbeat) this.startTimer();
     }
 
     private async acquireUnique(unique: readonly string[]): Promise<void> {
         const conflicts: LeaseConflict[] = [];
 
-        // 1. Look at who holds what; write ours where nobody live does.
-        await Promise.all(
-            unique.map(async (source) => {
-                const conflict = await this.take(source);
-                if (conflict) conflicts.push(conflict);
-            }),
-        );
+        // 1. Look at who holds what; write ours where nobody live does. Every source is allowed to finish before anything is
+        // decided: a failure on one must not leave the others to write their lease after the clean-up has already run.
+        const taken = await Promise.allSettled(unique.map((source) => this.take(source)));
+        for (const result of taken) {
+            if (result.status === 'fulfilled' && result.value) conflicts.push(result.value);
+        }
+        const failed = taken.find((result): result is PromiseRejectedResult => result.status === 'rejected');
+        if (failed) throw failed.reason;
 
         // 2. Two runs that started together both wrote: let the writes settle, read back, and the loser backs off.
         if (conflicts.length === 0 && this.settleMs > 0) {
@@ -252,6 +267,12 @@ export class RunLeases implements RunLeasePort {
         return { source, holder: 'unknown', heartbeatAt: this.now().toISOString() };
     }
 
+    async verify(): Promise<void> {
+        if (this.lostError) throw this.lostError;
+        if (this.held.size === 0) return;
+        await this.renewNow();
+    }
+
     async renewIfDue(): Promise<void> {
         if (this.lostError) throw this.lostError;
         if (this.held.size === 0) return;
@@ -264,8 +285,11 @@ export class RunLeases implements RunLeasePort {
     /** Reads every held lease and rewrites its heartbeat; throws {@link LeaseLostError} (and remembers it) when one is no longer ours. */
     private async renewNow(): Promise<void> {
         const nowMs = this.now().getTime();
-        for (const source of this.held) {
+        for (const source of [...this.held]) {
             const current = parseLease(await this.storage.read(source));
+            // The run is releasing (a timer tick that was already reading when it started): a heartbeat written now would bring a
+            // released lease back to life and block the next run until it goes stale.
+            if (this.closing) return;
             // Absent means the run that took this lease over has already released it; corrupt or another id means somebody else owns it.
             if (current === undefined) {
                 this.lostError = new LeaseLostError(source, undefined);
@@ -285,10 +309,11 @@ export class RunLeases implements RunLeasePort {
         this.timer = setInterval(() => {
             if (this.timerBusy || this.lostError) return;
             this.timerBusy = true;
-            this.renewNow()
+            this.tick = this.renewNow()
                 .catch(() => undefined) // a LeaseLostError is remembered and thrown at the next check; a store error is retried at the next tick
                 .finally(() => {
                     this.timerBusy = false;
+                    this.tick = undefined;
                 });
         }, this.renewEveryMs);
         this.timer.unref();
@@ -300,7 +325,11 @@ export class RunLeases implements RunLeasePort {
     }
 
     async release(): Promise<void> {
+        this.closing = true;
         this.stopTimer();
+        // A renewal the timer started before the stop is allowed to finish (it will not write: `closing` is set) so that it cannot
+        // write after the records have been removed.
+        await this.tick;
         let failure: unknown;
         // Every lease is attempted even when one fails, and one that could not be removed stays in `held` for a second attempt.
         for (const source of [...this.held]) {

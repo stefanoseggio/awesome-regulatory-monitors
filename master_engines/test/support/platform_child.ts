@@ -19,6 +19,8 @@
  *   ENTRY=sinks (default)         `runEngine` through `createApifySinks(slug, NS, { leases })`; prints the summary or the error
  *   ENTRY=main                    `runEngineMain` (INPUT is read from the default store, leases with their default timings;
  *                                 the SDK exits the process): prints the exit code
+ *   ENTRY=load                    only reads the delta memory of NS, twice: once through a listing of the store (`load()`) and once by
+ *                                 name (`load(<every source of SOURCES_JSON>)`); prints { listed, named } (source ids that have memory)
  *   SOURCES_JSON                  {"<source id>": [SourceRecord, ...] | {"error": "<message the fetch throws>"}}
  *   INPUT_JSON                    Actor input for runEngine (default: every source selected)
  *   NS                            delta-memory namespace for ENTRY=sinks (default `default`)
@@ -137,6 +139,13 @@ if (env.ENTRY === 'main') {
         mainError = describeError(error);
     }
     process.exit(mainError ? 1 : 0);
+} else if (env.ENTRY === 'load') {
+    await Actor.init();
+    const { store } = createApifySinks(engine.slug, env.NS ?? 'default', {});
+    const listed = await store.load();
+    const named = await store.load(engine.connectors.map((connector) => connector.id));
+    print({ ok: true, listed: Object.keys(listed.sources).sort(), named: Object.keys(named.sources).sort(), invalid: Object.keys(named.invalid ?? {}).sort() });
+    process.exit(0);
 } else {
     await Actor.init();
     let outcome: Record<string, unknown>;

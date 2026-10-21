@@ -223,6 +223,8 @@ export interface MockPlatformOptions {
     maxTotalChargeUsd?: number;
     /** Server-side cap of `GET .../keys` pages (the real cap is 1000); lowered in tests to exercise pagination. */
     maxKeysPerPage?: number;
+    /** Keys a listing leaves out although the record exists (a listing that lags behind a write); direct reads still find them. */
+    listingHides?: (key: string) => boolean;
 }
 
 /** The `pricingInfo` of a pay-per-event Actor with these event prices (USD). */
@@ -268,6 +270,7 @@ export class MockApifyPlatform {
     /** Requests the mock does not implement (answered 400 `mock-not-implemented`): a test should expect this to stay empty. */
     readonly unhandled: string[] = [];
     maxKeysPerPage: number;
+    listingHides: ((key: string) => boolean) | undefined;
 
     private readonly stores = new Map<string, MockKeyValueStore>();
     private readonly datasetsById = new Map<string, MockDataset>();
@@ -288,6 +291,7 @@ export class MockApifyPlatform {
         this.pricingInfo = options.pricingInfo;
         this.maxTotalChargeUsd = options.maxTotalChargeUsd;
         this.maxKeysPerPage = options.maxKeysPerPage ?? 1000;
+        this.listingHides = options.listingHides;
         this.defaultKv = new MockKeyValueStore('default-kv', undefined);
         this.stores.set(this.defaultKv.id, this.defaultKv);
         this.dataset = new MockDataset('default-dataset', undefined);
@@ -515,7 +519,7 @@ export class MockApifyPlatform {
             if (!store) return notFound('Key-value store');
             const limit = Math.min(Number(query.limit ?? this.maxKeysPerPage) || this.maxKeysPerPage, this.maxKeysPerPage);
             const after = query.exclusiveStartKey;
-            const all = store.keys(query.prefix ?? '').filter((k) => after === undefined || k > after);
+            const all = store.keys(query.prefix ?? '').filter((k) => (after === undefined || k > after) && !this.listingHides?.(k));
             const page = all.slice(0, limit);
             const isTruncated = all.length > page.length;
             return send(200, {

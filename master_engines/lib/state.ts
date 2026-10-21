@@ -59,7 +59,12 @@ export class CorruptDeltaRecordError extends Error {
 
 /** Persistence port. The Apify implementation lives in `apify_adapters.ts`; tests use {@link InMemoryDeltaStore}. */
 export interface DeltaStore {
-    load(): Promise<DeltaState>;
+    /**
+     * Reads the memory. `sources` names the sources this run will deliver: a store that keeps one record per source reads exactly
+     * those records (a listing of the store is not needed and a record that a listing does not show yet is still found). Without
+     * it the store reads whatever it can list.
+     */
+    load(sources?: readonly string[]): Promise<DeltaState>;
     save(state: DeltaState): Promise<void>;
     /**
      * Optional. Persists ONE source's memory without rewriting the others. Stores that implement it avoid the

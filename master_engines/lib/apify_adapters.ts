@@ -139,19 +139,29 @@ export class ApifyDeltaStore implements DeltaStore {
         return this.opened;
     }
 
-    async load(): Promise<DeltaState> {
+    async load(sources?: readonly string[]): Promise<DeltaState> {
         const store = await this.store();
-        const keys: string[] = [];
+        const names = sources === undefined ? await this.listSources(store) : [...new Set(sources)];
+        const records: Record<string, unknown> = {};
+        // One unparsable record fails ITS source (parseState reports it as invalid); it must not take the other sources down.
+        for (const source of names) records[source] = await readRecord(store, `${this.prefix}${source}`);
+        return parseState({ version: 2, sources: records }, (source) => `The delta-memory record "${this.prefix}${source}" in the key-value store "${this.storeName}" exists but cannot be read`);
+    }
+
+    /**
+     * Which sources have a record, from a listing of the store. The router does not depend on it (it names the sources it needs):
+     * a listing can lag behind a record that was written moments ago, and a source missing from it would read as "never seen" and be
+     * delivered and billed again.
+     */
+    private async listSources(store: KeyValueLike): Promise<string[]> {
+        const names: string[] = [];
         await store.forEachKey(
             (key) => {
-                if (key.startsWith(this.prefix)) keys.push(key);
+                if (key.startsWith(this.prefix)) names.push(key.slice(this.prefix.length));
             },
             { prefix: this.prefix },
         );
-        const sources: Record<string, unknown> = {};
-        // One unparsable record fails ITS source (parseState reports it as invalid); it must not take the other sources down.
-        for (const key of keys) sources[key.slice(this.prefix.length)] = await readRecord(store, key);
-        return parseState({ version: 2, sources }, (source) => `The delta-memory record "${this.prefix}${source}" in the key-value store "${this.storeName}" exists but cannot be read`);
+        return names;
     }
 
     async saveSource(source: string, entry: SourceDeltaState): Promise<void> {
@@ -201,6 +211,19 @@ export class ApifyLeaseStorage implements LeaseStorage {
     }
 }
 
+/** How long the status of another run may take before it counts as unknown. */
+const LIVENESS_TIMEOUT_MS = 10_000;
+
+/** Resolves with `promise`, or rejects after `ms`; the timer never keeps the process alive. */
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const expired = new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error(`no answer within ${ms} ms`)), ms);
+        timer.unref();
+    });
+    return Promise.race([promise, expired]).finally(() => clearTimeout(timer));
+}
+
 /** The platform run statuses in which a run is still going (the transitional ones are still going until they finish). */
 const LIVE_RUN_STATUSES: ReadonlySet<string> = new Set(['READY', 'RUNNING', 'TIMING-OUT', 'ABORTING']);
 const DEAD_RUN_STATUSES: ReadonlySet<string> = new Set(['SUCCEEDED', 'FAILED', 'TIMED-OUT', 'ABORTED']);
@@ -216,7 +239,8 @@ export class ApifyRunLiveness implements RunLivenessChecker {
 
     async check(runId: string): Promise<RunLiveness> {
         try {
-            const run = await this.getRun(runId);
+            // The client retries a failing call for minutes: an API that does not answer must not stall the start of a run.
+            const run = await withTimeout(this.getRun(runId), LIVENESS_TIMEOUT_MS);
             // Not found is NOT dead: apify-client answers `undefined` both for a run that is gone and for a run this token may not see
             // (record-or-token-not-found), and a live holder must never read as dead because of a permission. The heartbeat decides.
             if (run === undefined || run === null) return 'unknown';

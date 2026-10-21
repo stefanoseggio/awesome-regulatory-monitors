@@ -88,8 +88,9 @@ after a hard kill at most the one row in flight can be delivered (and billed) ag
 exists but cannot be read fails its own source (it is never treated as empty); delete it to start the source from scratch.
 
 **One live run per namespace and source.** A run takes a lease (`lease.<namespace>.<source>`) before it reads any state;
-a second run of the same namespace is refused with `LeaseConflictError` before any request or charge, and a run whose
-lease was taken over stops before its next push. This is best effort (the key-value store has no compare-and-set); give
+a second run of the same namespace is refused with `LeaseConflictError` before it requests a source or delivers (and bills) a row,
+and a run whose lease was taken over stops at its next check (a store read at most every 60 s before a push, and one before every
+write of the delta memory), leaving the memory and the journal to the run that took over. This is best effort (the key-value store has no compare-and-set); give
 a concurrent run its own `stateNamespace`. See the strategy document, sections 2.2 and 9.
 
 **Billing.** Every source bills its own event (see `pricing/event_catalog.ts`). `RUN_SUMMARY.pricing.unpricedEvents`
