@@ -1,0 +1,80 @@
+import { describe, expect, it } from 'vitest';
+
+import { classifyRecord, createEmptyState, InMemoryDeltaStore, markProcessed, parseState } from '../lib/state.js';
+
+describe('delta state', () => {
+    it('classifies first_seen / unchanged / updated', () => {
+        let state = createEmptyState();
+        expect(classifyRecord(state, 's', 'a', 'f1')).toBe('first_seen');
+        state = markProcessed(state, 's', [{ recordId: 'a', fingerprint: 'f1' }], 't1');
+        expect(classifyRecord(state, 's', 'a', 'f1')).toBe('unchanged');
+        expect(classifyRecord(state, 's', 'a', 'f2')).toBe('updated');
+        expect(classifyRecord(state, 'other', 'a', 'f1')).toBe('first_seen');
+    });
+
+    it('is immutable: markProcessed returns a new state', () => {
+        const before = createEmptyState();
+        const after = markProcessed(before, 's', [{ recordId: 'a', fingerprint: 'f' }], 't');
+        expect(before.sources).toEqual({});
+        expect(after.sources.s?.seenIds).toEqual(['a']);
+    });
+
+    it('keeps newest first and caps, pruning fingerprints to retained ids', () => {
+        let state = createEmptyState();
+        state = markProcessed(state, 's', [{ recordId: 'a', fingerprint: '1' }, { recordId: 'b', fingerprint: '2' }], 't1', 3);
+        state = markProcessed(state, 's', [{ recordId: 'c', fingerprint: '3' }, { recordId: 'd', fingerprint: '4' }], 't2', 3);
+        const s = state.sources.s;
+        expect(s?.seenIds).toEqual(['c', 'd', 'a']);
+        expect(Object.keys(s?.fingerprints ?? {}).sort()).toEqual(['a', 'c', 'd']);
+    });
+
+    it('updates the fingerprint of a re-seen id and moves it to the front', () => {
+        let state = markProcessed(createEmptyState(), 's', [{ recordId: 'a', fingerprint: '1' }, { recordId: 'b', fingerprint: '2' }], 't1');
+        state = markProcessed(state, 's', [{ recordId: 'b', fingerprint: '9' }], 't2');
+        expect(state.sources.s?.seenIds).toEqual(['b', 'a']);
+        expect(state.sources.s?.fingerprints.b).toBe('9');
+        expect(state.sources.s?.lastRunAt).toBe('t2');
+    });
+
+    it('does not duplicate an id repeated within one run', () => {
+        const state = markProcessed(createEmptyState(), 's', [{ recordId: 'a', fingerprint: '1' }, { recordId: 'a', fingerprint: '2' }], 't');
+        expect(state.sources.s?.seenIds).toEqual(['a']);
+        expect(state.sources.s?.fingerprints.a).toBe('2');
+    });
+
+    it('leaves other sources untouched', () => {
+        let state = markProcessed(createEmptyState(), 'x', [{ recordId: 'a', fingerprint: '1' }], 't');
+        state = markProcessed(state, 'y', [{ recordId: 'b', fingerprint: '2' }], 't');
+        expect(state.sources.x?.seenIds).toEqual(['a']);
+        expect(state.sources.y?.seenIds).toEqual(['b']);
+    });
+});
+
+describe('parseState', () => {
+    it.each([null, undefined, 'x', 3, [], {}, { version: 1, sources: {} }, { version: 2 }, { version: 2, sources: 'x' }])('returns empty state for %j', (value) => {
+        expect(parseState(value)).toEqual(createEmptyState());
+    });
+
+    it('drops malformed sources but keeps valid ones', () => {
+        const parsed = parseState({
+            version: 2,
+            sources: {
+                good: { seenIds: ['a'], fingerprints: { a: 'f' }, lastRunAt: 't' },
+                badIds: { seenIds: [1], fingerprints: {}, lastRunAt: 't' },
+                badFp: { seenIds: ['a'], fingerprints: { a: 1 }, lastRunAt: 't' },
+                notObject: 5,
+            },
+        });
+        expect(Object.keys(parsed.sources)).toEqual(['good']);
+    });
+
+    it('round-trips through the in-memory store without aliasing', async () => {
+        const store = new InMemoryDeltaStore();
+        const state = markProcessed(createEmptyState(), 's', [{ recordId: 'a', fingerprint: 'f' }], 't');
+        await store.save(state);
+        const loaded = await store.load();
+        loaded.sources.s?.seenIds.push('zzz');
+        expect((await store.load()).sources.s?.seenIds).toEqual(['a']);
+        expect(parseState(JSON.parse(JSON.stringify(state)))).toEqual(state);
+    });
+});
