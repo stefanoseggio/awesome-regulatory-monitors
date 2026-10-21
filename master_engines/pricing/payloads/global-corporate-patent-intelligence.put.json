@@ -28,7 +28,7 @@
                     },
                     "uae-entity-updated": {
                         "eventTitle": "Updated UAE register entity",
-                        "eventDescription": "A previously delivered ADGM/DIFC entity whose status or content changed.",
+                        "eventDescription": "A previously delivered ADGM/DIFC entity whose status or content changed, or one re-sent unchanged by a full-snapshot run.",
                         "eventPriceUsd": 0.01
                     },
                     "sg-entity-new": {
@@ -38,7 +38,7 @@
                     },
                     "sg-entity-updated": {
                         "eventTitle": "Updated Singapore ACRA entity",
-                        "eventDescription": "A previously delivered ACRA entity whose status or content changed.",
+                        "eventDescription": "A previously delivered ACRA entity whose status or content changed, or one re-sent unchanged by a full-snapshot run.",
                         "eventPriceUsd": 0.01
                     },
                     "watchlist-hit": {
@@ -48,7 +48,7 @@
                     }
                 }
             },
-            "minimalMaxTotalChargeUsd": 0.1,
+            "minimalMaxTotalChargeUsd": 0.16,
             "apifyMarginPercentage": 0.2,
             "createdAt": "2026-10-21T00:00:00.000Z",
             "startedAt": "2026-11-04T00:00:00.000Z",

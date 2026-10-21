@@ -45,12 +45,13 @@
  * `openssl s_client -showcerts`), so a Node-native TLS stack on Linux fails with "unable to verify the
  * first certificate" unless the intermediate is added to the trust store (the legacy Dockerfile did that
  * with NODE_EXTRA_CA_CERTS; its later `impit` transport completed the chain on its own, but the shared
- * lib/http.ts is Node's global `fetch`). The bundle is therefore NOT copied into this package: a caller
- * that needs it supplies the PEM through `sourceOptions.ar_cordoba.extraCaPem`. The option is validated
- * to contain CERTIFICATE blocks and nothing else (a PRIVATE KEY block, or any stray content, is rejected in
- * preflight), is never logged, and is forwarded as the `tlsExtraCaPem` request hint, which an HttpClient
- * must ADD to (never replace) its trust store (see portalHttp.ts). Today's lib/http.ts ignores the hint;
- * the working alternative until the lib change lands is the process-level NODE_EXTRA_CA_CERTS variable.
+ * lib/http.ts is Node's global `fetch`). The bundle (two PUBLIC Sectigo CA certificates, no private key) ships in
+ * `latam-global-tender-intelligence/certs/cordoba-sectigo-chain.pem` and the engine's Dockerfile points
+ * `NODE_EXTRA_CA_CERTS` at it, which ADDS to - never replaces - Node's trust store. A caller can still supply a PEM
+ * through `sourceOptions.ar_cordoba.extraCaPem`: validated to contain CERTIFICATE blocks and nothing else (a PRIVATE
+ * KEY block, or any stray content, is rejected in preflight), never logged, and forwarded as the `tlsExtraCaPem`
+ * request hint. The default client cannot honour that hint per request (it logs a warning), so the process-level
+ * NODE_EXTRA_CA_CERTS variable is the supported mechanism.
  *
  * ACCESS CONSTRAINT (read before enabling in the cloud)
  * ----------------------------------------------------------------------------

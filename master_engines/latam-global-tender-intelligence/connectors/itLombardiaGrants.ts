@@ -88,7 +88,7 @@
 import { z } from 'zod';
 
 import { describeSanitization, findKeywordMatch, type SanitizedKeywordList, sanitizeKeywordList } from '../../lib/_guards.js';
-import { fingerprintOf } from '../../lib/connector_helpers.js';
+import { fingerprintOf, byokCredential } from '../../lib/connector_helpers.js';
 import { HttpStatusError } from '../../lib/http.js';
 import { type Connector, type ConnectorContext, type HttpRequestInit, type RunParams, SourceFetchError, type SourceRecord } from '../../lib/types.js';
 
@@ -237,7 +237,7 @@ export const itLombardiaGrantsOptionsSchema = z
         /** Keep only bandi in these derived statuses. A bando with no derivable status never matches. */
         statusFilter: z.array(z.enum(LOMBARDIA_STATUSES)).optional(),
         /** Optional free Socrata app token (BYOK). Sent as `X-App-Token`; an INVALID token makes every request fail with HTTP 403. */
-        socrataAppToken: z.string().trim().optional(),
+        socrataAppToken: byokCredential('socrataAppToken'),
     })
     .strict();
 export type ItLombardiaGrantsOptions = z.infer<typeof itLombardiaGrantsOptionsSchema>;

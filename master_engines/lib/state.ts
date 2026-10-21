@@ -15,6 +15,20 @@
 import type { RecordClass } from './types.js';
 
 export const DEFAULT_MAX_SEEN_IDS_PER_SOURCE = 5000;
+/** Absolute ceiling for an automatically sized memory, so a source cannot grow its state document without bound. */
+export const MAX_SEEN_IDS_HARD_CEILING = 50_000;
+
+/**
+ * How many ids a source's delta memory must retain.
+ *   - A connector that declares `maxSeenIds` is authoritative.
+ *   - Otherwise the memory is never smaller than what one run may deliver (`maxItemsPerSource`), nor than what it
+ *     already holds (so a run with a small limit cannot silently shrink it), capped at the hard ceiling. Anything
+ *     smaller evicts ids the run just processed and re-emits - and re-bills - them as first_seen next run.
+ */
+export function effectiveMaxSeenIds(connectorCap: number | undefined, maxItemsPerSource: number, previousLength: number): number {
+    if (connectorCap !== undefined) return Math.max(1, connectorCap);
+    return Math.min(MAX_SEEN_IDS_HARD_CEILING, Math.max(DEFAULT_MAX_SEEN_IDS_PER_SOURCE, maxItemsPerSource, previousLength));
+}
 
 export interface SourceDeltaState {
     /** Newest first. */
@@ -32,6 +46,12 @@ export interface DeltaState {
 export interface DeltaStore {
     load(): Promise<DeltaState>;
     save(state: DeltaState): Promise<void>;
+    /**
+     * Optional. Persists ONE source's memory without rewriting the others. Stores that implement it avoid the
+     * read-modify-write race between overlapping runs of the same engine (the whole-document `save` would write back
+     * every other source as it was when this run started and erase a concurrent run's progress).
+     */
+    saveSource?(source: string, entry: SourceDeltaState): Promise<void>;
 }
 
 export function createEmptyState(): DeltaState {
@@ -66,10 +86,9 @@ export function parseState(value: unknown): DeltaState {
 
 export function classifyRecord(state: DeltaState, source: string, recordId: string, fingerprint: string): RecordClass {
     const s = state.sources[source];
-    if (!s) return 'first_seen';
-    const previous = s.fingerprints[recordId];
-    if (previous === undefined) return 'first_seen';
-    return previous === fingerprint ? 'unchanged' : 'updated';
+    // Own-property check: a record id such as 'constructor' or 'toString' must not resolve to an inherited member.
+    if (!s || !Object.prototype.hasOwnProperty.call(s.fingerprints, recordId)) return 'first_seen';
+    return s.fingerprints[recordId] === fingerprint ? 'unchanged' : 'updated';
 }
 
 export interface ProcessedRecord {
@@ -96,7 +115,8 @@ export function markProcessed(
 
     const thisRunIds: string[] = [];
     const thisRunSet = new Set<string>();
-    const fingerprints: Record<string, string> = { ...previous.fingerprints };
+    // Null-prototype dictionaries: record ids come from upstream and may be '__proto__' or 'constructor'.
+    const fingerprints: Record<string, string> = Object.assign(Object.create(null) as Record<string, string>, previous.fingerprints);
     for (const item of processed) {
         fingerprints[item.recordId] = item.fingerprint;
         if (!thisRunSet.has(item.recordId)) {
@@ -107,7 +127,7 @@ export function markProcessed(
 
     const merged = [...thisRunIds, ...previous.seenIds.filter((id) => !thisRunSet.has(id))].slice(0, Math.max(1, maxSeenIds));
     const retained = new Set(merged);
-    const pruned: Record<string, string> = {};
+    const pruned: Record<string, string> = Object.create(null) as Record<string, string>;
     for (const id of merged) {
         const fp = fingerprints[id];
         if (fp !== undefined && retained.has(id)) pruned[id] = fp;
@@ -139,4 +159,24 @@ export class InMemoryDeltaStore implements DeltaStore {
     peek(): DeltaState {
         return structuredClone(this.snapshot);
     }
+}
+
+const NAMESPACE_PATTERN = /^[a-z0-9-]{1,40}$/u;
+
+/**
+ * Which delta-memory namespace a run uses. Two Tasks with different watchlists, filters or delta modes must not share
+ * memory (one would consume the other's "new" records), so:
+ *   1. an explicit `stateNamespace` input wins (validated);
+ *   2. otherwise a run started from a Task gets `task-<task id>`;
+ *   3. otherwise `default` (ad-hoc API/console runs share one memory, as a single-schedule setup expects).
+ * Throws an Error with a user-facing message for an invalid explicit value.
+ */
+export function resolveStateNamespace(rawInput: unknown, taskId: string | undefined): string {
+    const explicit = rawInput && typeof rawInput === 'object' && !Array.isArray(rawInput) ? (rawInput as Record<string, unknown>).stateNamespace : undefined;
+    if (explicit !== undefined && explicit !== null && explicit !== '') {
+        if (typeof explicit !== 'string' || !NAMESPACE_PATTERN.test(explicit)) throw new Error('stateNamespace must be 1-40 characters of a-z, 0-9 and "-".');
+        return explicit;
+    }
+    const cleaned = (taskId ?? '').toLowerCase().replace(/[^a-z0-9]/gu, '').slice(0, 34);
+    return cleaned === '' ? 'default' : `task-${cleaned}`;
 }

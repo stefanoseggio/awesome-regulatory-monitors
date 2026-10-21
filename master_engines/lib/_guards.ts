@@ -73,9 +73,17 @@ export interface SanitizedKeywordList {
 }
 
 const WHITESPACE_RUN = /\s+/gu;
+/** Line breaks, tabs and the other whitespace controls that INVISIBLE would otherwise delete and fuse words across. */
+const WHITESPACE_CONTROLS = /[\t\n\v\f\r\u0085\u2028\u2029]/gu;
 /** C0/C1 controls, zero-width space/joiners, BOM, bidi embeddings/isolates, soft hyphen. */
 const INVISIBLE = /[\u0000-\u001f\u007f-\u009f­​-‏‪-‮⁠-⁯﻿]/gu;
 const HAS_LETTER_OR_DIGIT = /[\p{L}\p{N}]/u;
+
+function codePointLength(text: string): number {
+    let n = 0;
+    for (const _ of text) n += 1;
+    return n;
+}
 
 /** Truncates a value for safe inclusion in a log line. */
 function preview(value: unknown): string {
@@ -90,7 +98,7 @@ function preview(value: unknown): string {
 
 /** NFKC + invisible-character removal + whitespace collapse + trim. Pure; exported for tests. */
 export function normaliseKeyword(raw: string): string {
-    return raw.normalize('NFKC').replace(INVISIBLE, '').replace(WHITESPACE_RUN, ' ').trim();
+    return raw.normalize('NFKC').replace(WHITESPACE_CONTROLS, ' ').replace(INVISIBLE, '').replace(WHITESPACE_RUN, ' ').trim();
 }
 
 /**
@@ -134,11 +142,12 @@ export function sanitizeKeywordList(input: unknown): SanitizedKeywordList {
             result.rejected.push({ value: preview(candidate), reason: 'empty_after_normalisation' });
             continue;
         }
-        if (cleaned.length < MIN_KEYWORD_LENGTH) {
+        // Length in code points, not UTF-16 units: one astral-plane letter is ONE character, not two.
+        if (codePointLength(cleaned) < MIN_KEYWORD_LENGTH) {
             result.rejected.push({ value: preview(candidate), reason: 'too_short' });
             continue;
         }
-        if (cleaned.length > MAX_KEYWORD_LENGTH) {
+        if (codePointLength(cleaned) > MAX_KEYWORD_LENGTH) {
             result.rejected.push({ value: preview(candidate), reason: 'too_long' });
             continue;
         }
@@ -183,7 +192,7 @@ export function findKeywordMatch(haystack: unknown, list: SanitizedKeywordList):
 
     for (let i = 0; i < list.needles.length; i += 1) {
         const needle = list.needles[i];
-        if (needle === undefined || needle.length < MIN_KEYWORD_LENGTH) continue;
+        if (needle === undefined || codePointLength(needle) < MIN_KEYWORD_LENGTH) continue;
         if (text.includes(needle)) return list.keywords[i] ?? needle;
     }
     return null;

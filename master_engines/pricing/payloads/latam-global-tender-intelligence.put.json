@@ -33,7 +33,7 @@
                     },
                     "notice-updated": {
                         "eventTitle": "Updated EU TED notice",
-                        "eventDescription": "A previously delivered TED notice whose content changed.",
+                        "eventDescription": "A previously delivered TED notice whose content changed, or one re-sent unchanged by a full-snapshot run.",
                         "eventPriceUsd": 0.01
                     },
                     "grant-new": {
@@ -43,7 +43,7 @@
                     },
                     "grant-updated": {
                         "eventTitle": "Updated Lombardia grant call",
-                        "eventDescription": "A previously delivered grant call whose status or fields changed.",
+                        "eventDescription": "A previously delivered grant call whose status or fields changed, or one re-sent unchanged by a full-snapshot run.",
                         "eventPriceUsd": 0.008
                     },
                     "watchlist-hit": {
@@ -53,7 +53,7 @@
                     }
                 }
             },
-            "minimalMaxTotalChargeUsd": 0.1,
+            "minimalMaxTotalChargeUsd": 0.16,
             "apifyMarginPercentage": 0.2,
             "createdAt": "2026-10-21T00:00:00.000Z",
             "startedAt": "2026-11-04T00:00:00.000Z",

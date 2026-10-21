@@ -23,7 +23,14 @@ await mkdir(out, { recursive: true });
 for (const dir of ['lib', 'pricing', slug]) await cp(join(root, dir), join(out, dir), { recursive: true });
 // Pricing payloads and tests are not part of the runtime image.
 await rm(join(out, 'pricing', 'payloads'), { recursive: true, force: true });
-for (const file of ['package.json', 'package-lock.json']) await cp(join(root, file), join(out, file));
+for (const file of ['package.json', 'package-lock.json']) {
+    try {
+        await cp(join(root, file), join(out, file));
+    } catch {
+        console.error(`Missing ${file}. The image installs with \`npm ci\`, which needs the committed lockfile: run \`npm install\` in master_engines/ first.`);
+        process.exit(1);
+    }
+}
 
 // The Apify build copies .actor/ from the context root.
 await cp(join(root, slug, '.actor'), join(out, '.actor'), { recursive: true });

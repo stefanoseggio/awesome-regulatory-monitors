@@ -473,6 +473,11 @@ export const usFloridaOptionsSchema = z
         closesAfter: dateInputSchema,
         /** Fetch each advertisement's detail (description, documents, contact, commodity codes). One extra GET per record kept. */
         fetchDetail: z.boolean().default(true),
+        /**
+         * Emit the advertisement's response contact (name, e-mail, phone, address). Off by default: it identifies a natural
+         * person. These are public statutory notices and the legacy actor emitted them, so a caller may opt in.
+         */
+        includeContactDetails: z.boolean().default(false),
         /** Parallel requests (listing pages and detail GETs). The listing endpoint answered 429 at 8-10 in flight, hence the low default. */
         maxConcurrency: z.number().int().min(1).max(10).default(5),
     })
@@ -740,11 +745,12 @@ function joinAddress(contact: ResponseContact | null): string | null {
  * Legacy keys NOT emitted because they describe the delta engine, which the router now owns: `record_id`,
  * `event_type`, `scraped_at`, `is_new`, `previousVersion`, `previousStatus`. Everything else keeps the legacy name.
  */
-export function buildPayload(item: ListingItem, detailResult: DetailResult | null, now: Date): Record<string, unknown> {
+export function buildPayload(item: ListingItem, detailResult: DetailResult | null, now: Date, includeContactDetails = true): Record<string, unknown> {
     const detail = detailResult?.detail ?? null;
     const docs = detail?.docs ?? [];
     const commodityCodes = detail?.commodityCodes ?? [];
-    const contact = detail?.responseContact ?? null;
+    // The response contact names a natural person (name, e-mail, phone). Unless the caller opts in, none of it is emitted.
+    const contact = includeContactDetails ? (detail?.responseContact ?? null) : null;
     const descriptionText = htmlToText(detail?.description);
     const amountsUsd = parseUsdAmounts(descriptionText);
     const indicators = indicatorsOf(detail);
@@ -848,8 +854,8 @@ const CLOCK_DERIVED_KEYS = ['daysUntilClose', 'isOpenForResponses', 'timeRemaini
 /** PPE event for a listing-only (no detail) record; priced in pricing/event_catalog.ts. */
 export const FLORIDA_SUMMARY_EVENT = 'tender-summary';
 
-export function toSourceRecord(item: ListingItem, detailResult: DetailResult | null, now: Date): SourceRecord {
-    const payload = buildPayload(item, detailResult, now);
+export function toSourceRecord(item: ListingItem, detailResult: DetailResult | null, now: Date, includeContactDetails = true): SourceRecord {
+    const payload = buildPayload(item, detailResult, now, includeContactDetails);
     const stable: Record<string, unknown> = { ...payload };
     for (const key of CLOCK_DERIVED_KEYS) delete stable[key];
     const agency = typeof payload.agency === 'string' ? payload.agency : '';
@@ -978,6 +984,6 @@ export const usFloridaConnector: Connector<UsFloridaOptions> = {
         ctx.log.info(
             `[us_florida] ${selected.length} record(s) returned (${totalMatching} matching on MFMP over ${pagesWalked} page(s), ${filtered.length} after client filters${options.fetchDetail ? ', detail fetched' : ', detail skipped'}).`,
         );
-        return selected.map((item, index) => toSourceRecord(item, details[index] ?? null, now));
+        return selected.map((item, index) => toSourceRecord(item, details[index] ?? null, now, options.includeContactDetails));
     },
 };

@@ -175,7 +175,7 @@ describe('normalisation helpers (legacy normalize.ts)', () => {
 
 describe('option parsing and date resolution', () => {
     it('applies the legacy defaults', () => {
-        expect(opts()).toEqual({ statuses: ['OPEN'], types: [], agencyIds: [], commodityCodes: [], fetchDetail: true, maxConcurrency: 5 });
+        expect(opts()).toEqual({ statuses: ['OPEN'], types: [], agencyIds: [], commodityCodes: [], fetchDetail: true, includeContactDetails: false, maxConcurrency: 5 });
     });
 
     it('needs no credential (public unauthenticated JSON): no requiredOptions, preflight passes with empty options', () => {
@@ -359,7 +359,7 @@ describe('buildPayload / toSourceRecord against the real captured records', () =
             commodityCodesText: '83112200 Enhanced telecommunications services; 83112403 Point to point digital telecommunications circuit',
             documentCount: 1,
             latestDocumentDateUtc: '2026-08-13T17:39:44.000Z',
-            contactName: 'Kim Whitwam',
+            contactName: 'Sam Sample',
             contactAddress: '207 San Marco Ave.',
             contactCity: 'SAINT AUGUSTINE',
             contactState: 'FL',
@@ -492,11 +492,32 @@ describe('fetch (stubbed http, real captured register)', () => {
 
     it('fetches detail for the selected ad and builds the full record (adNumber filter)', async () => {
         const stub = makeCtx(floridaServer({ details: { 16672: detail16672 } }), '2026-09-07T00:00:00Z');
-        const records = await usFloridaConnector.fetch(stub.ctx, opts({ adNumber: 'AD-16672' }), RUN);
+        const records = await usFloridaConnector.fetch(stub.ctx, opts({ adNumber: 'AD-16672', includeContactDetails: true }), RUN);
         expect(records).toHaveLength(1);
         expect(records[0]?.recordId).toBe('16672');
-        expect(records[0]?.payload).toMatchObject({ detailFetched: true, linkedAdNumber: '16671', documentCount: 1, contactName: 'Kim Whitwam' });
+        expect(records[0]?.payload).toMatchObject({ detailFetched: true, linkedAdNumber: '16671', documentCount: 1, contactName: 'Sam Sample' });
         expect((stub.requests[0]?.body as { adNumber: string }).adNumber).toBe('16672');
+    });
+
+    it('emits NO personal contact data unless the caller opts in (SEC-08)', async () => {
+        const stub = makeCtx(floridaServer({ details: { 16672: detail16672 } }), '2026-09-07T00:00:00Z');
+        const records = await usFloridaConnector.fetch(stub.ctx, opts({ adNumber: 'AD-16672' }), RUN);
+        const payload = records[0]?.payload as Record<string, unknown>;
+        expect(payload).toMatchObject({ detailFetched: true, documentCount: 1, responseContact: null, contactName: null, contactEmail: null, contactPhone: null, contactAddress: null, contactCity: null, contactState: null, contactZip: null });
+        const text = JSON.stringify(records);
+        expect(text).not.toContain('Sam Sample');
+        expect(text).not.toContain('contact.two@example.org');
+        expect(text).not.toContain('(555) 010-0100');
+    });
+
+    it('the contact does not drive the fingerprint when it is not emitted', async () => {
+        const a = makeCtx(floridaServer({ details: { 16672: detail16672 } }), '2026-09-07T00:00:00Z');
+        const changed = JSON.parse(JSON.stringify(detail16672)) as { responseContact: { responseContact: string } };
+        changed.responseContact.responseContact = 'Someone Else';
+        const b = makeCtx(floridaServer({ details: { 16672: changed as unknown as typeof detail16672 } }), '2026-09-07T00:00:00Z');
+        const first = await usFloridaConnector.fetch(a.ctx, opts({ adNumber: 'AD-16672' }), RUN);
+        const second = await usFloridaConnector.fetch(b.ctx, opts({ adNumber: 'AD-16672' }), RUN);
+        expect(first[0]?.fingerprint).toBe(second[0]?.fingerprint);
     });
 
     it('an unknown-id detail (HTTP 200, every field null) degrades to a summary record flagged NOT_FOUND', async () => {

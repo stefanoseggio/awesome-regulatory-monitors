@@ -301,8 +301,14 @@ function toNullableString(raw: string | undefined): string | null {
  * live 2026 file are "K" LINE companies).
  */
 export function stripWrappingQuotes(name: string): string {
-    const wrapped = name.match(/^"+([^"]*)"+$/);
-    return wrapped?.[1] !== undefined ? wrapped[1].trim() : name;
+    // Linear scan instead of /^"+([^"]*)"+$/, which is quadratic on a long run of quote characters.
+    let start = 0;
+    let end = name.length;
+    while (start < end && name[start] === '"') start += 1;
+    while (end > start && name[end - 1] === '"') end -= 1;
+    const inner = name.slice(start, end);
+    if (inner === '' && name.length >= 2 && /^"+$/u.test(name)) return '';
+    return start > 0 && end < name.length && !inner.includes('"') ? inner.trim() : name;
 }
 
 /**

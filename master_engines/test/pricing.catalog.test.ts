@@ -198,3 +198,15 @@ describe('committed payload files', () => {
         expect(JSON.parse(await readFile(`${dir}${engine}.notice.json`, 'utf8'))).toEqual(expected.notice);
     });
 });
+
+describe('minimalMaxTotalChargeFor (B2)', () => {
+    it.each(ALL_PRICING.map((p) => [p.engine, p] as const))('%s: the smallest allowed run budget affords the start events plus the dearest event', (_engine, pricing) => {
+        const { body } = buildPricingPutBody(pricing, { now: NOW });
+        const floor = body.pricingInfos[0]!.minimalMaxTotalChargeUsd;
+        const startEvents = Math.max(1, Math.ceil(pricing.memoryMbytes / 1024));
+        const dearest = Math.max(...pricing.events.map((e) => e.priceUsd));
+        expect(floor).toBeGreaterThanOrEqual(pricing.startPriceUsd * startEvents + dearest);
+        expect(floor).toBeGreaterThanOrEqual(0.1);
+        expect(floor).toBeLessThan(pricing.startPriceUsd * startEvents + dearest + 0.011);
+    });
+});

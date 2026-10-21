@@ -4,9 +4,15 @@ import { z } from 'zod';
 
 import { type Connector, type EngineSlug, FatalConfigError } from './types.js';
 
-/** Stable short fingerprint of the consumer-visible fields of a record. `null`/`undefined` collapse to the same token. */
+/**
+ * Stable short fingerprint of the consumer-visible fields of a record.
+ *
+ * `null`, `undefined` and `''` are one token (a field that flips between missing and empty is not a change, as in
+ * the legacy actors). Everything else keeps its type - `1` and `"1"` differ - and the parts are serialised as a JSON
+ * array, so no separator character inside a value can make two different part lists collide.
+ */
 export function fingerprintOf(parts: ReadonlyArray<unknown>): string {
-    const canonical = parts.map((p) => (p === null || p === undefined ? '' : typeof p === 'string' ? p : JSON.stringify(p))).join('␟');
+    const canonical = JSON.stringify(parts.map((p) => (p === null || p === undefined || p === '' ? '' : p)));
     return createHash('sha1').update(canonical).digest('hex').slice(0, 20);
 }
 
@@ -45,4 +51,16 @@ export function createHeldConnector(spec: HeldConnectorSpec): Connector<Record<s
             throw new FatalConfigError(`Source "${spec.id}" is held: ${spec.reason}`);
         },
     };
+}
+
+/**
+ * A BYOK credential option: blank is treated as absent (so `requiredOptions` reports it), anything else must be
+ * 1-300 printable ASCII characters without spaces. A malformed value (a token pasted with a line break, say) is
+ * refused in preflight with a STATIC message - the value itself is never echoed into an error, a log or a header.
+ */
+export function byokCredential(label: string): z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, unknown> {
+    return z.preprocess(
+        (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+        z.string().trim().regex(/^[\x21-\x7e]{1,300}$/u, `${label} must be 1-300 printable ASCII characters without spaces`).optional(),
+    ) as z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, unknown>;
 }

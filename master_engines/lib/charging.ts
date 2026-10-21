@@ -23,6 +23,8 @@
 export const START_EVENT = 'apify-actor-start';
 export const RESULT_EVENT = 'result';
 export const WATCHLIST_HIT_EVENT = 'watchlist-hit';
+/** Apify's automatic per-dataset-item event. It must never be priced alongside explicit events (double billing). */
+export const DEFAULT_DATASET_ITEM_EVENT = 'apify-default-dataset-item';
 
 export interface PortChargeResult {
     chargedCount: number;
@@ -85,9 +87,13 @@ export interface HitBillerOptions {
 export const DEFAULT_HIT_BILLER_OPTIONS: HitBillerOptions = { maxHitsPerRun: 200, maxHitSpendUsd: 50 };
 
 /** Hard-protected `Actor.charge({ eventName: 'watchlist-hit', count: 1 })`. */
+const MICRO = 1_000_000;
+const toMicro = (usd: number): number => Math.round(usd * MICRO);
+
 export class WatchlistHitBiller {
     private hitsCharged = 0;
-    private spendUsd = 0;
+    /** Spend in integer micro-USD: summing decimal prices as floats drifts and trips a cap one hit early. */
+    private spendMicro = 0;
     hitsUnpriced = 0;
     hitsCapped = 0;
 
@@ -101,7 +107,7 @@ export class WatchlistHitBiller {
     }
 
     get spent(): number {
-        return this.spendUsd;
+        return this.spendMicro / MICRO;
     }
 
     async chargeHit(): Promise<ChargeOutcome> {
@@ -114,7 +120,7 @@ export class WatchlistHitBiller {
             return 'skipped_unpriced';
         }
 
-        if (this.hitsCharged >= this.options.maxHitsPerRun || this.spendUsd + price > this.options.maxHitSpendUsd) {
+        if (this.hitsCharged >= this.options.maxHitsPerRun || this.spendMicro + toMicro(price) > toMicro(this.options.maxHitSpendUsd)) {
             this.hitsCapped += 1;
             return 'skipped_cap';
         }
@@ -123,7 +129,7 @@ export class WatchlistHitBiller {
         if (result.chargedCount < 1) return 'limit_reached';
 
         this.hitsCharged += 1;
-        this.spendUsd += price;
+        this.spendMicro += toMicro(price);
         return result.eventChargeLimitReached ? 'limit_reached' : 'charged';
     }
 }

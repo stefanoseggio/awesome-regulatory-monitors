@@ -503,6 +503,10 @@ export function buildClinicalTrialsUrl(query: QueryParams, pageSize: number, pag
     return `${CLINICALTRIALS_STUDIES_URL}?${toQueryString(params)}`;
 }
 
+/** clinicaltrials.gov/robots.txt declares `Crawl-delay: 1`: at most one request per second. */
+export const CT_CRAWL_DELAY_MS = 1000;
+const realSleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
 export interface ClinicalTrialsFetchParams {
     maxItems: number;
     queries: readonly QueryParams[];
@@ -516,6 +520,8 @@ export async function fetchClinicalTrials(ctx: ConnectorContext, params: Clinica
     const pageSizeCap = params.pageSize ?? CT_PAGE_SIZE;
     const byId = new Map<string, ClinicalTrialRaw>();
     let skipped = 0;
+    let requests = 0;
+    const sleep = ctx.sleep ?? realSleep;
 
     for (const query of params.queries) {
         let collected = 0;
@@ -523,6 +529,8 @@ export async function fetchClinicalTrials(ctx: ConnectorContext, params: Clinica
         let pageToken: string | undefined;
         while (collected < params.maxItems && pages < params.maxPages) {
             const pageSize = Math.min(pageSizeCap, params.maxItems - collected);
+            if (requests > 0) await sleep(CT_CRAWL_DELAY_MS);
+            requests += 1;
             const body = await ctx.http.getJson<unknown>(buildClinicalTrialsUrl(query, pageSize, pageToken), { maxBytes: 20 * 1024 * 1024 });
             const page = parseClinicalTrialsPage(body);
             pages += 1;

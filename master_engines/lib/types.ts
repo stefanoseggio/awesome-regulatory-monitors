@@ -75,6 +75,8 @@ export interface ConnectorContext {
     http: HttpClient;
     log: Logger;
     now: () => Date;
+    /** Optional injectable delay for connectors that pace their own requests (robots.txt Crawl-delay). Tests inject a no-op. */
+    sleep?: (ms: number) => Promise<void>;
 }
 
 /** Run-level knobs every connector receives next to its own validated options. */
@@ -180,5 +182,7 @@ export interface RunSummary {
     sources: SourceRunSummary[];
     totalEmitted: number;
     watchlist: { accepted: number; rejected: number; hitsCharged: number; hitsUnpriced: number };
+    /** Live-pricing check for pay-per-event runs: events this run can bill that have no positive price. */
+    pricing: { unpricedEvents: string[] };
     stoppedOnChargeLimit: boolean;
 }

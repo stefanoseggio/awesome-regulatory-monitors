@@ -73,7 +73,7 @@
  */
 import { z } from 'zod';
 
-import { DATE_RANGES, dateRangeToFrom, fingerprintOf } from '../../lib/connector_helpers.js';
+import { byokCredential, DATE_RANGES, dateRangeToFrom, fingerprintOf } from '../../lib/connector_helpers.js';
 import { HttpStatusError } from '../../lib/http.js';
 import { type Connector, type ConnectorContext, type RunParams, SourceFetchError, type SourceRecord } from '../../lib/types.js';
 
@@ -345,7 +345,7 @@ function upperCaseElements(value: unknown): unknown {
 export const usptoPtabOptionsSchema = z
     .object({
         /** BYOK: an already-issued USPTO Open Data Portal API key (sent as `x-api-key`; never logged). */
-        usptoOdpApiKey: z.string().trim().optional(),
+        usptoOdpApiKey: byokCredential('usptoOdpApiKey'),
         /** Filters by trialMetaData.trialTypeCode. Empty = all four trial types. */
         trialTypeCodes: z.preprocess(upperCaseElements, z.array(z.enum(PTAB_TRIAL_TYPE_CODES))).default([]),
         /** Restricts to proceedings whose petitionFilingDate is inside this window (applied server-side as a rangeFilter). */

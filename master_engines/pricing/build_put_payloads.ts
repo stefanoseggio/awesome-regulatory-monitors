@@ -21,11 +21,23 @@ import {
 
 export const NOTICE_DAYS = 14;
 export const START_EVENT_NAME = 'apify-actor-start';
-export const DEFAULT_DATASET_ITEM_EVENT = 'apify-default-dataset-item';
+export { DEFAULT_DATASET_ITEM_EVENT } from '../lib/charging.js';
+import { DEFAULT_DATASET_ITEM_EVENT } from '../lib/charging.js';
 /** Apify's share of PPE revenue; the API schema marks `apifyMarginPercentage` required. */
 export const APIFY_MARGIN_PERCENTAGE = 0.2;
-/** Smallest total charge a caller can set on a run of this Actor. */
+/** Floor for the smallest total charge a caller can set on a run of this Actor. */
 export const MINIMAL_MAX_TOTAL_CHARGE_USD = 0.1;
+
+/**
+ * The smallest `maxTotalChargeUsd` a caller may set must still pay for a run's start events plus the single most
+ * expensive event: with a lower floor the first matched record could not even be billed its `watchlist-hit`.
+ * Rounded up to the cent, never below {@link MINIMAL_MAX_TOTAL_CHARGE_USD}.
+ */
+export function minimalMaxTotalChargeFor(pricing: EnginePricing): number {
+    const startEvents = Math.max(1, Math.ceil(pricing.memoryMbytes / 1024));
+    const dearest = Math.max(...pricing.events.map((e) => e.priceUsd));
+    return Math.max(MINIMAL_MAX_TOTAL_CHARGE_USD, Math.ceil((pricing.startPriceUsd * startEvents + dearest) * 100 - 1e-9) / 100);
+}
 
 const EVENT_NAME = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u;
 
@@ -165,7 +177,7 @@ export function buildPricingPutBody(pricing: EnginePricing, options: BuildOption
             {
                 pricingModel: 'PAY_PER_EVENT',
                 pricingPerEvent: { actorChargeEvents },
-                minimalMaxTotalChargeUsd: MINIMAL_MAX_TOTAL_CHARGE_USD,
+                minimalMaxTotalChargeUsd: minimalMaxTotalChargeFor(pricing),
                 apifyMarginPercentage: APIFY_MARGIN_PERCENTAGE,
                 createdAt,
                 startedAt,

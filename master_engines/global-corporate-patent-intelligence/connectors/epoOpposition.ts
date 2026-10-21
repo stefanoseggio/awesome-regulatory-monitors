@@ -90,7 +90,7 @@ import * as cheerio from 'cheerio';
 import { z } from 'zod';
 
 import { type KeywordRejectionReason, sanitizeKeywordList } from '../../lib/_guards.js';
-import { fingerprintOf } from '../../lib/connector_helpers.js';
+import { fingerprintOf, byokCredential } from '../../lib/connector_helpers.js';
 import { HttpStatusError } from '../../lib/http.js';
 import { type Connector, type ConnectorContext, type RunParams, SourceFetchError, type SourceRecord } from '../../lib/types.js';
 
@@ -343,9 +343,9 @@ const epWatchlistSchema = z.unknown().transform((raw, issueCtx): string[] => {
 export const epoOppositionOptionsSchema = z
     .object({
         /** BYOK: EPO OPS OAuth2 Consumer Key from a free developers.epo.org account + app. Never logged. */
-        epoOpsConsumerKey: z.string().trim().optional(),
+        epoOpsConsumerKey: byokCredential('epoOpsConsumerKey'),
         /** BYOK: the paired Consumer Secret. Never logged. */
-        epoOpsConsumerSecret: z.string().trim().optional(),
+        epoOpsConsumerSecret: byokCredential('epoOpsConsumerSecret'),
         /** EP publication numbers in OPS epodoc format, at most 100. */
         epWatchlist: epWatchlistSchema,
         /** Pause between two lookups, to stay under the OPS `inpadoc` fair-use window (see header). 0 disables pacing. */

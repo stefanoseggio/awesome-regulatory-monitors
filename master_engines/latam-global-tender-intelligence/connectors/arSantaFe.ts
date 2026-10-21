@@ -672,9 +672,12 @@ function parseTitle(title: string | null): { tipo: string | null; numero: string
 }
 
 /** "MICROBIOLOGIA HNZN - " -> "MICROBIOLOGIA HNZN"; "ANEXO ... - 31-08-2026" is kept whole. */
-function splitTrailingDash(value: string | null): string | null {
+export function splitTrailingDash(value: string | null): string | null {
     if (!value) return null;
-    return blankToNull(value.replace(/(\s*-\s*)+$/, ''));
+    // Linear scan instead of /(\s*-\s*)+$/, which backtracks exponentially on a long run of "- " pairs.
+    let end = value.length;
+    while (end > 0 && (value[end - 1] === '-' || /\s/u.test(value[end - 1] ?? ''))) end -= 1;
+    return blankToNull(value.slice(end).includes('-') ? value.slice(0, end) : value);
 }
 
 /**

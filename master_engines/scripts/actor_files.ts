@@ -27,7 +27,7 @@ export const ENGINE_META: Record<string, EngineMeta> = {
         extraDockerLines: [
             '# The Cordoba portal sends only its leaf certificate. certs/ holds the two PUBLIC Sectigo CA certificates it omits',
             '# (intermediate + root, no private key); NODE_EXTRA_CA_CERTS adds them to - never replaces - the trust store.',
-            'ENV NODE_EXTRA_CA_CERTS=/usr/src/app/certs/cordoba-sectigo-chain.pem',
+            'ENV NODE_EXTRA_CA_CERTS=/usr/src/app/latam-global-tender-intelligence/certs/cordoba-sectigo-chain.pem',
         ],
     },
     'global-corporate-patent-intelligence': {
@@ -81,6 +81,13 @@ export function buildInputSchema(engine: EngineDefinition): Record<string, unkno
             enum: [...DELTA_MODES],
             enumTitles: ['All records (snapshot)', 'New and changed records', 'New records only'],
             default: 'onlyChanged',
+        },
+        stateNamespace: {
+            title: 'Delta memory namespace',
+            type: 'string',
+            description:
+                'Keeps delta memory separate between Tasks (different watchlists, filters or delta modes would otherwise consume each other\'s "new" records). Leave empty to use one namespace per Task, or "default" for ad-hoc runs. 1-40 characters: a-z, 0-9, "-".',
+            editor: 'textfield',
         },
         maxItemsPerSource: { title: 'Max records per source', type: 'integer', description: 'Upper bound on records taken from each source in one run.', minimum: 1, maximum: 10000, default: 500 },
         watchlistNames: {
@@ -141,7 +148,7 @@ export function buildDockerfile(engine: EngineDefinition): string {
 
 COPY --chown=myuser:myuser package*.json ./
 
-RUN npm install --include=dev --audit=false
+RUN npm ci --include=dev
 
 COPY --chown=myuser:myuser . ./
 
@@ -152,7 +159,7 @@ FROM apify/actor-node:24
 COPY --chown=myuser:myuser package*.json ./
 
 RUN npm --quiet set progress=false \\
-    && npm install --omit=dev --omit=optional \\
+    && npm ci --omit=dev --omit=optional \\
     && echo "Node.js version:" \\
     && node --version \\
     && rm -r ~/.npm

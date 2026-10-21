@@ -74,6 +74,10 @@ export const SEC_FEEDS: Record<SecFeedKey, { url: string; releaseType: 'litigati
 /** Legacy default User-Agent (README input table). Callers should supply their own organisation + contact. */
 export const SEC_DEFAULT_USER_AGENT = 'DeltaRegistrySECMonitor/1.0 (+https://apify.com/stefano_seggio/sec-enforcement-litigation-delta-feed)';
 
+/** Product tokens of real web browsers: sending one would be user-agent impersonation, which the compliance doctrine forbids. */
+const BROWSER_USER_AGENT = /\b(?:Chrome|Chromium|CriOS|Safari|Firefox|FxiOS|Edg|EdgA|EdgiOS|Edge|OPR|Opera|AppleWebKit|Version)\/|like Gecko|Trident|MSIE/iu;
+const CONTACT_MARKER = /(?:https?:\/\/\S+|[\w.+-]+@[\w-]+\.[\w.-]+)/iu;
+
 export const secEnforcementOptionsSchema = z.object({
     /** Which of the two official SEC feeds to poll (legacy input `sources`). */
     sources: z.array(z.enum(SEC_FEED_KEYS)).min(1).max(SEC_FEED_KEYS.length).default([...SEC_FEED_KEYS]),
@@ -87,6 +91,8 @@ export const secEnforcementOptionsSchema = z.object({
         .min(8, 'userAgent must identify your organisation (min 8 characters)')
         .max(200)
         .regex(/^[\x20-\x7e]+$/, 'userAgent must be printable ASCII (no control characters or newlines)')
+        .refine((ua) => !BROWSER_USER_AGENT.test(ua), 'userAgent must identify this client honestly; a web-browser User-Agent is not allowed')
+        .refine((ua) => CONTACT_MARKER.test(ua), 'userAgent must include a contact (an http(s) URL or an e-mail address), as the SEC fair-access policy asks')
         .default(SEC_DEFAULT_USER_AGENT),
     /**
      * Legacy-compat only. Deliberately `unknown` (the ghost-billing bug lived in trusting this field's type).

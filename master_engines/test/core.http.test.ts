@@ -141,10 +141,11 @@ describe('redirect validation', () => {
         await expect(client.getText('https://a.test/loop', { redirects: { max: 3 } })).rejects.toThrow(/more than 3 redirects/);
     });
 
-    it('leaves default redirect behaviour untouched when the option is absent', async () => {
-        const { client, calls } = clientWith(() => new Response('plain'));
-        await client.getText('https://a.test/x');
-        expect(calls[0]?.init.redirect).toBeUndefined();
+    it('handles redirects itself by default (manual), following up to 5 hops without a validator', async () => {
+        const { client, calls } = clientWith(handler);
+        expect(await client.getText('https://a.test/start')).toBe('arrived');
+        expect(calls.every((c) => c.init.redirect === 'manual')).toBe(true);
+        await expect(client.getText('https://a.test/loop')).rejects.toThrow(/more than 5 redirects/);
     });
 });
 
@@ -231,5 +232,101 @@ describe('retry floor and Retry-After', () => {
         const now = Date.parse('2026-10-21T00:00:00Z');
         expect(parseRetryAfterMs('Wed, 21 Oct 2026 00:00:10 GMT', now)).toBe(10_000);
         expect(parseRetryAfterMs('Wed, 21 Oct 2026 00:00:00 GMT', now + 5000)).toBe(0);
+    });
+});
+
+describe('redirects never leak credentials', () => {
+    const redirectTo = (location: string, status = 302): Handler => (url) => (url === 'https://api.test/start' ? new Response(null, { status, headers: { location } }) : new Response('ok'));
+
+    it('drops credential headers when the origin changes, keeps the safe ones', async () => {
+        const { client, calls } = clientWith(redirectTo('https://other.test/landing'));
+        await client.getText('https://api.test/start', { headers: { 'x-api-key': 'KEY-123456', 'x-app-token': 'TOK-123456', authorization: 'Bearer abcdef', cookie: 'a=b', accept: 'application/json' } });
+        const second = calls[1]?.init.headers as Record<string, string>;
+        expect(second['x-api-key']).toBeUndefined();
+        expect(second['x-app-token']).toBeUndefined();
+        expect(second.authorization).toBeUndefined();
+        expect(second.cookie).toBeUndefined();
+        expect(second['user-agent']).toBe('test-agent (contact@example.com)');
+        expect(second.accept).toBe('application/json');
+    });
+
+    it('keeps headers on a same-origin redirect', async () => {
+        const { client, calls } = clientWith(redirectTo('/next'));
+        await client.getText('https://api.test/start', { headers: { 'x-api-key': 'KEY-123456' } });
+        expect((calls[1]?.init.headers as Record<string, string>)['x-api-key']).toBe('KEY-123456');
+    });
+
+    it('refuses an https to http downgrade even on the same host', async () => {
+        const { client, calls } = clientWith(redirectTo('http://api.test/plain'));
+        await expect(client.getText('https://api.test/start', { headers: { 'x-api-key': 'KEY-123456' } })).rejects.toThrow(/downgrade/);
+        expect(calls).toHaveLength(1);
+    });
+
+    it('turns a POST into a body-less GET on 302/303 and preserves it on 307/308', async () => {
+        for (const [status, expectedMethod, expectedBody] of [[302, 'GET', undefined], [303, 'GET', undefined], [307, 'POST', 'a=1'], [308, 'POST', 'a=1']] as const) {
+            const { client, calls } = clientWith(redirectTo('/next', status));
+            await client.getText('https://api.test/start', { method: 'POST', body: 'a=1', headers: { 'content-type': 'application/x-www-form-urlencoded' } });
+            expect(calls[1]?.init.method, String(status)).toBe(expectedMethod);
+            expect(calls[1]?.init.body, String(status)).toBe(expectedBody);
+        }
+    });
+});
+
+describe('error bodies are bounded', () => {
+    function endlessBody(): Response {
+        let chunks = 0;
+        const stream = new ReadableStream<Uint8Array>({
+            pull(controller) {
+                chunks += 1;
+                if (chunks > 100_000) {
+                    controller.close();
+                    return;
+                }
+                controller.enqueue(new Uint8Array(64 * 1024).fill(65));
+            },
+        });
+        return new Response(stream, { status: 404 });
+    }
+
+    it('reads at most a small preview of a non-2xx body and cancels the stream', async () => {
+        const { client } = clientWith(() => endlessBody());
+        const started = Date.now();
+        const error = await client.getText('https://x.test/hostile', { maxBytes: 1000 }).catch((e: Error) => e);
+        expect(error).toBeInstanceOf(HttpStatusError);
+        expect((error as HttpStatusError).bodyPreview.length).toBeLessThanOrEqual(200);
+        expect(Date.now() - started).toBeLessThan(2000);
+    });
+
+    it('does the same on a retryable status across every attempt', async () => {
+        let n = 0;
+        const { client } = clientWith(() => {
+            n += 1;
+            return new Response('x'.repeat(5_000_000), { status: 503 });
+        }, { maxRetries: 2 });
+        await expect(client.getText('https://x.test/')).rejects.toBeInstanceOf(HttpStatusError);
+        expect(n).toBe(3);
+    });
+});
+
+describe('secret hygiene in logs', () => {
+    it('redactUrl strips fragments and more credential names', () => {
+        expect(redactUrl('https://x.test/p?session=abc&jwt=def&bearer=ghi&page=2#access_token=zzz')).toBe('https://x.test/p?session=***&jwt=***&bearer=***&page=2');
+    });
+
+    it('does not echo a header value in the retry debug line', async () => {
+        const lines: string[] = [];
+        const client = createHttpClient({
+            userAgent: 'ua',
+            maxRetries: 1,
+            baseDelayMs: 1,
+            sleep: async () => undefined,
+            log: { info() {}, warning() {}, error() {}, debug: (m) => lines.push(m) },
+            fetchImpl: (async (_u: string, init: RequestInit) => {
+                throw new TypeError(`Headers.append: "${(init.headers as Record<string, string>)['x-app-token']}" is an invalid header value.`);
+            }) as typeof fetch,
+        });
+        await expect(client.getText('https://x.test/', { headers: { 'x-app-token': 'LEAKME-SECRET-0123456789' } })).rejects.toThrow();
+        expect(lines.join('\n')).not.toContain('LEAKME-SECRET-0123456789');
+        expect(lines.join('\n')).toContain('***');
     });
 });

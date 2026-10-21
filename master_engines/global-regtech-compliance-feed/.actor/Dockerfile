@@ -2,7 +2,7 @@ FROM apify/actor-node:24 AS builder
 
 COPY --chown=myuser:myuser package*.json ./
 
-RUN npm install --include=dev --audit=false
+RUN npm ci --include=dev
 
 COPY --chown=myuser:myuser . ./
 
@@ -13,7 +13,7 @@ FROM apify/actor-node:24
 COPY --chown=myuser:myuser package*.json ./
 
 RUN npm --quiet set progress=false \
-    && npm install --omit=dev --omit=optional \
+    && npm ci --omit=dev --omit=optional \
     && echo "Node.js version:" \
     && node --version \
     && rm -r ~/.npm

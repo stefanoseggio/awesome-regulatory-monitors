@@ -260,8 +260,33 @@ export function parseRobotsTxt(text: string): ParsedRobots {
     return parsed;
 }
 
-function escapeRegExp(text: string): string {
-    return text.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+/**
+ * Iterative `*` wildcard matcher (no regular expression): a hostile robots.txt with hundreds of `*` in a rule cannot
+ * cause catastrophic backtracking, and nothing is compiled per rule per bot.
+ */
+function wildcardMatch(pattern: string, text: string): boolean {
+    let p = 0;
+    let t = 0;
+    let star = -1;
+    let mark = 0;
+    while (t < text.length) {
+        if (p < pattern.length && pattern[p] === '*') {
+            star = p;
+            p += 1;
+            mark = t;
+        } else if (p < pattern.length && pattern[p] === text[t]) {
+            p += 1;
+            t += 1;
+        } else if (star !== -1) {
+            p = star + 1;
+            mark += 1;
+            t = mark;
+        } else {
+            return false;
+        }
+    }
+    while (p < pattern.length && pattern[p] === '*') p += 1;
+    return p === pattern.length;
 }
 
 /** RFC 9309 path matching: prefix match from the start, `*` = any run of characters, trailing `$` = end anchor. */
@@ -270,8 +295,8 @@ export function pathMatches(pattern: string, path: string): boolean {
     if (!pattern.startsWith('/') && !pattern.startsWith('*')) return false;
     const anchored = pattern.endsWith('$');
     const body = anchored ? pattern.slice(0, -1) : pattern;
-    const source = body.split('*').map(escapeRegExp).join('.*');
-    return new RegExp(`^${source}${anchored ? '$' : ''}`, 'u').test(path);
+    // Not anchored => prefix match, i.e. the rule matches if it matches the start of the path.
+    return wildcardMatch(anchored ? body : `${body}*`, path);
 }
 
 export type BotDirective = 'allow' | 'disallow' | 'not_specified';

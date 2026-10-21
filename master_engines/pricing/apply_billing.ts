@@ -1,6 +1,6 @@
 import type { EngineDefinition } from '../lib/router_core.js';
 import type { Connector } from '../lib/types.js';
-import type { EnginePricing } from './event_catalog.js';
+import { type EnginePricing, RECORD_LEVEL_EVENTS } from './event_catalog.js';
 
 /**
  * Returns a copy of `engine` whose active connectors carry the `billing` mapping from the catalog.
@@ -15,5 +15,5 @@ export function applyCatalogBilling(engine: EngineDefinition, pricing: EnginePri
         if (!billing) throw new Error(`Active connector "${connector.id}" has no entry in the ${pricing.engine} pricing catalog.`);
         return { ...connector, billing };
     });
-    return { ...engine, connectors };
+    return { ...engine, connectors, extraBillingEvents: RECORD_LEVEL_EVENTS[engine.slug] };
 }

@@ -28,7 +28,7 @@
                     },
                     "statement-updated": {
                         "eventTitle": "Updated modern slavery statement",
-                        "eventDescription": "A previously delivered UK statement whose content changed.",
+                        "eventDescription": "A previously delivered UK statement whose content changed, or one re-sent unchanged by a full-snapshot run.",
                         "eventPriceUsd": 0.01
                     },
                     "enforcement-release": {
@@ -38,7 +38,7 @@
                     },
                     "enforcement-update": {
                         "eventTitle": "Updated SEC enforcement release",
-                        "eventDescription": "A previously delivered SEC release whose content changed.",
+                        "eventDescription": "A previously delivered SEC release whose content changed, or one re-sent unchanged by a full-snapshot run.",
                         "eventPriceUsd": 0.02
                     },
                     "crawler-signal": {
@@ -48,7 +48,7 @@
                     },
                     "crawler-signal-change": {
                         "eventTitle": "AI crawler signal change",
-                        "eventDescription": "A previously delivered domain whose crawler permissions, Content-Signal or llms.txt changed.",
+                        "eventDescription": "A previously delivered domain whose crawler permissions, Content-Signal or llms.txt changed, or one re-sent unchanged by a full-snapshot run.",
                         "eventPriceUsd": 0.006
                     },
                     "recall-record": {
@@ -63,7 +63,7 @@
                     }
                 }
             },
-            "minimalMaxTotalChargeUsd": 0.1,
+            "minimalMaxTotalChargeUsd": 0.16,
             "apifyMarginPercentage": 0.2,
             "createdAt": "2026-10-21T00:00:00.000Z",
             "startedAt": "2026-11-04T00:00:00.000Z",

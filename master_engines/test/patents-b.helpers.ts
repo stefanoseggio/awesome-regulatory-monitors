@@ -92,7 +92,7 @@ export function httpError(url: string, status: number, body = ''): HttpStatusErr
 
 export function makeCtx(http: HttpClient, now: Date = FIXED_NOW): { ctx: ConnectorContext; logs: LogEntry[] } {
     const { log, entries } = createRecordingLogger();
-    return { ctx: { http, log, now: () => now }, logs: entries };
+    return { ctx: { http, log, now: () => now, sleep: async () => undefined }, logs: entries };
 }
 
 /** Messages of the log entries at `level`. */

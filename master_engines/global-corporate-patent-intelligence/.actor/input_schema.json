@@ -55,6 +55,12 @@
             ],
             "default": "onlyChanged"
         },
+        "stateNamespace": {
+            "title": "Delta memory namespace",
+            "type": "string",
+            "description": "Keeps delta memory separate between Tasks (different watchlists, filters or delta modes would otherwise consume each other's \"new\" records). Leave empty to use one namespace per Task, or \"default\" for ad-hoc runs. 1-40 characters: a-z, 0-9, \"-\".",
+            "editor": "textfield"
+        },
         "maxItemsPerSource": {
             "title": "Max records per source",
             "type": "integer",

@@ -21,8 +21,9 @@
 import { z } from 'zod';
 
 import { clampInteger, describeSanitization, findKeywordMatch, sanitizeKeywordList } from './_guards.js';
-import { type BillingPort, DEFAULT_HIT_BILLER_OPTIONS, RESULT_EVENT, WatchlistHitBiller } from './charging.js';
-import { classifyRecord, type DeltaStore, markProcessed, type ProcessedRecord } from './state.js';
+import { type BillingPort, DEFAULT_DATASET_ITEM_EVENT, DEFAULT_HIT_BILLER_OPTIONS, RESULT_EVENT, WATCHLIST_HIT_EVENT, WatchlistHitBiller } from './charging.js';
+import { createScrubber, collectSecrets } from './secrets.js';
+import { classifyRecord, type DeltaStore, effectiveMaxSeenIds, markProcessed, type ProcessedRecord } from './state.js';
 import {
     type Connector,
     type ConnectorContext,
@@ -51,6 +52,8 @@ export interface EngineDefinition {
      * `sourceOptions` JSON object.
      */
     credentialFields?: Readonly<Record<string, CredentialField>>;
+    /** PPE events a connector can reach through `SourceRecord.billingEvent` (outside its `billing` mapping). Checked at run start. */
+    extraBillingEvents?: readonly string[];
 }
 
 /**
@@ -60,7 +63,10 @@ export interface EngineDefinition {
 export function mergeCredentialFields(engine: EngineDefinition, rawInput: unknown): unknown {
     if (!engine.credentialFields || !rawInput || typeof rawInput !== 'object' || Array.isArray(rawInput)) return rawInput;
     const input = rawInput as Record<string, unknown>;
-    const existing = input.sourceOptions && typeof input.sourceOptions === 'object' && !Array.isArray(input.sourceOptions) ? (input.sourceOptions as Record<string, unknown>) : {};
+    // A malformed sourceOptions (string, array, null...) is left alone so schema validation reports it, instead of being
+    // silently replaced by {} and masking the caller's mistake.
+    if (input.sourceOptions !== undefined && (input.sourceOptions === null || typeof input.sourceOptions !== 'object' || Array.isArray(input.sourceOptions))) return rawInput;
+    const existing = (input.sourceOptions ?? {}) as Record<string, unknown>;
     const sourceOptions: Record<string, unknown> = { ...existing };
     for (const [topKey, target] of Object.entries(engine.credentialFields)) {
         const value = input[topKey];
@@ -86,6 +92,11 @@ export const EngineInputSchema = z.object({
     watchlistNames: z.unknown().optional(),
     maxWatchlistHitsPerRun: z.number().int().min(0).max(100_000).default(DEFAULT_HIT_BILLER_OPTIONS.maxHitsPerRun),
     maxWatchlistSpendUsd: z.number().min(0).max(10_000).default(DEFAULT_HIT_BILLER_OPTIONS.maxHitSpendUsd),
+    /**
+     * Isolates delta memory: two Tasks (different watchlists, filters or delta modes) must not consume each other's
+     * "new" records. Read by the Apify adapter before the store is opened; the router itself never uses it.
+     */
+    stateNamespace: z.string().regex(/^[a-z0-9-]{1,40}$/u, 'stateNamespace must be 1-40 characters of a-z, 0-9 and "-".').optional(),
 });
 export type EngineInput = z.infer<typeof EngineInputSchema>;
 
@@ -167,7 +178,9 @@ export function billingEventFor(connector: Connector<any>, cls: RecordClass): st
     const b = connector.billing;
     const base = b?.newEvent ?? RESULT_EVENT;
     if (cls === 'updated') return b?.updatedEvent ?? base;
-    if (cls === 'unchanged') return b?.snapshotEvent ?? base;
+    // An unchanged record re-sent by deltaMode 'all' is NOT a new delivery: bill the lower "updated" event unless the
+    // connector declares a dedicated snapshot event.
+    if (cls === 'unchanged') return b?.snapshotEvent ?? b?.updatedEvent ?? base;
     return base;
 }
 
@@ -178,6 +191,36 @@ export function shouldEmit(mode: DeltaMode, cls: RecordClass): boolean {
     return cls === 'first_seen';
 }
 
+export interface PricingCheck {
+    /** Events this run can bill that have no own, finite, positive price (PPE runs only). They would be delivered free. */
+    unpricedEvents: string[];
+}
+
+/**
+ * Runtime guard on the LIVE pricing, for pay-per-event runs:
+ *   - `apify-default-dataset-item` priced => `pushData(row, eventName)` bills BOTH events per row (verified in the
+ *     installed SDK): refuse the run, the customer would be double-billed;
+ *   - an event this run can bill that is not priced is treated as free by the SDK and reported as charged: warn and
+ *     record it, so a pricing mismatch (notice window not elapsed, renamed event) is visible instead of silent.
+ */
+export function checkRuntimePricing(engine: EngineDefinition, selected: readonly ResolvedSource[], billing: BillingPort, watchlistActive: boolean): PricingCheck {
+    if (!billing.isPayPerEvent()) return { unpricedEvents: [] };
+    const prices = billing.perEventPrices();
+    const priced = (name: string): boolean => Object.prototype.hasOwnProperty.call(prices, name) && Number.isFinite(prices[name]) && (prices[name] as number) > 0;
+
+    if (priced(DEFAULT_DATASET_ITEM_EVENT)) {
+        throw new FatalConfigError(
+            `The Actor's pricing prices "${DEFAULT_DATASET_ITEM_EVENT}". With it priced, every row would be billed twice (once as itself and once as its own event). Remove that event from the pricing and run again.`,
+        );
+    }
+    const needed = new Set<string>(engine.extraBillingEvents ?? []);
+    for (const { connector } of selected) {
+        for (const cls of ['first_seen', 'updated', 'unchanged'] as const) needed.add(billingEventFor(connector, cls));
+    }
+    if (watchlistActive) needed.add(WATCHLIST_HIT_EVENT);
+    return { unpricedEvents: [...needed].filter((name) => !priced(name)).sort() };
+}
+
 interface RunDeps {
     sinks: RunSinks;
     ctx: ConnectorContext;
@@ -185,8 +228,11 @@ interface RunDeps {
     clock?: () => Date;
 }
 
+/** Persist delta memory after this many emitted rows, bounding what a hard kill (timeout, OOM, migration) can re-deliver. */
+export const CHECKPOINT_EVERY_ROWS = 25;
+
 export async function runEngine(engine: EngineDefinition, rawInput: unknown, deps: RunDeps): Promise<RunSummary> {
-    const { sinks, ctx } = deps;
+    const { sinks } = deps;
     const clock = deps.clock ?? (() => new Date());
     const startedAt = clock().toISOString();
 
@@ -201,9 +247,28 @@ export async function runEngine(engine: EngineDefinition, rawInput: unknown, dep
     // 1. PREFLIGHT - nothing below runs if this throws.
     const selected = resolveSources(engine, input);
 
+    // Every log line, warning and error from here on is scrubbed with the credentials of the selected sources.
+    const scrub = createScrubber(selected.flatMap(({ options }) => collectSecrets(options)));
+    const ctx: ConnectorContext = {
+        ...deps.ctx,
+        log: {
+            info: (m) => deps.ctx.log.info(scrub(m)),
+            warning: (m) => deps.ctx.log.warning(scrub(m)),
+            error: (m) => deps.ctx.log.error(scrub(m)),
+            debug: (m) => deps.ctx.log.debug(scrub(m)),
+        },
+    };
+
     // 4. WATCHLIST - sanitised exactly once, up front.
     const watchlist = sanitizeKeywordList(input.watchlistNames);
     if (input.watchlistNames !== undefined) ctx.log.info(describeSanitization(watchlist));
+
+    // LIVE pricing check (pay-per-event runs): refuse a double-billing configuration, record unpriced events.
+    const pricing = checkRuntimePricing(engine, selected, sinks.billing, watchlist.keywords.length > 0);
+    if (pricing.unpricedEvents.length > 0) {
+        ctx.log.warning(`Pay-per-event events with no positive price in this Actor's pricing (rows billed at them are delivered free): ${pricing.unpricedEvents.join(', ')}.`);
+    }
+
     const biller = new WatchlistHitBiller(sinks.billing, {
         maxHitsPerRun: clampInteger(input.maxWatchlistHitsPerRun, 0, 100_000, DEFAULT_HIT_BILLER_OPTIONS.maxHitsPerRun),
         maxHitSpendUsd: input.maxWatchlistSpendUsd,
@@ -236,7 +301,7 @@ export async function runEngine(engine: EngineDefinition, rawInput: unknown, dep
             log: {
                 ...ctx.log,
                 warning(message: string) {
-                    if (summary.warnings.length < 50) summary.warnings.push(message.slice(0, 500));
+                    if (summary.warnings.length < 50) summary.warnings.push(scrub(message).slice(0, 500));
                     ctx.log.warning(message);
                 },
             },
@@ -247,65 +312,92 @@ export async function runEngine(engine: EngineDefinition, rawInput: unknown, dep
         try {
             records = await connector.fetch(sourceCtx, options, { maxItemsPerSource: input.maxItemsPerSource });
         } catch (error) {
-            summary.error = error instanceof Error ? error.message : String(error);
+            summary.error = scrub(error instanceof Error ? error.message : String(error));
             ctx.log.error(`[${connector.id}] fetch failed: ${summary.error}`);
             continue;
         }
         records = dedupeById(records).slice(0, input.maxItemsPerSource);
         summary.fetched = records.length;
 
-        // 3 + 5. DELTA, EMIT, BILL
+        // 3 + 5. DELTA, EMIT, BILL. Delta memory is checkpointed while the loop runs and once more in `finally`, so a
+        // row that was already pushed and billed is remembered even if a later push throws or the run is killed.
         const processed: ProcessedRecord[] = [];
-        for (const record of records) {
-            const cls = classifyRecord(state, connector.id, record.recordId, record.fingerprint);
-            summary[cls === 'first_seen' ? 'firstSeen' : cls] += 1;
+        const memoryCap = effectiveMaxSeenIds(connector.maxSeenIds, input.maxItemsPerSource, state.sources[connector.id]?.seenIds.length ?? 0);
+        const persist = async (): Promise<void> => {
+            if (processed.length === 0) return;
+            const batch = processed.slice();
+            state = markProcessed(state, connector.id, batch, clock().toISOString(), memoryCap);
+            const entry = state.sources[connector.id];
+            if (sinks.store.saveSource && entry) await sinks.store.saveSource(connector.id, entry);
+            else await sinks.store.save(state);
+            processed.splice(0, batch.length);
+        };
+        let sinceCheckpoint = 0;
 
-            if (!shouldEmit(input.deltaMode, cls)) {
-                processed.push({ recordId: record.recordId, fingerprint: record.fingerprint });
-                continue;
-            }
+        try {
+            for (const record of records) {
+                const cls = classifyRecord(state, connector.id, record.recordId, record.fingerprint);
+                summary[cls === 'first_seen' ? 'firstSeen' : cls] += 1;
 
-            const matchedKeyword = findKeywordMatch(record.watchText, watchlist);
-            const row: Record<string, unknown> = {
-                ...record.payload,
-                engine: engine.slug,
-                source: connector.id,
-                record_id: record.recordId,
-                delta_status: cls,
-                is_new: cls === 'first_seen',
-                is_watchlist_match: matchedKeyword !== null,
-                matched_watchlist_keyword: matchedKeyword,
-                scraped_at: clock().toISOString(),
-            };
+                if (!shouldEmit(input.deltaMode, cls)) {
+                    processed.push({ recordId: record.recordId, fingerprint: record.fingerprint });
+                    continue;
+                }
 
-            const emission = await sinks.emit(row, record.billingEvent ?? billingEventFor(connector, cls));
-            if (!emission.emitted) {
-                stoppedOnChargeLimit = true;
-                ctx.log.info(`[${connector.id}] charge limit reached before record ${record.recordId}; stopping.`);
-                break;
-            }
-            summary.emitted += 1;
-            totalEmitted += 1;
-            processed.push({ recordId: record.recordId, fingerprint: record.fingerprint });
+                const matchedKeyword = findKeywordMatch(record.watchText, watchlist);
+                const row: Record<string, unknown> = {
+                    ...record.payload,
+                    engine: engine.slug,
+                    source: connector.id,
+                    record_id: record.recordId,
+                    delta_status: cls,
+                    is_new: cls === 'first_seen',
+                    is_watchlist_match: matchedKeyword !== null,
+                    matched_watchlist_keyword: matchedKeyword,
+                    scraped_at: clock().toISOString(),
+                };
 
-            if (matchedKeyword !== null) {
-                summary.watchlistHits += 1;
-                const outcome = await biller.chargeHit();
-                if (outcome === 'limit_reached') {
+                const emission = await sinks.emit(row, record.billingEvent ?? billingEventFor(connector, cls));
+                if (!emission.emitted) {
                     stoppedOnChargeLimit = true;
-                    ctx.log.info(`[${connector.id}] watchlist-hit charge limit reached; stopping.`);
+                    ctx.log.info(`[${connector.id}] charge limit reached before record ${record.recordId}; stopping.`);
                     break;
                 }
+                summary.emitted += 1;
+                totalEmitted += 1;
+                processed.push({ recordId: record.recordId, fingerprint: record.fingerprint });
+
+                if (matchedKeyword !== null) {
+                    summary.watchlistHits += 1;
+                    // At the budget limit the SDK would "overcharge by one" to terminate the Actor: never spend that
+                    // extra event on a hit. The hit stays flagged on the row; it is just not billed.
+                    if (!emission.limitReached) {
+                        const outcome = await biller.chargeHit();
+                        if (outcome === 'limit_reached') {
+                            stoppedOnChargeLimit = true;
+                            ctx.log.info(`[${connector.id}] watchlist-hit charge limit reached; stopping.`);
+                            break;
+                        }
+                    }
+                }
+                if (emission.limitReached) {
+                    stoppedOnChargeLimit = true;
+                    break;
+                }
+                sinceCheckpoint += 1;
+                if (sinceCheckpoint >= CHECKPOINT_EVERY_ROWS) {
+                    sinceCheckpoint = 0;
+                    await persist();
+                }
             }
-            if (emission.limitReached) {
-                stoppedOnChargeLimit = true;
-                break;
+        } finally {
+            // 6. STATE - whatever was actually processed. A failure to save must not mask the error that got us here.
+            try {
+                await persist();
+            } catch (saveError) {
+                ctx.log.error(`[${connector.id}] could not persist delta memory: ${scrub(saveError instanceof Error ? saveError.message : String(saveError))}`);
             }
         }
-
-        // 6. STATE - after every source, only for processed records.
-        state = markProcessed(state, connector.id, processed, clock().toISOString(), connector.maxSeenIds);
-        await sinks.store.save(state);
     }
 
     const summary: RunSummary = {
@@ -321,6 +413,7 @@ export async function runEngine(engine: EngineDefinition, rawInput: unknown, dep
             hitsCharged: biller.charged,
             hitsUnpriced: biller.hitsUnpriced,
         },
+        pricing,
         stoppedOnChargeLimit,
     };
     await sinks.saveSummary(summary);
