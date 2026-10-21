@@ -1011,6 +1011,19 @@ describe('n8n templates', () => {
             for (const entry of corpus.normalise) expect(guard.normaliseKeyword(entry.input), entry.name).toBe(entry.expected);
         });
 
+        it('has a guard whose sanitizeKeywordList equals the TypeScript guard on the whole parity corpus: keywords, the count of every rejection reason, the container flag', () => {
+            const corpus = JSON.parse(read(GUARD_PARITY_JSON_PATH)) as { sanitize: ParityCase[] };
+            const guard = loadGuard(workflow);
+            for (const entry of corpus.sanitize) {
+                const reasons: Record<string, number> = {};
+                for (const item of entry.expected.rejected) reasons[item.reason] = (reasons[item.reason] ?? 0) + 1;
+                const got = guard.sanitizeKeywordList(entry.input);
+                expect(got.keywords, entry.name).toEqual(entry.expected.keywords);
+                expect(got.rejected, entry.name).toEqual(reasons);
+                expect(got.malformedContainer, entry.name).toBe(entry.expected.malformedContainer);
+            }
+        });
+
         it('has a Code node that cleans the watchlist exactly like the TypeScript guard on the whole parity corpus', async () => {
             const corpus = JSON.parse(read(GUARD_PARITY_JSON_PATH)) as { sanitize: ParityCase[] };
             const supplied = (value: unknown): boolean => {

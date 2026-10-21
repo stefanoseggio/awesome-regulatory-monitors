@@ -2040,6 +2040,13 @@ describe('PART 2 regression tests for the guard defects found by this suite (all
         // a haystack longer than the window is searched up to the last whitespace; a name in the cut part is not found
         expect(findKeywordMatch(`${'word '.repeat(1_700)}Pfizer`, pfizer)).toBeNull();
         expect(findKeywordMatch(`Pfizer ${'word '.repeat(1_700)}`, pfizer)).toBe('Pfizer');
+        // the cut keeps exactly 16 marks: a keyword that ends in 16 marks (the most a keyword may hold) is found in a haystack whose run is longer, not in one whose run is shorter
+        const sixteen = sanitizeKeywordList([`ab${'\u0301'.repeat(16)}`]);
+        expect(sixteen.keywords).toHaveLength(1);
+        expect(findKeywordMatch(`xx ab${'\u0301'.repeat(40)}`, sixteen)).not.toBeNull();
+        expect(findKeywordMatch(`xx ab${'\u0301'.repeat(17)}`, sixteen)).not.toBeNull();
+        expect(findKeywordMatch(`xx ab${'\u0301'.repeat(16)}`, sixteen)).not.toBeNull();
+        expect(findKeywordMatch(`xx ab${'\u0301'.repeat(15)}`, sixteen)).toBeNull();
     });
 
     it('D23 a rejected value is a log-safe preview: control characters, escapes, bidi controls and lone surrogates never reach a log line', () => {
@@ -2062,7 +2069,7 @@ describe('PART 2 regression tests for the guard defects found by this suite (all
 //
 // Every expectation in this table was derived BY HAND from docs section 5.3 (NFKC; removal of every
 // Default_Ignorable_Code_Point and Bidi_Control character and of the C0/C1 controls, repeated to a fixed point; length in
-// code points after cleaning; at least one letter or digit); none of it is computed from lib/_guards.ts or from the
+// code points after cleaning; at least two letters or digits); none of it is computed from lib/_guards.ts or from the
 // reference above. Rows tagged `grey` sit where the written specification leaves a decision (noncharacters, separators
 // outside ASCII, a visible character plus a combining enclosing keycap): they pin what the guard does, and each one needs
 // a deliberate decision if it changes.
