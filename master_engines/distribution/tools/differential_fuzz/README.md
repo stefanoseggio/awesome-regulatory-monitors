@@ -19,6 +19,6 @@ npx tsx distribution/tools/differential_fuzz/evaluate_ts.ts spec.json expected.j
 /path/to/node20/bin/node distribution/tools/differential_fuzz/compare_n8n.mjs spec.json expected.json
 ```
 
-Every interpreter must be able to import `regulatory_engines` (its dependencies installed: `pip install -e "distribution/python[dev]"`). The scripts print one line per implementation and exit non-zero on any mismatch; the first twelve mismatches are printed in full.
+Every interpreter must be able to import `regulatory_engines` (its dependencies installed: `pip install -e "distribution/python[dev]"`). The scripts print one line per implementation and exit non-zero on any mismatch; the Python comparison prints the first twelve mismatches and the n8n comparison the first five per template, each cut to a few hundred characters.
 
 This is a differential test, not a proof: it finds a difference between implementations, not a defect that all three share. Results of the committed seeds are in `../../README.md` ("Safety model").

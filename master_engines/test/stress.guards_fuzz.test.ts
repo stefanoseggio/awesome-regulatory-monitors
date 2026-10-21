@@ -2153,10 +2153,13 @@ describe('PART 2 regression tests for the guard defects found by this suite (all
         const build = (needles: string[], keywords: unknown[] = needles): never => ({ keywords, needles, rejected: [], malformedContainer: false }) as never;
         expect(findKeywordMatch('ab\u{1f600}', build(['ab\ud83d']))).toBeNull();
         expect(findKeywordMatch('x\u{1f600}bc', build(['\ude00bc']))).toBeNull();
-        expect(findKeywordMatch('Acme\ufdfaHoldings x', build(['acme\u0000holdings']))).toBeNull();
+        // 10 ligatures make the haystack exceed the expansion cap, so it is searched in pieces joined by the NUL a needle must not contain
+        expect(findKeywordMatch(`Acme${'\ufdfa'.repeat(10)}Holdings x`, build(['acme\u0000holdings']))).toBeNull();
         const started = performance.now();
         expect(findKeywordMatch('Acme Corp', build(Array.from({ length: 500 }, () => 'a'.repeat(100_000))))).toBeNull();
         expect(performance.now() - started, 'needles over 400 units are skipped without being counted').toBeLessThan(50);
+        expect(findKeywordMatch('a'.repeat(401), build(['a'.repeat(401)])), '401 units: over the cap').toBeNull();
+        expect(findKeywordMatch('a'.repeat(400), build(['a'.repeat(400)])), '400 units: the longest keyword a list can hold').toBe('a'.repeat(400));
         expect(findKeywordMatch('Acme Corp', build(['acme corp'], [null]))).toBe('acme corp');
         expect(findKeywordMatch('Acme Corp', build(['acme corp'], [7]))).toBe('acme corp');
     });
@@ -2166,7 +2169,8 @@ describe('PART 2 regression tests for the guard defects found by this suite (all
         expect(findKeywordMatch('Acme Corp', list)).toBe('Acme Corp');
         expect(findKeywordMatch('Acme Corp', list)).toBe('Acme Corp');
         list.needles[0] = '..';
-        expect(findKeywordMatch('Acme Corp', list), 'the edited needle is below the floor').toBeNull();
+        // a haystack that holds the edited needle: a stale cache would answer with the keyword of the needle that was there before
+        expect(findKeywordMatch('Acme Corp ..', list), 'the edited needle is below the floor').toBeNull();
         list.needles[0] = 'acme corp';
         expect(findKeywordMatch('Acme Corp', list)).toBe('Acme Corp');
         list.needles.push('globex');

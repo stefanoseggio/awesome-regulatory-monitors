@@ -31,6 +31,13 @@ export interface KeyValueLike {
     forEachKey(iteratee: (key: string) => void | Promise<void>, options?: { prefix?: string }): Promise<void>;
     getValue(key: string): Promise<unknown>;
     setValue(key: string, value: unknown): Promise<void>;
+    /**
+     * The store's resource client (the Apify `KeyValueStore` has one). Records are read through it as raw bytes: `getValue` makes
+     * the client parse JSON bodies, and when a body is truncated the client RETRIES that failure with exponential backoff (8 retries,
+     * 0.5 s to 64 s each, 2 to 4 minutes in all) before it throws, once per read. Reading bytes and parsing here finds a truncated
+     * record at once.
+     */
+    client?: { getRecord(key: string, options?: { buffer?: boolean }): Promise<{ value: unknown; contentType?: string } | undefined> };
 }
 
 /**
@@ -42,11 +49,54 @@ export function isUnparsableRecordError(error: unknown): boolean {
     return typeof e === 'object' && e !== null && (e.name === 'InvalidResponseBodyError' || e.code === 'invalid-response-body');
 }
 
+/** True for a 404 from the platform (apify-client's `deleteRecord` does not swallow it the way `getRecord` does). */
+function isNotFoundError(error: unknown): boolean {
+    const e = error as { statusCode?: unknown; type?: unknown } | null;
+    return typeof e === 'object' && e !== null && (e.statusCode === 404 || e.type === 'record-not-found');
+}
+
+/** Deletes a record (`setValue(key, null)`); a record that is already gone is what was wanted. */
+async function deleteRecord(store: KeyValueLike, key: string): Promise<void> {
+    try {
+        await store.setValue(key, null);
+    } catch (error) {
+        if (!isNotFoundError(error)) throw error;
+    }
+}
+
 /** What a record that exists but cannot be parsed reads as: no valid state, journal or lease has this shape. */
 const UNREADABLE_RECORD = '[unreadable record]';
 
-/** `getValue`, with an unparsable body returned as {@link UNREADABLE_RECORD} instead of thrown. Other errors propagate. */
+/**
+ * A record read as bytes, decoded the way `getValue` would decode it: `application/json` is parsed (an unparsable body, an empty one
+ * included, is {@link UNREADABLE_RECORD}: it is never read as "absent"), `text/*` is a string, anything else is unreadable for our
+ * purposes. A literal JSON `null` is absent, as in `getValue`.
+ */
+function decodeRecord(value: unknown, contentType: string | undefined): unknown {
+    const bytes = Buffer.isBuffer(value) ? value : value instanceof Uint8Array ? Buffer.from(value) : typeof value === 'string' ? Buffer.from(value, 'utf8') : undefined;
+    if (bytes === undefined) return value;
+    const type = (contentType ?? '').toLowerCase();
+    if (type.startsWith('application/json')) {
+        try {
+            return (JSON.parse(bytes.toString('utf8')) as unknown) ?? null;
+        } catch {
+            return UNREADABLE_RECORD;
+        }
+    }
+    return type.startsWith('text/') ? bytes.toString('utf8') : UNREADABLE_RECORD;
+}
+
+/**
+ * Reads a record without letting an unparsable body cost minutes or kill the run: through the store's client as raw bytes when it
+ * has one, else through `getValue` with the client's parse error caught. Other errors (a platform failure) propagate: they are not
+ * a corrupt record and must not be read as an empty one.
+ */
 async function readRecord(store: KeyValueLike, key: string): Promise<unknown> {
+    const client = store.client;
+    if (client && typeof client.getRecord === 'function') {
+        const record = await client.getRecord(key, { buffer: true });
+        return record === undefined || record === null ? null : decodeRecord(record.value, record.contentType);
+    }
     try {
         return await store.getValue(key);
     } catch (error) {
@@ -116,7 +166,9 @@ export class ApifyDeltaStore implements DeltaStore {
 
     async saveJournal(source: string, entries: readonly ProcessedRecord[]): Promise<void> {
         const store = await this.store();
-        await store.setValue(this.journalKey(source), entries.length === 0 ? null : entries.map(({ recordId, fingerprint }) => ({ recordId, fingerprint })));
+        const key = this.journalKey(source);
+        if (entries.length === 0) await deleteRecord(store, key);
+        else await store.setValue(key, entries.map(({ recordId, fingerprint }) => ({ recordId, fingerprint })));
     }
 
     async save(state: DeltaState): Promise<void> {
@@ -145,7 +197,7 @@ export class ApifyLeaseStorage implements LeaseStorage {
     }
 
     async remove(source: string): Promise<void> {
-        await (await this.openStore()).setValue(this.key(source), null);
+        await deleteRecord(await this.openStore(), this.key(source));
     }
 }
 

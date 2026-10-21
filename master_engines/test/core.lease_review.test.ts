@@ -164,7 +164,7 @@ describe('F-04 a record that exists but cannot be parsed fails ITS source, not t
     it('a platform failure while reading a record is NOT a corrupt record: it propagates', async () => {
         const kv = new PlatformLikeKv();
         await kv.setValue('state.ns.good', { seenIds: [], fingerprints: {}, lastRunAt: 't' });
-        kv.getValue = async () => {
+        kv.client.getRecord = async () => {
             throw new Error('ECONNRESET');
         };
         await expect(new ApifyDeltaStore('s', 'ns', async () => kv).load()).rejects.toThrow('ECONNRESET');
@@ -531,15 +531,16 @@ describe('F-08 hits that were not billed are in the summary', () => {
         expect(summary.watchlist).toMatchObject({ hitsCharged: 0, hitsCapped: 1 });
     });
 
-    it('a hit the budget cannot afford (affordability check) is counted too, and the run stops', async () => {
-        // 0.052: the first row and its hit fit exactly; nothing is left for the second row's hit
-        const billing = new FakeBilling(true, { [RESULT_EVENT]: 0.002, [WATCHLIST_HIT_EVENT]: 0.05 }, 0.053);
+    it('a hit the budget cannot afford (the affordability check) is not attempted, is counted, and the run stops', async () => {
+        // 0.0515: the first row (0.002) fits and leaves 0.0495, enough for another row but not for the 0.05 hit
+        const billing = new FakeBilling(true, { [RESULT_EVENT]: 0.002, [WATCHLIST_HIT_EVENT]: 0.05 }, 0.0515);
         const h = harness({ billing });
         const records = ids(4).map((id) => rec(id, 'ACME CORP'));
         const summary = await runEngine(engineOf(connector('a', async () => records)), { sources: ['a'], watchlistNames: ['Acme Corp'] }, { sinks: h.sinks, ctx, clock });
         expect(summary.stoppedOnChargeLimit).toBe(true);
-        expect(summary.watchlist.hitsCharged).toBe(1);
-        expect(summary.totalEmitted).toBeLessThanOrEqual(2);
+        expect(summary.totalEmitted).toBe(1);
+        expect(summary.watchlist).toMatchObject({ hitsCharged: 0, hitsCapped: 1 });
+        expect(billing.calls.filter((call) => call.eventName === WATCHLIST_HIT_EVENT)).toEqual([]);
     });
 });
 

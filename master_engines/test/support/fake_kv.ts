@@ -17,6 +17,21 @@ export class InvalidResponseBodyError extends Error {
 export class PlatformLikeKv implements KeyValueLike {
     readonly data = new Map<string, unknown>();
     private readonly unparsable = new Set<string>();
+    /** Raw reads (`buffer: true`) of records, the way the adapters read them; `reads` counts them. */
+    readonly rawReads: string[] = [];
+    readonly client = {
+        getRecord: async (key: string, options: { buffer?: boolean } = {}): Promise<{ value: unknown; contentType?: string } | undefined> => {
+            if (!this.data.has(key)) return undefined;
+            const body = this.unparsable.has(key) ? String(this.data.get(key)) : JSON.stringify(this.data.get(key));
+            if (options.buffer) {
+                this.rawReads.push(key);
+                return { value: Buffer.from(body, 'utf8'), contentType: 'application/json; charset=utf-8' };
+            }
+            // what the client does without `buffer`: parse, and throw on a body that is not JSON
+            if (this.unparsable.has(key)) throw new InvalidResponseBodyError();
+            return { value: JSON.parse(body) as unknown, contentType: 'application/json; charset=utf-8' };
+        },
+    };
 
     async forEachKey(iteratee: (key: string) => void | Promise<void>, options: { prefix?: string } = {}): Promise<void> {
         for (const key of [...this.data.keys()].sort()) {
@@ -25,8 +40,8 @@ export class PlatformLikeKv implements KeyValueLike {
     }
 
     async getValue(key: string): Promise<unknown> {
-        if (this.unparsable.has(key)) throw new InvalidResponseBodyError();
-        return structuredClone(this.data.get(key));
+        const record = await this.client.getRecord(key);
+        return record?.value ?? null;
     }
 
     async setValue(key: string, value: unknown): Promise<void> {

@@ -262,7 +262,7 @@ describe('ApifyLeaseStorage', () => {
         await storage.write('ofac', record);
         expect([...kv.data.keys()]).toEqual(['lease.team-a.ofac']);
         expect(await storage.read('ofac')).toEqual(record);
-        expect(await storage.read('sec')).toBeUndefined();
+        expect(await storage.read('sec')).toBeNull();
         await storage.remove('ofac');
         expect(kv.data.size).toBe(0);
     });

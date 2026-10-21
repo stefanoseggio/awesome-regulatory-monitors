@@ -196,10 +196,12 @@ def test_a_preview_hides_the_line_and_paragraph_separators() -> None:
 def test_a_hand_built_list_gets_no_more_than_the_sanitiser_gives() -> None:
     assert find_keyword_match("ab\U0001f600", forged("ab\ud83d")) is None, "half of an astral character"
     assert find_keyword_match("x\U0001f600bc", forged("\ude00bc")) is None
-    assert find_keyword_match("Acme" + FDFA + "Holdings x", forged("acme\x00holdings")) is None, "a cut marker"
+    assert find_keyword_match("Acme" + FDFA * 10 + "Holdings x", forged("acme\x00holdings")) is None, "a cut marker (10 ligatures exceed the expansion cap, so the haystack is searched in pieces)"
     started = time.perf_counter()
     assert find_keyword_match("Acme Corp", forged(*["a" * 100_000] * 500)) is None
     assert time.perf_counter() - started < 1.0, "needles over 400 units are skipped"
+    assert find_keyword_match("a" * 401, forged("a" * 401)) is None, "401 units: over the cap"
+    assert find_keyword_match("a" * 400, forged("a" * 400)) == "a" * 400, "400 units: the longest keyword a list can hold"
     assert find_keyword_match("Acme Corp", SanitizedKeywordList(keywords=(None,), needles=("acme corp",), rejected=(), malformed_container=False)) == "acme corp"  # type: ignore[arg-type]
     assert find_keyword_match("Acme Corp", SanitizedKeywordList(keywords=(7,), needles=("acme corp",), rejected=(), malformed_container=False)) == "acme corp"  # type: ignore[arg-type]
 
