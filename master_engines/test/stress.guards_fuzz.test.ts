@@ -310,7 +310,9 @@ function dress(rng: Rng, text: string, pools: WeightedPools): string {
 //      haystack keeps the first 16 marks of such a run; a text that NFKC grows by more than 4x plus 16 units counts as empty
 //   5  length >= 2 code points after cleaning, and at least 2 VISIBLE code points (neither invisible nor White_Space)
 //      in the raw text: one glyph that NFKC expands is not a two-character keyword
-//   6  at least TWO letters or numbers (none: no_letter_or_digit, exactly one: single_letter_or_digit)
+//   6  at least TWO letters or numbers (none: no_letter_or_digit, exactly one: single_letter_or_digit); and, last of the
+//      checks before the length bound, at least 2 GLYPHS (letters, numbers or symbols, not punctuation or marks) in the raw
+//      text: one expanding glyph padded with punctuation ("circled twenty" + a full stop) is still one character (too_short)
 //   7  length <= 200 code points
 //   8  de-duplicated case-insensitively, first spelling wins
 //   9  at most 500 accepted, the rest rejected as over_limit
@@ -319,10 +321,14 @@ function dress(rng: Rng, text: string, pools: WeightedPools): string {
 //   a bare string is cut to 200,000 units and split on LF, CR, comma and semicolon (ASCII only); when it WAS cut, the last
 //   piece (possibly truncated) is dropped and one over_limit entry is appended after the 'further entries' one;
 //   a non-array, non-string value is a malformed container. A rejected value is previewed: a string cut at 57 units with
-//   control, invisible and lone surrogate characters replaced by U+FFFD, anything else as a constant tag such as [object].
-//   A needle is only matched if it has at least 2 code points and 2 letters or numbers; at most 500 needles are read.
+//   control, line and paragraph separator, invisible and lone surrogate characters replaced by U+FFFD, anything else as a
+//   constant tag such as [object].
+//   A needle is only matched if it is a string of at most 400 units with at least 2 code points and 2 letters or numbers, no lone
+//   surrogate and no NUL; at most 500 needles are read.
 //   A haystack longer than 8,192 units is searched only up to
-//   the last White_Space character inside the window (none: not searched), then cleaned.
+//   the last White_Space character inside the window (none: not searched), then cleaned. A haystack that NFKC would grow past
+//   4x plus 16 units is not emptied: every code point whose NFKC form is more than 4x as long as it is (U+FDFA) is cut out, the
+//   pieces between them are cleaned on their own, and they are joined with NUL (no keyword contains it, so nothing matches across).
 
 const REF_MIN_CODE_POINTS = 2;
 const REF_MAX_CODE_POINTS = 200;
@@ -484,6 +490,42 @@ function refHasLoneSurrogate(text: string): boolean {
 }
 
 const REF_LETTER_OR_NUMBER = /[\p{Letter}\p{Number}]/u;
+const REF_GLYPH = /[\p{Letter}\p{Number}\p{Symbol}]/u;
+
+function refCountGlyphs(text: string): number {
+    let n = 0;
+    for (const ch of text) if (REF_GLYPH.test(ch)) n += 1;
+    return n;
+}
+
+/** A haystack cleaned for matching: a text that NFKC grows past the cap is cleaned in pieces around the code points that expand more than 4x. */
+function refCleanHaystack(text: string): string {
+    const whole = refClean(text, 'cut');
+    if (whole !== '') return whole;
+    const pieces: string[] = [];
+    let current = '';
+    let heavy = false;
+    for (const ch of text) {
+        if (ch.normalize('NFKC').length > ch.length * 4) {
+            heavy = true;
+            pieces.push(current);
+            current = '';
+        } else {
+            current += ch;
+        }
+    }
+    if (!heavy) return '';
+    pieces.push(current);
+    return pieces
+        .map((piece) => refClean(piece, 'cut'))
+        .filter((piece) => piece !== '')
+        .join('\u0000');
+}
+
+/** A needle of a hand-built list that the matcher may use. */
+function refUsableNeedle(needle: unknown): needle is string {
+    return typeof needle === 'string' && needle.length <= 400 && !needle.includes('\u0000') && !refHasLoneSurrogate(needle) && codePoints(needle) >= REF_MIN_CODE_POINTS && refCountLettersOrNumbers(needle) >= 2;
+}
 
 function refCountLettersOrNumbers(text: string): number {
     let n = 0;
@@ -594,6 +636,8 @@ function refSanitize(input: unknown): RefResult {
             out.reasons.push('no_letter_or_digit');
         } else if (refCountLettersOrNumbers(cleaned) === 1) {
             out.reasons.push('single_letter_or_digit');
+        } else if (refCountGlyphs(candidate) < REF_MIN_CODE_POINTS) {
+            out.reasons.push('too_short');
         } else if (points > REF_MAX_CODE_POINTS) {
             out.reasons.push('too_long');
         } else {
@@ -618,10 +662,10 @@ function refSanitize(input: unknown): RefResult {
 function refFind(haystack: unknown, ref: RefResult): string | null {
     if (ref.needles.length === 0) return null;
     if (typeof haystack !== 'string') return null;
-    const text = refClean(refCutHaystack(haystack), 'cut').toLowerCase();
+    const text = refCleanHaystack(refCutHaystack(haystack)).toLowerCase();
     for (let i = 0; i < Math.min(ref.needles.length, REF_MAX_ACCEPTED); i += 1) {
-        const needle = ref.needles[i] as string;
-        if (codePoints(needle) < REF_MIN_CODE_POINTS || refCountLettersOrNumbers(needle) < 2) continue;
+        const needle = ref.needles[i];
+        if (!refUsableNeedle(needle)) continue;
         if (text.includes(needle)) return ref.keywords[i] as string;
     }
     return null;
@@ -706,7 +750,7 @@ function refPreview(value: string): string {
         } else if (unit >= 0xd800 && unit <= 0xdfff) {
             out += '\ufffd';
         } else {
-            out += refIsRemoved(unit) ? '\ufffd' : clipped[i];
+            out += refIsRemoved(unit) || unit === 0x2028 || unit === 0x2029 ? '\ufffd' : clipped[i];
         }
     }
     return out;
@@ -2060,6 +2104,82 @@ describe('PART 2 regression tests for the guard defects found by this suite (all
         const long = sanitizeKeywordList([`\u001b${'x'.repeat(100)}\ud83d`.repeat(40)]);
         expect(long.rejected).toHaveLength(1);
         expect(long.rejected[0]?.value.length).toBeLessThanOrEqual(60);
+    });
+
+    // ---- guard re-review, fourth round (an independent re-review of the fixes of the third round) ----
+
+    it('D24 a field of characters that NFKC expands past the cap hides no name in another field: every one of them, 1 to 1,000 times, in any position', () => {
+        // every code point whose NFKC form is more than 4x as long as it is (U+FDFA, U+FDFB, U+3316, U+33AF and fifteen more)
+        const heavy: string[] = [];
+        for (let cp = 0; cp <= 0x10ffff; cp += 1) {
+            if (cp >= 0xd800 && cp <= 0xdfff) continue;
+            const ch = String.fromCodePoint(cp);
+            if (ch.normalize('NFKC').length > ch.length * 4) heavy.push(ch);
+        }
+        expect(heavy.length, 'the expanders the rule has to cover').toBeGreaterThanOrEqual(19);
+        const list = sanitizeKeywordList(['Acme Holdings']);
+        for (const ch of heavy) {
+            for (const times of [1, 10, 100, 1_000]) {
+                const field = ch.repeat(times);
+                expect(findKeywordMatch(`Acme Holdings Ltd ${field}`, list), `${ch.codePointAt(0)?.toString(16)} x ${times} after`).toBe('Acme Holdings');
+                expect(findKeywordMatch(`${field} Acme Holdings Ltd`, list), `${ch.codePointAt(0)?.toString(16)} x ${times} before`).toBe('Acme Holdings');
+                expect(findKeywordMatch(`${field} | Acme Holdings | ${field}`, list), `${ch.codePointAt(0)?.toString(16)} x ${times} around`).toBe('Acme Holdings');
+            }
+        }
+        // a haystack that is nothing but the field has nothing to find; nothing can match across a cut-out character
+        expect(findKeywordMatch('\ufdfa'.repeat(8_000), list)).toBeNull();
+        for (const joined of ['Acme\ufdfaHoldings', 'Acme \ufdfa Holdings', `Acme${'\ufdfa'.repeat(50)}Holdings`]) {
+            expect(findKeywordMatch(joined, list), joined.length.toString()).toBeNull();
+            expect(findKeywordMatch(joined, sanitizeKeywordList(['AcmeHoldings'])), 'fused').toBeNull();
+        }
+        // and the cost stays small: one row of 8,188 ligatures
+        const started = performance.now();
+        findKeywordMatch(`${'\ufdfa'.repeat(8_188)} Acme Holdings`, list);
+        expect(performance.now() - started).toBeLessThan(500);
+    });
+
+    it('D25 one expanding glyph padded with punctuation is still one character: "\u2473." and "\u2116." are rejected, "no." and two glyphs are not', () => {
+        for (const padded of ['\u2473.', '\u2116.', '\ufb01.', '(\u2473)', '\u2116-', '\u3392,']) {
+            const list = sanitizeKeywordList([padded]);
+            expect(list.keywords, padded).toEqual([]);
+            expect(list.rejected.map((r) => r.reason), padded).toEqual(['too_short']);
+        }
+        expect(findKeywordMatch('Filed 2020. Done', sanitizeKeywordList(['\u2473.']))).toBeNull();
+        expect(findKeywordMatch('Casino. x', sanitizeKeywordList(['\u2116.']))).toBeNull();
+        for (const kept of ['no.', 'S.A.', 'a.b', '\u2116\u2116', '\u2473\u2473.', '\u2116 x', 'AT&T']) expect(sanitizeKeywordList([kept]).keywords.length, kept).toBe(1);
+    });
+
+    it('D26 a hand-built list gets no more than the sanitiser gives: no half of an astral character, no cut marker, no needle of 100,000 units, a missing keyword answers with the needle', () => {
+        const build = (needles: string[], keywords: unknown[] = needles): never => ({ keywords, needles, rejected: [], malformedContainer: false }) as never;
+        expect(findKeywordMatch('ab\u{1f600}', build(['ab\ud83d']))).toBeNull();
+        expect(findKeywordMatch('x\u{1f600}bc', build(['\ude00bc']))).toBeNull();
+        expect(findKeywordMatch('Acme\ufdfaHoldings x', build(['acme\u0000holdings']))).toBeNull();
+        const started = performance.now();
+        expect(findKeywordMatch('Acme Corp', build(Array.from({ length: 500 }, () => 'a'.repeat(100_000))))).toBeNull();
+        expect(performance.now() - started, 'needles over 400 units are skipped without being counted').toBeLessThan(50);
+        expect(findKeywordMatch('Acme Corp', build(['acme corp'], [null]))).toBe('acme corp');
+        expect(findKeywordMatch('Acme Corp', build(['acme corp'], [7]))).toBe('acme corp');
+    });
+
+    it('D27 the usable needles of a list are found once per list, and a list edited in place is checked again', () => {
+        const list = sanitizeKeywordList(['Acme Corp', 'Pfizer']);
+        expect(findKeywordMatch('Acme Corp', list)).toBe('Acme Corp');
+        expect(findKeywordMatch('Acme Corp', list)).toBe('Acme Corp');
+        list.needles[0] = '..';
+        expect(findKeywordMatch('Acme Corp', list), 'the edited needle is below the floor').toBeNull();
+        list.needles[0] = 'acme corp';
+        expect(findKeywordMatch('Acme Corp', list)).toBe('Acme Corp');
+        list.needles.push('globex');
+        list.keywords.push('Globex');
+        expect(findKeywordMatch('Globex Ltd', list)).toBe('Globex');
+    });
+
+    it('D28 a rejected string is shown without the line and paragraph separators that log shippers split on', () => {
+        const list = sanitizeKeywordList(['\u2028\u2029', 'a\u2028--', '--\u2029']);
+        for (const r of list.rejected) {
+            expect(r.value).not.toMatch(/[\u2028\u2029]/u);
+            expect(r.value).toContain('\ufffd');
+        }
     });
 });
 

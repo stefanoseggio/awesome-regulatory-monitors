@@ -181,7 +181,14 @@ export interface RunSummary {
     finishedAt: string;
     sources: SourceRunSummary[];
     totalEmitted: number;
-    watchlist: { accepted: number; rejected: number; hitsCharged: number; hitsUnpriced: number };
+    watchlist: {
+        accepted: number;
+        rejected: number;
+        hitsCharged: number;
+        hitsUnpriced: number;
+        /** Matched rows whose hit was not billed because a per-run cap (hits or USD) or the spending limit was reached. */
+        hitsCapped: number;
+    };
     /** Live-pricing check for pay-per-event runs: events this run can bill that have no positive price. */
     pricing: { unpricedEvents: string[] };
     stoppedOnChargeLimit: boolean;

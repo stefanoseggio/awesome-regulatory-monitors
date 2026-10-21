@@ -512,9 +512,14 @@ describe('distribution data files', () => {
                 ['alnum: a pasted list with legal-form fragments matches only the names', null],
                 ['glyph: one expanding character is not a keyword, so it never matches its expansion', null],
                 ['glyph: two expanding characters are a keyword that matches their expansion', '2020'],
-                ['expansion: a haystack of U+FDFA ligatures is empty, the keyword after it is not searched', null],
+                ['expansion: a field of U+FDFA ligatures is cut out, the keyword after it is found', 'acme'],
                 ['expansion: a short haystack with a ligature inside the 4x allowance is searched', 'acme'],
-                ['expansion: a haystack past the allowance is empty', null],
+                ['expansion: a field past the allowance is cut out, the keyword next to it is found', 'acme'],
+                ['expansion: a window of ligatures with the name beyond the 8192-unit cut is not searched', null],
+                ['expansion: a name between two fields of ligatures', 'Acme Holdings'],
+                ['expansion: nothing matches across a cut-out ligature (spaced keyword)', null],
+                ['expansion: nothing matches across a cut-out ligature (fused keyword)', null],
+                ['expansion: the other characters that expand more than 4x (U+FDFB, square units) are cut out as well', 'Acme Holdings'],
             ];
             for (const [name, expected] of expectations) expect(matchCase(name).expected, name).toBe(expected);
             const haystackOf = (name: string): string => matchCase(name).haystack as string;
@@ -1217,7 +1222,7 @@ describe('n8n templates', () => {
         for (const file of TEMPLATE_FILES) {
             const code = byName(load(file), 'Build run input').parameters.jsCode as string;
             for (const [name, value] of Object.entries(constants)) expect(code, `${file}: ${name}`).toContain(`const ${name} = ${value};`);
-            for (const name of ['WHITESPACE_CONTROLS', 'INVISIBLE', 'INVISIBLE_ONE', 'WHITE_SPACE_ONE', 'WHITESPACE_RUN', 'LONE_SURROGATE', 'COMBINING_RUN_TOO_LONG', 'HAS_LETTER_OR_DIGIT', 'BARE_STRING_SEPARATORS']) {
+            for (const name of ['WHITESPACE_CONTROLS', 'INVISIBLE', 'INVISIBLE_ONE', 'WHITE_SPACE_ONE', 'WHITESPACE_RUN', 'LONE_SURROGATE', 'COMBINING_RUN_TOO_LONG', 'HAS_LETTER_OR_DIGIT', 'IS_GLYPH', 'BARE_STRING_SEPARATORS']) {
                 expect(literal(code, name), `${file}: ${name}`).toBe(literal(guardSource, name));
             }
         }

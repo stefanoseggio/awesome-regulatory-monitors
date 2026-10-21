@@ -517,11 +517,13 @@ const NAMED_SANITIZE_CASES = (): NamedCase[] => {
         // one visible glyph that NFKC expands is one character, not a two-character keyword
         { name: 'glyph: one expanding compatibility character is too_short', input: ['\u2473', '\u2116', '\ufb01', '\u2474', '\u249c', '\u2488', '\ufdfa', '\u00bd', '\u2460'] },
         { name: 'glyph: two expanding characters are two characters', input: ['\u2473\u2473', '\u2116\u2116', '\ufb01\ufb01', '\u2460\u2461'] },
+        { name: 'glyph: one expanding glyph padded with punctuation is still one character (too_short); typed words and two glyphs are kept', input: ['\u2473.', '\u2116.', '\ufb01.', '(\u2473)', '\u2116-', '\u3392,', 'no.', 'S.A.', 'a.b', '\u2116\u2116', '\u2473\u2473.', '\u2116 x', 'AT&T'] },
         { name: 'glyph: a visible character plus an invisible one is still one character', input: ['\u2473\u200b', '\u200b\u2116', '\ufb01\u00ad'] },
         // the NFKC expansion cap: a text that grows to more than 4x its length plus 16 units is empty
         { name: 'expansion: the Arabic ligature U+FDFA at several lengths', input: [repeat('\ufdfa', 2), repeat('\ufdfa', 3), repeat('\ufdfa', 11), repeat('\ufdfa', 12), repeat('\ufdfa', 40), `${repeat('\ufdfa', 3)}abcd`, `${'\ufdfa'}${repeat('a', 30)}`] },
         // preview(): a string is cut at 57 units and its control, invisible and lone surrogate characters become U+FFFD; anything else is a constant tag
         { name: 'preview: control characters, escape sequences and bidi controls in a rejected string become U+FFFD', input: ['\u001b[31mred', '\u202eevil\u0000', 'x\u0007y', '\u0085\u2028', '\u200b\u200b'] },
+        { name: 'preview: the line and paragraph separators in a rejected string become U+FFFD too', input: ['\u2028\u2029', 'a\u2028--', '--\u2029', 'x\u0085--'] },
         { name: 'preview: a lone surrogate inside a rejected string becomes U+FFFD', input: ['\ud800\u001b[31m\nFAKE', 'ab\udc00', '\ud83d'] },
         { name: 'preview: a long rejected string with controls is cut at 57 units, then cleaned', input: [`\u001b${repeat('x', 100)}`, `${repeat('-', 55)}\u0000\u0001\u0002${repeat('-', 20)}`] },
         { name: 'preview: nested and wide values are constant tags', input: [[], [[[[[[[[[[1]]]]]]]]]], { a: { b: { c: {} } } }, Array.from({ length: 300 }, (_unused, index) => [index]), 12345, 0.5, true, false, null] },
@@ -679,9 +681,14 @@ const NAMED_MATCH_CASES = (): MatchCase[] => {
         { name: 'glyph: one expanding character is not a keyword, so it never matches its expansion', haystack: 'Annual report 2020', keywords: ['\u2473', '\u2116'] },
         { name: 'glyph: two expanding characters are a keyword that matches their expansion', haystack: 'Annual report 2020', keywords: ['\u2473\u2473'] },
         // the NFKC expansion cap applies to a haystack too
-        { name: 'expansion: a haystack of U+FDFA ligatures is empty, the keyword after it is not searched', haystack: `${'\ufdfa'.repeat(8188)} acme`, keywords: ['acme'] },
+        { name: 'expansion: a field of U+FDFA ligatures is cut out, the keyword after it is found', haystack: `${'\ufdfa'.repeat(8000)} acme`, keywords: ['acme'] },
         { name: 'expansion: a short haystack with a ligature inside the 4x allowance is searched', haystack: `${'\ufdfa'.repeat(3)} acme corp`, keywords: ['acme'] },
-        { name: 'expansion: a haystack past the allowance is empty', haystack: `${'\ufdfa'.repeat(8)} acme corp`, keywords: ['acme'] },
+        { name: 'expansion: a field past the allowance is cut out, the keyword next to it is found', haystack: `${'\ufdfa'.repeat(8)} acme corp`, keywords: ['acme'] },
+        { name: 'expansion: a window of ligatures with the name beyond the 8192-unit cut is not searched', haystack: `${'\ufdfa'.repeat(8188)} acme`, keywords: ['acme'] },
+        { name: 'expansion: a name between two fields of ligatures', haystack: `${'\ufdfa'.repeat(100)} | Acme Holdings | ${'\ufdfa'.repeat(100)}`, keywords: ['Acme Holdings'] },
+        { name: 'expansion: nothing matches across a cut-out ligature (spaced keyword)', haystack: 'Acme\ufdfaHoldings', keywords: ['Acme Holdings'] },
+        { name: 'expansion: nothing matches across a cut-out ligature (fused keyword)', haystack: `Acme${'\ufdfa'.repeat(50)}Holdings`, keywords: ['AcmeHoldings'] },
+        { name: 'expansion: the other characters that expand more than 4x (U+FDFB, square units) are cut out as well', haystack: `Acme Holdings Ltd ${'\ufdfb'.repeat(30)}${'\u3316'.repeat(30)}${'\u33af'.repeat(30)}`, keywords: ['Acme Holdings'] },
     ];
 };
 

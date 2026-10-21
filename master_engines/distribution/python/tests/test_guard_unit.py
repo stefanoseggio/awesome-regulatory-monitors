@@ -307,18 +307,15 @@ def test_a_needle_with_a_lone_surrogate_cannot_come_out_of_the_sanitiser_so_matc
     assert find_keyword_match("x\U0001f600by", watchlist) is None
 
 
-def test_matching_runs_over_utf16_units_like_javascript_includes_for_a_list_that_bypassed_the_sanitiser() -> None:
-    # lib/_guards.ts uses text.includes(needle): a hand-built needle that ends in a lone high surrogate is found in the first half of an astral character.
-    # The needles carry two letters each, so they pass the sanitiser's floor that find_keyword_match applies again.
+def test_a_list_that_bypassed_the_sanitiser_cannot_match_half_of_an_astral_character() -> None:
+    # find_keyword_match applies the sanitiser's floor again, lone surrogates included: a needle that ends in a lone high surrogate used to be found in the
+    # first half of an astral character (js_includes still works over UTF-16 units, see the test below, but such a needle never reaches it).
     forged = SanitizedKeywordList(keywords=("ab\ud83d", "\ude00bc"), needles=("ab\ud83d", "\ude00bc"), rejected=(), malformed_container=False)
-    assert find_keyword_match("xab\U0001f600y", forged) == "ab\ud83d"
-    assert find_keyword_match("x\U0001f600bcy", forged) == "\ude00bc"
-    assert find_keyword_match("xab\ud83d\ude00y", forged) == "ab\ud83d", "the same text with the halves held as two code points"
+    assert find_keyword_match("xab\U0001f600y", forged) is None
+    assert find_keyword_match("x\U0001f600bcy", forged) is None
+    assert find_keyword_match("xab\ud83d\ude00y", forged) is None, "the same text with the halves held as two code points"
+    assert find_keyword_match("ab\u200b\ud83d", forged) is None
     assert find_keyword_match("zz\U00010000\U00010000", forged) is None
-    assert find_keyword_match("ab\u200b\ud83d", forged) == "ab\ud83d", "removing the invisible character leaves the half itself"
-    # one letter and a half is below the floor: it can no longer match inside an astral character
-    one_letter = SanitizedKeywordList(keywords=("a\ud83d",), needles=("a\ud83d",), rejected=(), malformed_container=False)
-    assert find_keyword_match("xa\U0001f600y", one_letter) is None
 
 
 def test_js_includes_is_aligned_to_utf16_units_and_treats_pairs_and_halves_alike() -> None:

@@ -17,7 +17,8 @@ Validation, per keyword and in this order:
     expands to more than four times its length plus 16 units) -> at least ``MIN_KEYWORD_LENGTH`` code points after cleaning and at least
     that many visible code points BEFORE it (one glyph that NFKC expands, such as the circled number twenty, is one character) ->
     at least one letter or number (``no_letter_or_digit``) and at least TWO (``single_letter_or_digit``: ``c.``, ``a |`` and ``-0`` are the
-    one-letter needle in disguise) -> at most ``MAX_KEYWORD_LENGTH`` -> case-insensitive de-duplication (first spelling wins) ->
+    one-letter needle in disguise) -> at least 2 glyphs (letters, numbers, symbols) before NFKC (``too_short``: an expanding glyph plus punctuation is one
+    character) -> at most ``MAX_KEYWORD_LENGTH`` -> case-insensitive de-duplication (first spelling wins) ->
     at most ``MAX_KEYWORDS`` accepted.
 At most ``MAX_CANDIDATES`` entries are inspected, and the string entries inspected (those of ``MAX_RAW_KEYWORD_UNITS`` units or fewer;
 a longer one is rejected at once and costs nothing) add up to at most ``MAX_TOTAL_RAW_UNITS`` UTF-16 units; the rest is reported as ONE
@@ -47,6 +48,7 @@ differs from Node 22's (16.0). The two agree on every code point both assign; th
 
 from __future__ import annotations
 
+import functools
 import itertools
 import re
 import unicodedata
@@ -96,8 +98,9 @@ _INVISIBLE = _removed_expression(load_registry().limits.removed_ranges)
 # The Unicode White_Space characters (all in the BMP), from engines.json: they cut a haystack longer than MAX_HAYSTACK_UNITS.
 _WHITE_SPACE = frozenset(code for first, last in load_registry().limits.white_space_ranges for code in range(first, last + 1))
 
-# What a log line must not carry: the removed code points above (controls, Default_Ignorable_Code_Point, Bidi_Control) and lone surrogates.
-_PREVIEW_UNSAFE = re.compile(_INVISIBLE.pattern[:-1] + "\ud800-\udfff]")
+# What a log line must not carry: the removed code points above (controls, Default_Ignorable_Code_Point, Bidi_Control), the line and paragraph
+# separators (log shippers split on them) and lone surrogates.
+_PREVIEW_UNSAFE = re.compile(_INVISIBLE.pattern[:-1] + "\u2028\u2029\ud800-\udfff]")
 _PREVIEW_LIMIT = 60
 _UNREADABLE = "[unreadable value]"
 
@@ -242,6 +245,17 @@ def _count_letters_or_digits(text: str, at_least: int) -> int:
     return count
 
 
+def _count_glyphs(text: str, at_least: int) -> int:
+    """Letters, numbers and symbols (``[\\p{L}\\p{N}\\p{S}]``) in ``text``, counted up to ``at_least``: what a reader counts as characters."""
+    count = 0
+    for ch in to_js_string(text):
+        if unicodedata.category(ch)[0] in ("L", "N", "S"):
+            count += 1
+            if count >= at_least:
+                return count
+    return count
+
+
 def _count_visible(text: str, at_least: int) -> int:
     """Code points of ``text`` that are neither removed as invisible nor White_Space, counted up to ``at_least``: the glyphs a reader sees."""
     count = 0
@@ -346,6 +360,10 @@ def _sanitize(value: Any) -> SanitizedKeywordList:
         if letters_or_digits == 1:
             rejected.append(RejectedKeyword(_preview(candidate), "single_letter_or_digit"))
             continue
+        # One expanding glyph padded with punctuation ("circled twenty" + a full stop) is still one character typed.
+        if _count_glyphs(candidate, MIN_KEYWORD_LENGTH) < MIN_KEYWORD_LENGTH:
+            rejected.append(RejectedKeyword(_preview(candidate), "too_short"))
+            continue
         if length > MAX_KEYWORD_LENGTH:
             rejected.append(RejectedKeyword(_preview(candidate), "too_long"))
             continue
@@ -387,11 +405,12 @@ def _cut_haystack(haystack: str) -> str:
 def find_keyword_match(haystack: Any, keyword_list: SanitizedKeywordList) -> str | None:
     """The first accepted keyword found in ``haystack`` (case-insensitive, NFKC-normalised substring match over UTF-16 units), or ``None``. Never raises.
 
-    An empty list never matches, an empty or non-string haystack never matches, and a needle that is not a string with at least ``MIN_KEYWORD_LENGTH``
-    code points and two letters or numbers is skipped (a hand-built list cannot match ``".."``), exactly as the TypeScript guard does. At most
-    ``MAX_KEYWORDS`` needles are read. A haystack of more than ``MAX_HAYSTACK_UNITS`` UTF-16 units is searched only up to the last whitespace
+    An empty list never matches, an empty or non-string haystack never matches, and a needle that is not a string of at most 400 units with at least
+    ``MIN_KEYWORD_LENGTH`` code points and two letters or numbers, no lone surrogate and no NUL is skipped (a hand-built list cannot match ``".."`` or half
+    of an astral character), exactly as the TypeScript guard does. At most ``MAX_KEYWORDS`` needles are read. A haystack of more than ``MAX_HAYSTACK_UNITS`` UTF-16 units is searched only up to the last whitespace
     character inside that window, cut before cleaning (see ``_cut_haystack``); a run of more than ``MAX_COMBINING_RUN`` combining marks in the
-    searched text is cut to its first ``MAX_COMBINING_RUN`` marks.
+    searched text is cut to its first ``MAX_COMBINING_RUN`` marks. A haystack that NFKC would grow past four times its length plus 16 units is searched in pieces
+    around the code points that expand more than four times (see ``_clean_haystack``) instead of being empty.
     """
     try:
         return _find_unchecked(haystack, keyword_list)
@@ -399,19 +418,70 @@ def find_keyword_match(haystack: Any, keyword_list: SanitizedKeywordList) -> str
         return None
 
 
+_PIECE_SEPARATOR = "\x00"
+
+
+def _split_at_heavy_expanders(text: str) -> list[str] | None:
+    """The text split at every code point whose NFKC form is more than four times as long (in UTF-16 units) as it is, or ``None`` when it has none."""
+    pieces: list[str] = []
+    current: list[str] = []
+    found = False
+    for ch in to_js_string(text):
+        if utf16_length(unicodedata.normalize("NFKC", ch)) > utf16_length(ch) * 4:
+            found = True
+            pieces.append("".join(current))
+            current = []
+        else:
+            current.append(ch)
+    if not found:
+        return None
+    pieces.append("".join(current))
+    return pieces
+
+
+def _clean_haystack(raw: str) -> str:
+    """``cleanHaystack`` of the TypeScript guard: a text NFKC would grow past the cap is not emptied as a whole; the heavy expanders are cut out, the pieces
+    between them are cleaned on their own and joined with NUL (no keyword contains it, so nothing matches across a cut-out character)."""
+    whole = normalise_keyword(raw, "cut")
+    if whole != "":
+        return whole
+    pieces = _split_at_heavy_expanders(raw)
+    if pieces is None:
+        return ""
+    return _PIECE_SEPARATOR.join(piece for piece in (normalise_keyword(piece, "cut") for piece in pieces) if piece != "")
+
+
+def _is_usable_needle(needle: Any) -> bool:
+    """The sanitiser's floor again for a hand-built list, without anything that could match half of a character or cross a cut."""
+    return (
+        isinstance(needle, str)
+        and utf16_length(needle) <= 2 * MAX_KEYWORD_LENGTH
+        and _PIECE_SEPARATOR not in needle
+        and not has_surrogate(to_js_string(needle))
+        and _code_point_length(needle) >= MIN_KEYWORD_LENGTH
+        and _count_letters_or_digits(needle, 2) >= 2
+    )
+
+
+@functools.lru_cache(maxsize=128)
+def _usable_needle_indexes(needles: tuple[Any, ...]) -> tuple[int, ...]:
+    """Indexes of the usable needles among the first ``MAX_KEYWORDS``, found once per distinct needle tuple (a run asks for every row)."""
+    return tuple(index for index, needle in enumerate(needles[:MAX_KEYWORDS]) if _is_usable_needle(needle))
+
+
 def _find_unchecked(haystack: Any, keyword_list: SanitizedKeywordList) -> str | None:
     if len(keyword_list.needles) == 0:
         return None
     if not isinstance(haystack, str) or len(haystack) == 0:
         return None
-    text = normalise_keyword(_cut_haystack(haystack), "cut").lower()
+    text = _clean_haystack(_cut_haystack(haystack)).lower()
     if len(text) == 0:
         return None
-    for index, needle in enumerate(keyword_list.needles[:MAX_KEYWORDS]):
-        if not isinstance(needle, str) or _code_point_length(needle) < MIN_KEYWORD_LENGTH or _count_letters_or_digits(needle, 2) < 2:
-            continue
+    for index in _usable_needle_indexes(tuple(keyword_list.needles)):
+        needle = keyword_list.needles[index]
         if js_includes(text, needle):
-            return keyword_list.keywords[index] if index < len(keyword_list.keywords) else needle
+            keyword = keyword_list.keywords[index] if index < len(keyword_list.keywords) else needle
+            return keyword if isinstance(keyword, str) else needle
     return None
 
 

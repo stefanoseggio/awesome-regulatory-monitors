@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { ApifyLeaseStorage, ApifyRunLiveness, type KeyValueLike } from '../lib/apify_adapters.js';
+import { ApifyLeaseStorage, ApifyRunLiveness } from '../lib/apify_adapters.js';
 import {
     InMemoryLeaseStorage,
     LeaseConflictError,
@@ -12,6 +12,7 @@ import {
     type RunLivenessChecker,
 } from '../lib/lease.js';
 import { FatalConfigError } from '../lib/types.js';
+import { PlatformLikeKv } from './support/fake_kv.js';
 
 /** A controllable clock: `advance` moves time, `sleep` records its argument and advances time. */
 function clock(startIso = '2026-10-21T10:00:00.000Z') {
@@ -252,19 +253,7 @@ describe('RunLeases.renewIfDue and release', () => {
 });
 
 describe('ApifyLeaseStorage', () => {
-    class FakeKv implements KeyValueLike {
-        readonly data = new Map<string, unknown>();
-        async *keys(): AsyncIterable<string> {
-            for (const key of [...this.data.keys()]) yield key;
-        }
-        async getValue(key: string): Promise<unknown> {
-            return structuredClone(this.data.get(key));
-        }
-        async setValue(key: string, value: unknown): Promise<void> {
-            if (value === null) this.data.delete(key);
-            else this.data.set(key, structuredClone(value));
-        }
-    }
+    const FakeKv = PlatformLikeKv;
 
     it('keeps one record per source under lease.<namespace>.<source>, away from the memory and the journal, and deletes it with null', async () => {
         const kv = new FakeKv();
@@ -303,8 +292,8 @@ describe('ApifyRunLiveness', () => {
         expect(await check({ status })).toBe('dead');
     });
 
-    it('a run that no longer exists is dead; an unknown status, a missing status and an API error are unknown', async () => {
-        expect(await check(undefined)).toBe('dead');
+    it('only a terminal status is dead: a run that cannot be found (gone, or not visible to this token), an unknown status, a missing status and an API error are unknown', async () => {
+        expect(await check(undefined)).toBe('unknown');
         expect(await check({ status: 'SOMETHING-NEW' })).toBe('unknown');
         expect(await check({})).toBe('unknown');
         expect(await check(new Error('403'))).toBe('unknown');

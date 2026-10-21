@@ -22,7 +22,7 @@ import { z } from 'zod';
 
 import { clampInteger, describeSanitization, findKeywordMatch, sanitizeKeywordList } from './_guards.js';
 import { type BillingPort, DEFAULT_DATASET_ITEM_EVENT, DEFAULT_HIT_BILLER_OPTIONS, hasPositivePrice, RESULT_EVENT, WATCHLIST_HIT_EVENT, WatchlistHitBiller } from './charging.js';
-import type { RunLeasePort } from './lease.js';
+import { LeaseLostError, type RunLeasePort } from './lease.js';
 import { createScrubber, collectSecrets } from './secrets.js';
 import { classifyRecord, CorruptDeltaRecordError, type DeltaStore, effectiveMaxSeenIds, markProcessed, NAMESPACE_PATTERN, type ProcessedRecord } from './state.js';
 import {
@@ -400,6 +400,8 @@ export async function runEngine(engine: EngineDefinition, rawInput: unknown, dep
             }
             let sinceCheckpoint = 0;
             let unserialisable = 0;
+            let oversized = 0;
+            let leaseLostError: LeaseLostError | undefined;
 
             try {
                 for (const record of records) {
@@ -424,12 +426,22 @@ export async function runEngine(engine: EngineDefinition, rawInput: unknown, dep
                         scraped_at: clock().toISOString(),
                     };
 
-                    // A row that cannot be serialised (a BigInt, a cycle) would make every push of it throw, on every run, and block
-                    // the rest of the source and every later source. Skip it, leave it unremembered, say so once per source.
-                    if (!isJsonSerialisable(row)) {
+                    // A row that cannot be serialised (a BigInt, a cycle) or that is larger than a dataset item may be would make
+                    // every push of it throw, on every run, and block the rest of the source and every later source. Skip it,
+                    // leave it unremembered, say so once per source.
+                    const size = serialisedSize(row);
+                    if (size === undefined) {
                         unserialisable += 1;
                         continue;
                     }
+                    if (size > MAX_ROW_BYTES) {
+                        oversized += 1;
+                        continue;
+                    }
+
+                    // A run that was suspended and overtaken stops HERE, before it pushes (and bills) another row; nothing it pushes
+                    // after this check can be pushed by a run that no longer holds the lease, except the one row in flight.
+                    if (leases) await leases.renewIfDue();
 
                     const emission = await sinks.emit(row, record.billingEvent ?? billingEventFor(connector, cls));
                     if (!emission.emitted) {
@@ -446,10 +458,6 @@ export async function runEngine(engine: EngineDefinition, rawInput: unknown, dep
                         journal.push(delivered);
                         await journalStore.save(connector.id, journal);
                     }
-                    // Keeps the lease alive while rows flow (a cheap clock check except once a minute) and stops this run if
-                    // another one took the lease over.
-                    if (leases) await leases.renewIfDue();
-
                     if (matchedKeyword !== null) {
                         summary.watchlistHits += 1;
                         // At the budget limit the SDK would "overcharge by one" to terminate the Actor: never spend that
@@ -461,6 +469,8 @@ export async function runEngine(engine: EngineDefinition, rawInput: unknown, dep
                                 ctx.log.info(`[${connector.id}] watchlist-hit charge limit reached; stopping.`);
                                 break;
                             }
+                        } else {
+                            biller.hitsCapped += 1;
                         }
                     }
                     if (emission.limitReached) {
@@ -473,18 +483,28 @@ export async function runEngine(engine: EngineDefinition, rawInput: unknown, dep
                         await persist();
                     }
                 }
+            } catch (error) {
+                if (error instanceof LeaseLostError) leaseLostError = error;
+                throw error;
             } finally {
-                // 6. STATE - whatever was actually processed. A failure to save must not mask the error that got us here.
-                try {
-                    await persist();
-                } catch (saveError) {
-                    const reason = scrub(saveError instanceof Error ? saveError.message : String(saveError));
-                    ctx.log.error(`[${connector.id}] could not persist delta memory: ${reason}`);
-                    // Visible to the caller: the run may still end SUCCEEDED because the delivery journal covers the rows.
-                    if (summary.warnings.length < 50) summary.warnings.push(`could not persist delta memory: ${reason}`.slice(0, 500));
+                if (leaseLostError) {
+                    // The delta memory and the journal of this source now belong to the run that took the lease: writing this run's older view
+                    // over them would erase that run's progress and make the next run deliver and bill its rows again.
+                    ctx.log.error(`[${connector.id}] ${scrub(leaseLostError.message)} The delta memory and the delivery journal of this source were left as they are.`);
+                } else {
+                    // 6. STATE - whatever was actually processed. A failure to save must not mask the error that got us here.
+                    try {
+                        await persist();
+                    } catch (saveError) {
+                        const reason = scrub(saveError instanceof Error ? saveError.message : String(saveError));
+                        ctx.log.error(`[${connector.id}] could not persist delta memory: ${reason}`);
+                        // Visible to the caller: the run may still end SUCCEEDED because the delivery journal covers the rows.
+                        if (summary.warnings.length < 50) summary.warnings.push(`could not persist delta memory: ${reason}`.slice(0, 500));
+                    }
                 }
             }
             if (unserialisable > 0) sourceCtx.log.warning(`${unserialisable} row(s) skipped: the payload cannot be serialised to JSON (they will be tried again on the next run).`);
+            if (oversized > 0) sourceCtx.log.warning(`${oversized} row(s) skipped: the payload is larger than ${MAX_ROW_BYTES} bytes, which the platform refuses to store in one dataset item (they will be tried again on the next run).`);
         }
 
         const summary: RunSummary = {
@@ -499,6 +519,7 @@ export async function runEngine(engine: EngineDefinition, rawInput: unknown, dep
                 rejected: watchlist.rejected.length,
                 hitsCharged: biller.charged,
                 hitsUnpriced: biller.hitsUnpriced,
+                hitsCapped: biller.hitsCapped,
             },
             pricing,
             stoppedOnChargeLimit,
@@ -549,11 +570,15 @@ function dedupeById(records: SourceRecord[]): { records: SourceRecord[]; invalid
     return { records: out, invalid };
 }
 
-function isJsonSerialisable(value: unknown): boolean {
+/** The Apify client refuses a dataset item above 9,437,184 bytes; rows above this are skipped instead of aborting the run on every attempt. */
+export const MAX_ROW_BYTES = 9_000_000;
+
+/** UTF-8 size of the JSON of `value`, or undefined when it cannot be serialised (a BigInt, a cycle, a throwing getter). */
+function serialisedSize(value: unknown): number | undefined {
     try {
-        JSON.stringify(value);
-        return true;
+        const json = JSON.stringify(value);
+        return json === undefined ? undefined : Buffer.byteLength(json, 'utf8');
     } catch {
-        return false;
+        return undefined;
     }
 }

@@ -109,6 +109,7 @@ export class WatchlistHitBiller {
     /** Spend in integer micro-USD: summing decimal prices as floats drifts and trips a cap one hit early. */
     private spendMicro = 0;
     hitsUnpriced = 0;
+    /** Matched rows whose hit was not billed because a per-run cap or the spending limit was reached. */
     hitsCapped = 0;
 
     constructor(
@@ -142,10 +143,16 @@ export class WatchlistHitBiller {
         // Do not even try when the budget cannot pay one more hit: the SDK would overcharge by one event (up to the hit
         // price, $0.15) past the customer's maximum. The row was already delivered; its hit stays unbilled and the run stops.
         const affordable = this.billing.affordableCount?.(WATCHLIST_HIT_EVENT);
-        if (affordable !== undefined && affordable < 1) return 'limit_reached';
+        if (affordable !== undefined && affordable < 1) {
+            this.hitsCapped += 1;
+            return 'limit_reached';
+        }
 
         const result = await this.billing.charge(WATCHLIST_HIT_EVENT, 1);
-        if (result.chargedCount < 1) return 'limit_reached';
+        if (result.chargedCount < 1) {
+            this.hitsCapped += 1;
+            return 'limit_reached';
+        }
 
         this.hitsCharged += 1;
         this.spendMicro += toMicro(price);

@@ -68,7 +68,7 @@
 import * as cheerio from 'cheerio';
 import { z } from 'zod';
 
-import { describeSanitization, normaliseKeyword, type SanitizedKeywordList, sanitizeKeywordList } from '../../lib/_guards.js';
+import { describeSanitization, MAX_RAW_KEYWORD_UNITS, normaliseKeyword, type SanitizedKeywordList, sanitizeKeywordList } from '../../lib/_guards.js';
 import { DATE_RANGES, type DateRange, fingerprintOf } from '../../lib/connector_helpers.js';
 import { HttpStatusError } from '../../lib/http.js';
 import { type Connector, type ConnectorContext, type RunParams, SourceFetchError, type SourceRecord } from '../../lib/types.js';
@@ -293,6 +293,8 @@ export function toSourceRecord(raw: WorldBankProcNoticeRaw): SourceRecord {
 export function matchesExactList(value: string | null | undefined, list: SanitizedKeywordList): boolean {
     if (list.needles.length === 0) return true;
     if (typeof value !== 'string') return false;
+    // normaliseKeyword is quadratic on hostile text and bounds nothing itself: a field longer than any keyword may be cannot equal one.
+    if (value.length > MAX_RAW_KEYWORD_UNITS) return false;
     return list.needles.includes(normaliseKeyword(value).toLowerCase());
 }
 

@@ -238,6 +238,13 @@ def test_corpus_boundary_cases_test_what_they_claim_to() -> None:
         ("marks: marks glued to the last letter compose with it, so the unaccented keyword is not in the text", nothing),
         ("marks: marks after a space are cut and the keyword before the space is found", "acme"),
         ("marks: cutting a run cannot invent a hit: the accent stays on the letter", nothing),
+        ("expansion: a field of U+FDFA ligatures is cut out, the keyword after it is found", "acme"),
+        ("expansion: a field past the allowance is cut out, the keyword next to it is found", "acme"),
+        ("expansion: a window of ligatures with the name beyond the 8192-unit cut is not searched", nothing),
+        ("expansion: a name between two fields of ligatures", "Acme Holdings"),
+        ("expansion: nothing matches across a cut-out ligature (spaced keyword)", nothing),
+        ("expansion: nothing matches across a cut-out ligature (fused keyword)", nothing),
+        ("expansion: the other characters that expand more than 4x (U+FDFB, square units) are cut out as well", "Acme Holdings"),
     ]:
         assert by_name[name]["expected"] == expected, name
     assert utf16_length(by_name["cut: a haystack of exactly 8192 units is searched whole"]["haystack"]) == MAX_HAYSTACK_UNITS

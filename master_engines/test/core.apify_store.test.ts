@@ -1,22 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { ApifyDeltaStore, type KeyValueLike } from '../lib/apify_adapters.js';
+import { ApifyDeltaStore } from '../lib/apify_adapters.js';
 import { CorruptDeltaRecordError, createEmptyState, markProcessed, resolveStateNamespace } from '../lib/state.js';
+import { PlatformLikeKv } from './support/fake_kv.js';
 
-class FakeKv implements KeyValueLike {
-    readonly data = new Map<string, unknown>();
-    async *keys(): AsyncIterable<string> {
-        for (const key of [...this.data.keys()]) yield key;
-    }
-    async getValue(key: string): Promise<unknown> {
-        return structuredClone(this.data.get(key));
-    }
-    async setValue(key: string, value: unknown): Promise<void> {
-        // Same contract as a key-value store: `null` deletes the record.
-        if (value === null) this.data.delete(key);
-        else this.data.set(key, structuredClone(value));
-    }
-}
+const FakeKv = PlatformLikeKv;
 
 const stateWith = (source: string, ids: string[]) => markProcessed(createEmptyState(), source, ids.map((id) => ({ recordId: id, fingerprint: 'f' })), 't');
 

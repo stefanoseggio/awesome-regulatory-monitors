@@ -277,7 +277,10 @@ export class ChaosPlatform {
         this.rng = new SeededRandom(options.seed);
         this.pricesUsd = options.prices;
         this.keyValue = {
-            keys: () => this.kvKeys(),
+            // forEachKey, not keys(): the platform's key-value client has no keys() (see KeyValueLike)
+            forEachKey: async (iteratee, listing = {}) => {
+                for (const key of [...this.kv.keys()].sort()) if (listing.prefix === undefined || key.startsWith(listing.prefix)) await iteratee(key);
+            },
             getValue: async (key) => {
                 const raw = this.kv.get(key);
                 return raw === undefined ? undefined : (JSON.parse(raw) as unknown);
@@ -412,10 +415,6 @@ export class ChaosPlatform {
 
     durableKeys(): string[] {
         return [...this.kv.keys()].sort();
-    }
-
-    private async *kvKeys(): AsyncGenerator<string> {
-        for (const key of [...this.kv.keys()]) yield key;
     }
 
     private async kvSet(key: string, value: unknown): Promise<void> {

@@ -630,21 +630,21 @@ describe('run leases (overlapping runs of the same namespace must not deliver an
         expect(warnings.some((w) => w.includes('could not release the run lease: kv store unavailable'))).toBe(true);
     });
 
-    it('renews the lease before each fetch and after each delivered row', async () => {
+    it('checks the lease before each fetch, after each fetch and before each row it pushes', async () => {
         const { port, calls } = spyLeases();
         const h = harness();
         h.sinks.leases = port;
         await runEngine(engineOf(stub('a', many('a', 3)), stub('b', many('b', 2))), { sources: ['a', 'b'] }, { sinks: h.sinks, ctx, clock });
-        // per source: before the fetch, after the fetch, and after every delivered row
+        // per source: before the fetch, after the fetch, and before every row that is pushed
         expect(calls.filter((c) => c === 'renew')).toHaveLength(2 * 2 + 3 + 2);
     });
 
-    it('a run whose lease was taken over stops at the next renewal, remembers the rows it already delivered, and releases', async () => {
+    it('a run whose lease was taken over stops BEFORE pushing the next row, leaves the memory and the journal of that source to the new holder, and releases', async () => {
         let renewals = 0;
         const { port, calls } = spyLeases({
             async renewIfDue() {
                 renewals += 1;
-                // calls 1 and 2 are the renewals around the fetch; call 3 follows the first row, call 4 the second row
+                // calls 1 and 2 are the checks around the fetch; call 3 precedes the first push, call 4 the second push
                 if (renewals === 4) throw new LeaseLostError('a', 'run-b');
             },
         });
@@ -652,8 +652,12 @@ describe('run leases (overlapping runs of the same namespace must not deliver an
         const h = harness({ store });
         h.sinks.leases = port;
         await expect(runEngine(engineOf(stub('a', many('a', 10))), { sources: ['a'] }, { sinks: h.sinks, ctx, clock })).rejects.toBeInstanceOf(LeaseLostError);
-        expect(h.rows.map((r) => r.record_id)).toEqual(['a-1', 'a-2']);
-        expect(store.peek().sources.a?.seenIds.sort()).toEqual(['a-1', 'a-2']);
+        // one row was pushed, the second was never pushed
+        expect(h.rows.map((r) => r.record_id)).toEqual(['a-1']);
+        // the run that took the lease over owns the memory and the journal now: writing this run's older view over them would erase its progress
+        expect(store.peek().sources.a).toBeUndefined();
+        expect(store.journalWrites, 'one journal write for the one pushed row, and no clearing write afterwards').toBe(1);
+        expect(store.peekJournal('a')).toHaveLength(1);
         expect(calls.at(-1)).toBe('release');
     });
 

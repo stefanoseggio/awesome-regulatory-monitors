@@ -10,6 +10,7 @@ F4 the NFKC expansion cap, F5 never raising, F6 the needle floor of a hand-built
 from __future__ import annotations
 
 import time
+import unicodedata
 from typing import Any
 
 import pytest
@@ -23,6 +24,7 @@ from regulatory_engines import (
     sanitize_keyword_list,
 )
 from regulatory_engines._guards import _cut_mark_runs, _preview
+from regulatory_engines._js import utf16_length
 
 FDFA = "ﷺ"  # ARABIC LIGATURE SALLALLAHOU ALAYHE WASALLAM: one character that NFKC expands to 18
 ACUTE = "́"
@@ -151,11 +153,55 @@ def test_a_hostile_list_of_ligatures_costs_well_under_a_second() -> None:
     assert time.perf_counter() - started < 5.0, "generous bound for a slow runner; the TypeScript guard needs well under a second"
 
 
-def test_a_haystack_of_ligatures_is_empty_and_never_matches() -> None:
+def test_a_field_of_ligatures_is_cut_out_and_hides_no_name_in_another_field() -> None:
     watchlist = sanitize_keyword_list(["acme"])
-    assert find_keyword_match(FDFA * 8_188 + " acme", watchlist) is None
-    assert find_keyword_match(FDFA * 8 + " acme corp", watchlist) is None
+    assert find_keyword_match(FDFA * 8_000 + " acme", watchlist) == "acme"
+    assert find_keyword_match(FDFA * 8 + " acme corp", watchlist) == "acme"
     assert find_keyword_match("Acme " + FDFA, watchlist) == "acme", "one ligature next to a name is inside the allowance"
+    assert find_keyword_match(f"{FDFA * 100} | Acme Holdings | {FDFA * 100}", sanitize_keyword_list(["Acme Holdings"])) == "Acme Holdings"
+    # a haystack that is nothing but the field has nothing to find, and nothing can match across a cut-out character
+    assert find_keyword_match(FDFA * 8_000, watchlist) is None
+    for joined in ("Acme" + FDFA + "Holdings", "Acme " + FDFA + " Holdings", "Acme" + FDFA * 50 + "Holdings"):
+        assert find_keyword_match(joined, sanitize_keyword_list(["Acme Holdings"])) is None
+        assert find_keyword_match(joined, sanitize_keyword_list(["AcmeHoldings"])) is None
+
+
+def test_every_code_point_that_expands_more_than_four_times_is_cut_out() -> None:
+    heavy = [chr(cp) for cp in range(0x110000) if not 0xD800 <= cp <= 0xDFFF and utf16_length(unicodedata.normalize("NFKC", chr(cp))) > utf16_length(chr(cp)) * 4]
+    assert len(heavy) >= 19
+    watchlist = sanitize_keyword_list(["Acme Holdings"])
+    for ch in heavy:
+        for times in (1, 40):
+            assert find_keyword_match(f"Acme Holdings Ltd {ch * times}", watchlist) == "Acme Holdings", (hex(ord(ch)), times)
+            assert find_keyword_match(f"{ch * times} Acme Holdings Ltd", watchlist) == "Acme Holdings", (hex(ord(ch)), times)
+
+
+@pytest.mark.parametrize("padded", ["\u2473.", "\u2116.", "\ufb01.", "(\u2473)", "\u2116-", "\u3392,"])
+def test_one_expanding_glyph_padded_with_punctuation_is_too_short(padded: str) -> None:
+    result = sanitize_keyword_list([padded])
+    assert result.keywords == () and reasons(result) == ["too_short"]
+    assert find_keyword_match("Filed 2020. Casino. x", result) is None
+
+
+@pytest.mark.parametrize("kept", ["no.", "S.A.", "a.b", "\u2116\u2116", "\u2473\u2473.", "\u2116 x", "AT&T"])
+def test_two_glyphs_or_a_typed_word_are_kept(kept: str) -> None:
+    assert len(sanitize_keyword_list([kept]).keywords) == 1
+
+
+def test_a_preview_hides_the_line_and_paragraph_separators() -> None:
+    for value in sanitize_keyword_list(["\u2028\u2029", "a\u2028--", "--\u2029"]).rejected:
+        assert "\u2028" not in value.value and "\u2029" not in value.value and "\ufffd" in value.value
+
+
+def test_a_hand_built_list_gets_no_more_than_the_sanitiser_gives() -> None:
+    assert find_keyword_match("ab\U0001f600", forged("ab\ud83d")) is None, "half of an astral character"
+    assert find_keyword_match("x\U0001f600bc", forged("\ude00bc")) is None
+    assert find_keyword_match("Acme" + FDFA + "Holdings x", forged("acme\x00holdings")) is None, "a cut marker"
+    started = time.perf_counter()
+    assert find_keyword_match("Acme Corp", forged(*["a" * 100_000] * 500)) is None
+    assert time.perf_counter() - started < 1.0, "needles over 400 units are skipped"
+    assert find_keyword_match("Acme Corp", SanitizedKeywordList(keywords=(None,), needles=("acme corp",), rejected=(), malformed_container=False)) == "acme corp"  # type: ignore[arg-type]
+    assert find_keyword_match("Acme Corp", SanitizedKeywordList(keywords=(7,), needles=("acme corp",), rejected=(), malformed_container=False)) == "acme corp"  # type: ignore[arg-type]
 
 
 # ---- F5 / F6: find_keyword_match and describe_sanitization never raise, and a hand-built list gets the sanitiser's floor ------------

@@ -54,6 +54,8 @@
  *   - contains at least TWO letters or digits (so "--", "..", "()", "c.", "a |", "-0" cannot match everything
  *                                             punctuated: one alphanumeric character padded with punctuation is the
  *                                             one-letter needle of the original bug in disguise; "BP", "GE", "3M" pass)
+ *   - at least 2 glyphs (letters, numbers, symbols; not punctuation or marks) BEFORE normalisation, so one expanding
+ *     glyph padded with punctuation ("⑳.", "№.") is not a two-character keyword either
  *   - at least 2 visible code points BEFORE normalisation (one glyph that NFKC expands, such as the circled
  *     number twenty or the numero sign, is a single character, not a two-character keyword)
  *   - de-duplicated case-insensitively; the first spelling wins
@@ -73,17 +75,20 @@
  * to (a cut in the middle of a word could drop a combining accent and create a hit the full text would not give).
  *
  * `sanitizeKeywordList`, `findKeywordMatch`, `matchesAnyKeyword` and `describeSanitization` never throw, even for a revoked
- * or hostile Proxy or a malformed list; `findKeywordMatch` re-checks every needle (a string with at least 2 code points
- * and 2 letters or digits) and reads at most {@link MAX_KEYWORDS} of them, so a hand-built list cannot match "..".
- * `rejected[].value` is a bounded, log-safe preview: a string is cut at 57 units and control, invisible and lone
- * surrogate characters are replaced by U+FFFD; a non-string is a constant tag such as "[object]" (never serialised).
+ * or hostile Proxy or a malformed list; `findKeywordMatch` re-checks every needle (a string of at most 400 units with at
+ * least 2 code points and 2 letters or digits, no lone surrogate and no NUL) and reads at most {@link MAX_KEYWORDS} of
+ * them, so a hand-built list cannot match ".." or half of an astral character.
+ * `rejected[].value` is a bounded, log-safe preview: a string is cut at 57 units and control, line and paragraph separator,
+ * invisible and lone surrogate characters are replaced by U+FFFD; a non-string is a constant tag such as "[object]" (never
+ * serialised).
  *
  * Containers: undefined and null give an empty result; an array is read; a string is split; anything else (a number,
  * boolean, Set, Map, typed array, String object...) is `malformedContainer: true` with no keywords.
  *
  * A haystack with a run of more than {@link MAX_COMBINING_RUN} combining marks is searched with that run cut to
  * {@link MAX_COMBINING_RUN} marks (one hostile field must not hide a whole record), while a KEYWORD with such a run
- * is rejected.
+ * is rejected. A haystack that NFKC would grow past 4x + 16 units (a field of U+FDFA) is not emptied either: the characters
+ * that expand more than 4x are cut out and the pieces between them are searched (they never join into a match).
  */
 
 export const MIN_KEYWORD_LENGTH = 2;
@@ -145,14 +150,16 @@ const LONE_SURROGATE = /\p{Surrogate}/u;
 /** Non-global twins of INVISIBLE and of White_Space, for testing single code points. */
 const INVISIBLE_ONE = /[\u0000-\u001f\u007f-\u009f\p{Default_Ignorable_Code_Point}\p{Bidi_Control}]/u;
 const WHITE_SPACE_ONE = /\p{White_Space}/u;
-/** What a log line must not carry: controls, invisible characters and lone surrogates. */
-const PREVIEW_UNSAFE = /[\u0000-\u001f\u007f-\u009f\p{Default_Ignorable_Code_Point}\p{Surrogate}]/gu;
+/** What a log line must not carry: controls, the line and paragraph separators (log shippers split on them), invisible characters and lone surrogates. */
+const PREVIEW_UNSAFE = /[\u0000-\u001f\u007f-\u009f\u2028\u2029\p{Default_Ignorable_Code_Point}\p{Surrogate}]/gu;
 /** Marks beyond the {@link MAX_COMBINING_RUN}th of a run (MAX_COMBINING_RUN, written out so the ReDoS gate analyses it). */
 const MARK_RUN_EXCESS = /(\p{M}{16})\p{M}+/gu;
 /** MAX_COMBINING_RUN + 1 consecutive combining marks. A literal (not built from the constant) so the ReDoS gate analyses it. */
 const COMBINING_RUN_TOO_LONG = /\p{M}{17}/u;
 const WHITE_SPACE_UNIT = /\p{White_Space}/u;
 const HAS_LETTER_OR_DIGIT = /[\p{L}\p{N}]/u;
+/** A glyph a reader counts as a character of its own: a letter, a number or a symbol (not punctuation, not a mark). */
+const IS_GLYPH = /[\p{L}\p{N}\p{S}]/u;
 const BARE_STRING_SEPARATORS = /[\n\r,;]+/u;
 
 function codePointLength(text: string): number {
@@ -180,6 +187,18 @@ function countVisible(text: string, atLeast: number): number {
         if (INVISIBLE_ONE.test(ch) || WHITE_SPACE_ONE.test(ch)) continue;
         n += 1;
         if (n >= atLeast) return n;
+    }
+    return n;
+}
+
+/** Letters, numbers and symbols in `text`, counted up to `atLeast`: what a reader counts as characters ("20." has two, "⑳." has one). */
+function countGlyphs(text: string, atLeast: number): number {
+    let n = 0;
+    for (const ch of text) {
+        if (IS_GLYPH.test(ch)) {
+            n += 1;
+            if (n >= atLeast) return n;
+        }
     }
     return n;
 }
@@ -350,6 +369,12 @@ function sanitizeUnchecked(input: unknown): SanitizedKeywordList {
             result.rejected.push({ value: preview(candidate), reason: 'single_letter_or_digit' });
             continue;
         }
+        // One expanding glyph plus punctuation ("⑳.", "№.") passes the count of visible code points and, once expanded, the letter
+        // count: what was typed is still one character. Punctuation and marks are not characters of their own.
+        if (countGlyphs(candidate, MIN_KEYWORD_LENGTH) < MIN_KEYWORD_LENGTH) {
+            result.rejected.push({ value: preview(candidate), reason: 'too_short' });
+            continue;
+        }
         if (codePointLength(cleaned) > MAX_KEYWORD_LENGTH) {
             result.rejected.push({ value: preview(candidate), reason: 'too_long' });
             continue;
@@ -398,20 +423,94 @@ export function findKeywordMatch(haystack: unknown, list: SanitizedKeywordList):
     }
 }
 
+/** Separates the pieces of a haystack that was cleaned around characters NFKC expands too far. Cleaned text and keywords never contain it. */
+const PIECE_SEPARATOR = '\u0000';
+
+/**
+ * The haystack split at every code point whose NFKC form is more than four times as long as it is (U+FDFA becomes 18
+ * characters; 19 code points expand that much), or `undefined` when it holds none. Such a character is what the expansion
+ * cap in {@link cleanOnce} refuses, and a text that holds enough of them would otherwise be empty as a whole.
+ */
+function splitAtHeavyExpanders(text: string): string[] | undefined {
+    const pieces: string[] = [];
+    let current = '';
+    let found = false;
+    for (const ch of text) {
+        if (ch.normalize('NFKC').length > ch.length * 4) {
+            found = true;
+            pieces.push(current);
+            current = '';
+        } else {
+            current += ch;
+        }
+    }
+    if (!found) return undefined;
+    pieces.push(current);
+    return pieces;
+}
+
+/**
+ * A haystack cleaned for matching. A text that NFKC would grow past the cap is not emptied as a whole: one hostile field of a
+ * record (a run of U+FDFA in a free-text column) must not hide a watchlisted name in another. The heavy expanders are cut
+ * out, the pieces between them are cleaned on their own and joined with {@link PIECE_SEPARATOR}, which no keyword contains, so
+ * no keyword can match across a cut-out character.
+ */
+function cleanHaystack(raw: string): string {
+    const whole = normaliseKeyword(raw, 'cut');
+    if (whole !== '') return whole;
+    const pieces = splitAtHeavyExpanders(raw);
+    if (pieces === undefined) return '';
+    return pieces
+        .map((piece) => normaliseKeyword(piece, 'cut'))
+        .filter((piece) => piece !== '')
+        .join(PIECE_SEPARATOR);
+}
+
+/** A needle a hand-built list may carry: the sanitiser's floor again, without anything that could match half a character or cross a cut. */
+function isUsableNeedle(needle: unknown): needle is string {
+    return (
+        typeof needle === 'string' &&
+        needle.length <= 2 * MAX_KEYWORD_LENGTH &&
+        !needle.includes(PIECE_SEPARATOR) &&
+        !LONE_SURROGATE.test(needle) &&
+        codePointLength(needle) >= MIN_KEYWORD_LENGTH &&
+        countLettersOrDigits(needle, 2) >= 2
+    );
+}
+
+/** The usable needles of a list, found once per list: re-checking 500 needles on every row of a run costs more than matching it. */
+const NEEDLE_CACHE = new WeakMap<readonly unknown[], { length: number; seen: unknown[]; indexes: number[] }>();
+
+function usableNeedleIndexes(needles: readonly unknown[]): number[] {
+    const cached = NEEDLE_CACHE.get(needles);
+    // A list edited in place is checked again: the cache is used only while every needle it read is still the same string.
+    if (cached && cached.length === needles.length && cached.seen.every((needle, i) => needles[i] === needle)) return cached.indexes;
+    const count = Math.min(needles.length, MAX_KEYWORDS);
+    const seen: unknown[] = [];
+    const indexes: number[] = [];
+    for (let i = 0; i < count; i += 1) {
+        const needle = needles[i];
+        seen.push(needle);
+        if (isUsableNeedle(needle)) indexes.push(i);
+    }
+    NEEDLE_CACHE.set(needles, { length: needles.length, seen, indexes });
+    return indexes;
+}
+
 function findUnchecked(haystack: unknown, list: SanitizedKeywordList): string | null {
     if (list.needles.length === 0) return null;
     if (typeof haystack !== 'string' || haystack.length === 0) return null;
 
     // Cut before normalising (quadratic in the worst case); text beyond the cut is simply not searched.
-    const text = normaliseKeyword(cutHaystack(haystack), 'cut').toLowerCase();
+    const text = cleanHaystack(cutHaystack(haystack)).toLowerCase();
     if (text.length === 0) return null;
 
-    const count = Math.min(list.needles.length, MAX_KEYWORDS);
-    for (let i = 0; i < count; i += 1) {
-        const needle = list.needles[i];
-        // Defence in depth for a hand-built list that bypassed sanitizeKeywordList: the same floor as the sanitiser.
-        if (typeof needle !== 'string' || codePointLength(needle) < MIN_KEYWORD_LENGTH || countLettersOrDigits(needle, 2) < 2) continue;
-        if (text.includes(needle)) return list.keywords[i] ?? needle;
+    for (const i of usableNeedleIndexes(list.needles)) {
+        const needle = list.needles[i] as string;
+        if (text.includes(needle)) {
+            const keyword = list.keywords[i];
+            return typeof keyword === 'string' ? keyword : needle;
+        }
     }
     return null;
 }

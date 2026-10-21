@@ -21,11 +21,38 @@ export function createApifyLogger(): Logger {
     };
 }
 
-/** The slice of a key-value store the delta store needs (the Apify `KeyValueStore` satisfies it). */
+/**
+ * The slice of a key-value store the delta store needs (the Apify `KeyValueStore` satisfies it). Keys are listed with
+ * `forEachKey`, NOT with `keys()`: on the platform the store's resource client is apify-client's `KeyValueStoreClient`,
+ * which has `listKeys` but no `keys`, so `keys()` throws there ("Resource client is missing the keys method") while local
+ * storage, where every test runs, has it. `forEachKey` works on both.
+ */
 export interface KeyValueLike {
-    keys(): AsyncIterable<string>;
+    forEachKey(iteratee: (key: string) => void | Promise<void>, options?: { prefix?: string }): Promise<void>;
     getValue(key: string): Promise<unknown>;
     setValue(key: string, value: unknown): Promise<void>;
+}
+
+/**
+ * True for the error apify-client throws when a record's body is declared JSON but is not (a truncated or hand-edited
+ * record): `InvalidResponseBodyError`. It is a corrupt record, not a failing platform, and is handled as one.
+ */
+export function isUnparsableRecordError(error: unknown): boolean {
+    const e = error as { name?: unknown; code?: unknown } | null;
+    return typeof e === 'object' && e !== null && (e.name === 'InvalidResponseBodyError' || e.code === 'invalid-response-body');
+}
+
+/** What a record that exists but cannot be parsed reads as: no valid state, journal or lease has this shape. */
+const UNREADABLE_RECORD = '[unreadable record]';
+
+/** `getValue`, with an unparsable body returned as {@link UNREADABLE_RECORD} instead of thrown. Other errors propagate. */
+async function readRecord(store: KeyValueLike, key: string): Promise<unknown> {
+    try {
+        return await store.getValue(key);
+    } catch (error) {
+        if (isUnparsableRecordError(error)) return UNREADABLE_RECORD;
+        throw error;
+    }
 }
 
 /**
@@ -64,11 +91,16 @@ export class ApifyDeltaStore implements DeltaStore {
 
     async load(): Promise<DeltaState> {
         const store = await this.store();
+        const keys: string[] = [];
+        await store.forEachKey(
+            (key) => {
+                if (key.startsWith(this.prefix)) keys.push(key);
+            },
+            { prefix: this.prefix },
+        );
         const sources: Record<string, unknown> = {};
-        for await (const key of store.keys()) {
-            if (!key.startsWith(this.prefix)) continue;
-            sources[key.slice(this.prefix.length)] = await store.getValue(key);
-        }
+        // One unparsable record fails ITS source (parseState reports it as invalid); it must not take the other sources down.
+        for (const key of keys) sources[key.slice(this.prefix.length)] = await readRecord(store, key);
         return parseState({ version: 2, sources }, (source) => `The delta-memory record "${this.prefix}${source}" in the key-value store "${this.storeName}" exists but cannot be read`);
     }
 
@@ -79,7 +111,7 @@ export class ApifyDeltaStore implements DeltaStore {
 
     async loadJournal(source: string): Promise<ProcessedRecord[]> {
         const store = await this.store();
-        return parseJournal(await store.getValue(this.journalKey(source)), `The delivery-journal record "${this.journalKey(source)}" in the key-value store "${this.storeName}" exists but cannot be read`);
+        return parseJournal(await readRecord(store, this.journalKey(source)), `The delivery-journal record "${this.journalKey(source)}" in the key-value store "${this.storeName}" exists but cannot be read`);
     }
 
     async saveJournal(source: string, entries: readonly ProcessedRecord[]): Promise<void> {
@@ -104,7 +136,8 @@ export class ApifyLeaseStorage implements LeaseStorage {
     }
 
     async read(source: string): Promise<unknown> {
-        return (await this.openStore()).getValue(this.key(source));
+        // An unparsable lease is a lease nobody can read: the lease logic treats it as no lease (it is overwritten), never as a block.
+        return readRecord(await this.openStore(), this.key(source));
     }
 
     async write(source: string, record: LeaseRecord): Promise<void> {
@@ -121,9 +154,10 @@ const LIVE_RUN_STATUSES: ReadonlySet<string> = new Set(['READY', 'RUNNING', 'TIM
 const DEAD_RUN_STATUSES: ReadonlySet<string> = new Set(['SUCCEEDED', 'FAILED', 'TIMED-OUT', 'ABORTED']);
 
 /**
- * Reads the status of another run from the platform. A run that no longer exists is dead. A run that cannot be read (an
- * Actor with limited permissions may not see other runs, or the API is down) is `unknown`, and the caller falls back to
- * the lease heartbeat.
+ * Reads the status of another run from the platform. Only a terminal status is `dead` and only a running one is `live`.
+ * Anything else is `unknown` and the caller falls back to the lease heartbeat: a run that cannot be found (it may be gone,
+ * or this token may not be allowed to see it: apify-client answers `undefined` for both), a run that cannot be read (an
+ * Actor with limited permissions, an API outage) and a status this code does not know.
  */
 export class ApifyRunLiveness implements RunLivenessChecker {
     constructor(private readonly getRun: (runId: string) => Promise<{ status?: string } | undefined> = async (runId) => Actor.apifyClient.run(runId).get()) {}
@@ -131,7 +165,9 @@ export class ApifyRunLiveness implements RunLivenessChecker {
     async check(runId: string): Promise<RunLiveness> {
         try {
             const run = await this.getRun(runId);
-            if (run === undefined || run === null) return 'dead';
+            // Not found is NOT dead: apify-client answers `undefined` both for a run that is gone and for a run this token may not see
+            // (record-or-token-not-found), and a live holder must never read as dead because of a permission. The heartbeat decides.
+            if (run === undefined || run === null) return 'unknown';
             if (typeof run.status === 'string' && LIVE_RUN_STATUSES.has(run.status)) return 'live';
             if (typeof run.status === 'string' && DEAD_RUN_STATUSES.has(run.status)) return 'dead';
             return 'unknown';
@@ -185,6 +221,7 @@ export function createApifySinks(engine: EngineSlug, namespace: string = 'defaul
               staleAfterMs: options.leases.staleAfterMs,
               renewEveryMs: options.leases.renewEveryMs,
               settleMs: options.leases.settleMs,
+              heartbeat: true,
           })
         : undefined;
     return {

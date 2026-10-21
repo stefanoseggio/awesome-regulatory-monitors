@@ -175,7 +175,8 @@ def third_round_candidate():
         return pad + letter + pad + rng.choice('abXY17') + rng.choice(['', pad])
     if kind == 2:  # expanding glyphs, alone, doubled or with invisible padding
         glyph = rng.choice(ALPHA['expanding'])
-        return rng.choice([glyph, glyph * 2, glyph + '\u200b', '\u200b' + glyph + '\u00ad', glyph + glyph + glyph, glyph + letter])
+        pad = rng.choice(ALPHA['padding_punct'])
+        return rng.choice([glyph, glyph * 2, glyph + '\u200b', '\u200b' + glyph + '\u00ad', glyph + glyph + glyph, glyph + letter, glyph + pad, pad + glyph + pad, glyph * 2 + pad])
     if kind == 3:  # runs of the ligature with the expansion cap near its boundary
         return '\ufdfa' * rng.randint(1, 14) + rng.choice(['', 'a', 'ab', 'abcd', ' acme'])
     if kind == 4:  # letters followed by a run of marks near the limit of 16
