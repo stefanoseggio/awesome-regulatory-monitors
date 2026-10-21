@@ -10,8 +10,6 @@ import type { EnginePricing } from '../pricing/event_catalog.js';
 export interface EngineMeta {
     title: string;
     description: string;
-    /** Extra Dockerfile lines for this engine only (e.g. NODE_EXTRA_CA_CERTS). */
-    extraDockerLines?: string[];
 }
 
 export const ENGINE_META: Record<string, EngineMeta> = {
@@ -23,12 +21,7 @@ export const ENGINE_META: Record<string, EngineMeta> = {
     'latam-global-tender-intelligence': {
         title: 'LatAm & Global Tender Intelligence - public procurement delta feed',
         description:
-            'One Actor for public tenders and grants: Argentine provincial portals (Santa Fe, Tucuman, Entre Rios, Cordoba), Chile Diario Oficial, EU TED, Florida MFMP, World Bank notices and Regione Lombardia grants. Held sources (ar_salta, ar_mendoza, ar_pba, au_grantconnect, ADB, IDB) are refused with their reason.',
-        extraDockerLines: [
-            '# The Cordoba portal sends only its leaf certificate. certs/ holds the two PUBLIC Sectigo CA certificates it omits',
-            '# (intermediate + root, no private key); NODE_EXTRA_CA_CERTS adds them to - never replaces - the trust store.',
-            'ENV NODE_EXTRA_CA_CERTS=/usr/src/app/latam-global-tender-intelligence/certs/cordoba-sectigo-chain.pem',
-        ],
+            'One Actor for public tenders and grants: Argentine provincial portals (Santa Fe, Tucuman, Entre Rios), Chile Diario Oficial, EU TED, Florida MFMP, World Bank notices and Regione Lombardia grants. Held sources (ar_cordoba, ar_salta, ar_mendoza, ar_pba, au_grantconnect, ADB, IDB) are refused with their reason.',
     },
     'global-corporate-patent-intelligence': {
         title: 'Global Corporate & Patent Intelligence - PTAB, EPO, trials, company registers',
@@ -143,7 +136,6 @@ export function buildActorJson(engine: EngineDefinition, pricing: EnginePricing)
 export function buildDockerfile(engine: EngineDefinition): string {
     const meta = ENGINE_META[engine.slug];
     if (!meta) throw new Error(`No ENGINE_META for ${engine.slug}`);
-    const extra = meta.extraDockerLines ? `\n${meta.extraDockerLines.join('\n')}\n` : '';
     return `FROM apify/actor-node:24 AS builder
 
 COPY --chown=myuser:myuser package*.json ./
@@ -167,7 +159,7 @@ RUN npm --quiet set progress=false \\
 COPY --from=builder --chown=myuser:myuser /usr/src/app/dist ./dist
 
 COPY --chown=myuser:myuser . ./
-${extra}
+
 CMD ["node", "dist/${engine.slug}/main.js"]
 `;
 }

@@ -9,6 +9,7 @@
  * `x-app-token` or `authorization` can never be delivered to another host. 301/302 on a POST and 303 turn into a
  * body-less GET, as browsers and `fetch` do.
  */
+import { capLength, redactQueryString } from './safe_text.js';
 import type { HttpClient, HttpRequestInit, Logger, RawHttpResponse } from './types.js';
 
 export interface HttpClientOptions {
@@ -54,7 +55,8 @@ export function redactUrl(url: string): string {
         }
         return parsed.toString();
     } catch {
-        return url.replace(/#.*$/u, '').replace(/([?&][^=&]*(?:key|token|secret|passw|auth|sig|credential|session|jwt|bearer)[^=&]*=)[^&]*/gi, '$1***');
+        // Not a parseable URL: mask the query string with a linear scan (no backtracking regex on an unvalidated string).
+        return redactQueryString(capLength(url, 4096), (name) => SECRET_QUERY_KEY.test(name));
     }
 }
 

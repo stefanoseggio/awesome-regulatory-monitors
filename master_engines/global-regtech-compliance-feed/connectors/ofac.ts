@@ -333,6 +333,9 @@ export function assertCompleteSdnFeed(feed: ParsedSdnFeed): void {
  * 5342883." The index is scoped per record (not a flat whole-document scan, which
  * could attribute an IMO number to the wrong neighbouring entity).
  */
+// Bounded repetition ({0,40}): each start position scans at most 41 characters, so the cost is O(41 * n), linear in the
+// text length. A static analyser reports it as polynomial because it cannot treat 40 as a constant; test/review_redos.test.ts
+// times it on 2 MB of repeated `IMO`.
 const IMO_IN_TEXT_PATTERN = /IMO[^0-9]{0,40}?(\d{7})\b/gi;
 
 /** Builds a Map from 7-digit IMO number to every UN ENTITY/INDIVIDUAL record whose COMMENTS1 text mentions it. */

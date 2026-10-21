@@ -1,6 +1,12 @@
 /**
  * arCordoba.ts - Province of Córdoba (Argentina) "Compras Públicas" licitaciones connector.
  *
+ * STATUS: DORMANT. `ar_cordoba` is registered as HELD (see held_argentina.ts, `arCordobaHeldConnector`) because
+ * the portal blocks non-residential, non-Argentine traffic and this package has no proxy support. This module is
+ * intentionally NOT imported by `index.ts`, so none of it ships in a runnable path; it is kept, with its tests, so
+ * that the source can be reactivated once an approved network path exists (replace the held registration with
+ * this connector and add `ar_cordoba` back to `sourceBilling` in pricing/event_catalog.ts).
+ *
  * Absorbs the legacy actor `cordoba-compras-monitor` (src/fetchTenders.ts, dateFilter.ts, fingerprint.ts,
  * types.ts, parsers/form.ts, parsers/pagination.ts, parsers/table.ts). Ported: the stateful ASP.NET
  * postback walk, the form/pager/grid parsers, normalisation, record id, fingerprint and the `dateRange`
@@ -45,13 +51,13 @@
  * `openssl s_client -showcerts`), so a Node-native TLS stack on Linux fails with "unable to verify the
  * first certificate" unless the intermediate is added to the trust store (the legacy Dockerfile did that
  * with NODE_EXTRA_CA_CERTS; its later `impit` transport completed the chain on its own, but the shared
- * lib/http.ts is Node's global `fetch`). The bundle (two PUBLIC Sectigo CA certificates, no private key) ships in
- * `latam-global-tender-intelligence/certs/cordoba-sectigo-chain.pem` and the engine's Dockerfile points
- * `NODE_EXTRA_CA_CERTS` at it, which ADDS to - never replaces - Node's trust store. A caller can still supply a PEM
- * through `sourceOptions.ar_cordoba.extraCaPem`: validated to contain CERTIFICATE blocks and nothing else (a PRIVATE
- * KEY block, or any stray content, is rejected in preflight), never logged, and forwarded as the `tlsExtraCaPem`
- * request hint. The default client cannot honour that hint per request (it logs a warning), so the process-level
- * NODE_EXTRA_CA_CERTS variable is the supported mechanism.
+ * lib/http.ts is Node's global `fetch`). The two PUBLIC Sectigo CA certificates it needs (intermediate + root, no
+ * private key) are NOT shipped in this package or its image: the source is held, so no extra trust anchor is added.
+ * On reactivation take them from the legacy repo (`cordoba-compras-monitor/certs/cordoba-sectigo-chain.pem`) and set
+ * `NODE_EXTRA_CA_CERTS` on the Actor process, which ADDS to - never replaces - Node's trust store. A caller can also
+ * supply a PEM through `sourceOptions.ar_cordoba.extraCaPem`: validated to contain CERTIFICATE blocks and nothing
+ * else (a PRIVATE KEY block, or any stray content, is rejected in preflight), never logged, and forwarded as the
+ * `tlsExtraCaPem` request hint, which the default client cannot honour per request (it logs a warning).
  *
  * ACCESS CONSTRAINT (read before enabling in the cloud)
  * ----------------------------------------------------------------------------
@@ -89,6 +95,7 @@
  * parsers are verified against the legacy repo's real captures of 2026-09-04 (trimmed, see the test header).
  * ============================================================================
  */
+import { findPemBlocks, removePemBlocks } from '../../lib/safe_text.js';
 import type { CheerioAPI } from 'cheerio';
 import * as cheerio from 'cheerio';
 import { z } from 'zod';
@@ -365,7 +372,6 @@ export function toSourceRecord(row: TenderRow): SourceRecord {
 
 const MAX_PEM_LENGTH = 65_536;
 const MAX_PEM_CERTIFICATES = 10;
-const CERTIFICATE_BLOCK = /-----BEGIN CERTIFICATE-----([\s\S]*?)-----END CERTIFICATE-----/g;
 
 /**
  * Returns why `pem` is not an acceptable extra-CA bundle, or null when it is. Only PUBLIC certificate blocks
@@ -377,14 +383,14 @@ export function certificateOnlyPemProblem(pem: string): string | null {
     if (/-----BEGIN (?!CERTIFICATE-----)/.test(pem) || /PRIVATE KEY-----/.test(pem)) {
         return 'contains private-key material or a non-certificate PEM block; only public "CERTIFICATE" blocks are accepted';
     }
-    const blocks = [...pem.matchAll(CERTIFICATE_BLOCK)];
+    const blocks = findPemBlocks(pem, 'CERTIFICATE');
     if (blocks.length === 0) return 'contains no "-----BEGIN CERTIFICATE-----" block';
     if (blocks.length > MAX_PEM_CERTIFICATES) return `contains more than ${MAX_PEM_CERTIFICATES} certificates`;
     for (const block of blocks) {
-        const body = (block[1] ?? '').replace(/\s+/g, '');
+        const body = block.body.replace(/\s+/g, '');
         if (body.length < 64 || body.length % 4 !== 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(body)) return 'contains a certificate block whose body is not valid base64';
     }
-    if (pem.replace(CERTIFICATE_BLOCK, '').trim() !== '') return 'contains content outside the certificate blocks';
+    if (removePemBlocks(pem, 'CERTIFICATE').trim() !== '') return 'contains content outside the certificate blocks';
     return null;
 }
 
@@ -544,7 +550,7 @@ export const arCordobaConnector: Connector<ArCordobaOptions> = {
 
     async fetch(ctx: ConnectorContext, options: ArCordobaOptions, run: RunParams): Promise<SourceRecord[]> {
         if (options.extraCaPem !== undefined) {
-            ctx.log.info(`[${CORDOBA_SOURCE_ID}] extra CA bundle supplied (${(options.extraCaPem.match(CERTIFICATE_BLOCK) ?? []).length} certificate(s)); forwarded as the tlsExtraCaPem request hint.`);
+            ctx.log.info(`[${CORDOBA_SOURCE_ID}] extra CA bundle supplied (${findPemBlocks(options.extraCaPem, 'CERTIFICATE').length} certificate(s)); forwarded as the tlsExtraCaPem request hint.`);
         }
         const rows = await walkGrid(ctx, run.maxItemsPerSource, options.extraCaPem);
         ctx.log.info(`[${CORDOBA_SOURCE_ID}] ${rows.length} licitaciones fetched${rows.length >= run.maxItemsPerSource ? ' (maxItemsPerSource reached - not necessarily the whole census)' : ''}.`);

@@ -1,13 +1,14 @@
 /**
  * Shared `main()` for all three engines: init, read input, run the router, map a
- * preflight failure to a FAILED run (so API callers see the real message, not a
- * SUCCEEDED run with an error row), and exit.
+ * preflight failure, or a run in which every selected source failed and nothing was
+ * delivered, to a FAILED run (so API callers see the real message, not a SUCCEEDED
+ * run with an error row), and exit.
  */
 import { Actor } from 'apify';
 
 import { createApifyLogger, createApifySinks } from './apify_adapters.js';
 import { createHttpClient } from './http.js';
-import { type EngineDefinition, runEngine } from './router_core.js';
+import { allSourcesFailed, describeSourceFailures, type EngineDefinition, runEngine } from './router_core.js';
 import { resolveStateNamespace } from './state.js';
 import { FatalConfigError } from './types.js';
 
@@ -26,6 +27,12 @@ export async function runEngineMain(engine: EngineDefinition, userAgent: string)
             sinks: createApifySinks(engine.slug, namespace),
             ctx: { http: createHttpClient({ userAgent, log }), log, now: () => new Date() },
         });
+        if (allSourcesFailed(summary)) {
+            const message = describeSourceFailures(summary);
+            log.error(message);
+            await Actor.fail(message);
+            return;
+        }
         log.info(`Done: ${summary.totalEmitted} record(s) emitted across ${summary.sources.length} source(s).`);
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);

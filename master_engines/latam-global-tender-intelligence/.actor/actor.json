@@ -3,7 +3,7 @@
     "actorSpecification": 1,
     "name": "latam-global-tender-intelligence",
     "title": "LatAm & Global Tender Intelligence - public procurement delta feed",
-    "description": "One Actor for public tenders and grants: Argentine provincial portals (Santa Fe, Tucuman, Entre Rios, Cordoba), Chile Diario Oficial, EU TED, Florida MFMP, World Bank notices and Regione Lombardia grants. Held sources (ar_salta, ar_mendoza, ar_pba, au_grantconnect, ADB, IDB) are refused with their reason.",
+    "description": "One Actor for public tenders and grants: Argentine provincial portals (Santa Fe, Tucuman, Entre Rios), Chile Diario Oficial, EU TED, Florida MFMP, World Bank notices and Regione Lombardia grants. Held sources (ar_cordoba, ar_salta, ar_mendoza, ar_pba, au_grantconnect, ADB, IDB) are refused with their reason.",
     "version": "0.1",
     "buildTag": "latest",
     "minMemoryMbytes": 1024,

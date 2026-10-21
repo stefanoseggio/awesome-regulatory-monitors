@@ -1,6 +1,6 @@
 /**
- * held_argentina.ts - the three Argentine provincial portals that are REGISTERED but must NEVER run:
- * `ar_salta`, `ar_mendoza`, `ar_pba`.
+ * held_argentina.ts - the four Argentine provincial portals that are REGISTERED but must NEVER run:
+ * `ar_salta`, `ar_mendoza`, `ar_pba`, `ar_cordoba`.
  *
  * Each is built with `createHeldConnector()`: it stays in the registry so that selecting it fails
  * preflight (`resolveSources` -> FatalConfigError) with a precise, auditable reason instead of
@@ -21,6 +21,18 @@
  *         Argentina proxy (~$7-8/GB). The shared lib/http.ts client has no proxy support and the
  *         compliance doctrine of this package does not route around network-level access blocks, so the
  *         source is held with the legacy reason.
+ *
+ * ar_cordoba (cordoba-compras-monitor)  DOCUMENTS THE SAME BLOCKING CONSTRAINT AS ar_pba. AGENTS.md (lines 86-88):
+ *         the portal "blocks non-Argentina/non-residential traffic, same as PBAC" - the failure is at TCP
+ *         level (10 s, both resolved IPs) - and the legacy actor "fixed [it] the same way" with a hardcoded
+ *         Residential + AR `Actor.createProxyConfiguration()` fallback. SECURITY.md (line 18) and README.md
+ *         (lines 48 and 78) repeat it: the actor "does require a paid Residential + Argentina Apify Proxy
+ *         group ... the source blocks non-residential, non-Argentina traffic at the network level".
+ *         AGENTS.md (lines 179-205) additionally records that the proxied path was never independently
+ *         verified from the real Linux container. Held by operator decision (the connector was first shipped
+ *         active, then transitioned to held): the shared lib/http.ts has no proxy support and the compliance
+ *         doctrine does not route around a network-level access block. The ported connector stays in
+ *         `connectors/arCordoba.ts` as DORMANT, tested code and is deliberately not imported by the registry.
  *
  * ar_salta (salta-compras-monitor)  DOCUMENTS NO BLOCKING CONSTRAINT. Its README "Reliability" and
  *         AGENTS.md "Architecture" state the opposite: plain server-rendered PHP (Apache/2.4.18), "no
@@ -53,6 +65,17 @@ export const PORTFOLIO_HOLD_REASON = 'held by portfolio decision (operator-desig
 
 export const PBA_HOLD_REASON =
     'pbac.cgp.gba.gov.ar blocks non-residential, non-Argentine traffic at the network level (legacy pba-tenders-monitor AGENTS.md "CRITICAL: PBAC blocks non-residential-Argentina traffic", verified 2026-09-04: every request from Apify\'s cloud with no proxy or a datacenter proxy timed out after 30 s across 4 retries, 0 successes in two cloud runs; only a paid Residential proxy with countryCode AR succeeded, which is how the legacy actor runs). The shared HTTP client has no proxy support and the compliance doctrine does not route around a network-level access block.';
+
+export const CORDOBA_HOLD_REASON =
+    'webecommerce.cba.gov.ar blocks non-residential, non-Argentine traffic at the network level (legacy cordoba-compras-monitor AGENTS.md lines 86-88: the failure is at TCP level and the portal blocks non-Argentina/non-residential traffic, same as PBAC; SECURITY.md and README.md state the actor requires a paid Residential + Argentina Apify Proxy group, and that proxied path was never independently verified from the real container). The shared HTTP client has no proxy support and the compliance doctrine does not route around a network-level access block.';
+
+export const arCordobaHeldConnector = createHeldConnector({
+    id: 'ar_cordoba',
+    engine: 'latam-global-tender-intelligence',
+    legacyActor: 'cordoba-compras-monitor',
+    description: 'Province of Cordoba (Argentina) Compras Publicas licitaciones, webecommerce.cba.gov.ar. HELD: cannot be selected.',
+    reason: CORDOBA_HOLD_REASON,
+});
 
 export const arSaltaConnector = createHeldConnector({
     id: 'ar_salta',

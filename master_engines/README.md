@@ -6,10 +6,10 @@ format, one set of billing guards; each source is a small connector.
 | Engine | Active sources | Held (registered, refused with a reason) |
 |---|---|---|
 | `global-regtech-compliance-feed` | `ofac`, `world_bank_debarred`, `uk_modern_slavery`, `sec_enforcement`, `ai_crawler_signals`, `fda_ema_recalls` | `paris_mou_thetis`, `tokyo_mou_apcis`, `imo_gisis` |
-| `latam-global-tender-intelligence` | `ar_santafe`, `ar_tucuman`, `ar_entrerios`, `ar_cordoba`, `cl_diario_oficial`, `eu_ted`, `us_florida`, `world_bank_notices`, `it_lombardia_grants` | `ar_salta`, `ar_mendoza`, `ar_pba`, `au_grantconnect`, `adb_procurement`, `idb_procurement` |
+| `latam-global-tender-intelligence` | `ar_santafe`, `ar_tucuman`, `ar_entrerios`, `cl_diario_oficial`, `eu_ted`, `us_florida`, `world_bank_notices`, `it_lombardia_grants` | `ar_cordoba`, `ar_salta`, `ar_mendoza`, `ar_pba`, `au_grantconnect`, `adb_procurement`, `idb_procurement` |
 | `global-corporate-patent-intelligence` | `uspto_ptab`, `epo_opposition`, `clinicaltrials_orange_book`, `sg_acra`, `ae_registers` | none |
 
-The strategy, governance and remediation matrix live in
+19 active and 10 held connectors in total. The strategy, governance and remediation matrices live in
 [`../docs/apify_portfolio_refactor_strategy_2026.md`](../docs/apify_portfolio_refactor_strategy_2026.md).
 The Apify pay-per-event policy research (with citations) is in
 [`docs-research/apify-ppe-policy-verification.md`](docs-research/apify-ppe-policy-verification.md).
@@ -25,6 +25,7 @@ lib/
   charge_watchlist_hit.ts  drop-in guarded Actor.charge('watchlist-hit')
   state.ts               delta memory (seenIds + fingerprints per source)
   http.ts                shared client: retries, Retry-After, body cap, redirect validation, getRaw
+  safe_text.ts           linear-time text helpers that replace quadratic regexes on hostile text
   apify_adapters.ts      the only file that imports the apify SDK
   connector_helpers.ts   fingerprintOf, dateRangeToFrom, createHeldConnector
 pricing/
@@ -37,8 +38,8 @@ pricing/
   main.ts                one line: runEngineMain(engine, userAgent)
   connectors/            one file per source (+ held registries)
   .actor/                generated: actor.json, input_schema.json, Dockerfile
-scripts/                 generate_pricing_payloads, generate_actor_files, stage_actor
-test/                    fixture-driven, no network
+scripts/                 generate_pricing_payloads, generate_actor_files, stage_actor, redos_audit
+test/                    fixture-driven, no network; support/ holds real-SDK child processes
 ```
 
 ## Running an engine
@@ -68,7 +69,9 @@ per-source counts, `warnings` (non-fatal problems such as one sub-source being d
 
 A failed preflight (unknown or held source, missing credential, invalid option, or a pricing that prices
 `apify-default-dataset-item`) ends the run `FAILED` with the full list of problems, before any network request or
-billable event.
+billable event. A run in which every selected source failed and nothing was delivered also ends `FAILED`, with one
+line per source; if at least one source answered (even with zero records) the run is `SUCCEEDED` and the per-source
+errors stay on `RUN_SUMMARY`.
 
 **Delta memory** is one key-value record per source, `state.<namespace>.<source>`, in the store `<engine>-delta-state`.
 Separate Tasks get separate memory (`stateNamespace`, default `task-<id>`), so they cannot consume each other's "new"
@@ -83,7 +86,8 @@ lists any event this run could bill that has no positive price in the Actor's li
 ```bash
 npm install
 npm run typecheck          # tsc --noEmit, strict
-npm test                   # vitest, no network
+npm test                   # vitest; fixtures, plus real-SDK scenarios in child processes (no network)
+npm install --no-save recheck && npm run audit:redos   # static ReDoS gate over every regex; exits non-zero on a new unbounded pattern
 npx tsx scripts/generate_actor_files.ts
 npx tsx scripts/generate_pricing_payloads.ts --now=<ISO instant> [--paying-users=false] [--strict]
 npx tsx scripts/stage_actor.ts <engine-slug> [--out=<dir>]   # self-contained build context for `apify push`

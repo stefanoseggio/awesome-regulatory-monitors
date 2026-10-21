@@ -35,6 +35,7 @@
  * ignores unknown init fields, so the hint is inert until the same lib change lands; the working
  * alternative today is the process-level `NODE_EXTRA_CA_CERTS` environment variable.
  */
+import { stripHtmlComments } from '../../lib/safe_text.js';
 import type { ConnectorContext, HttpClient, HttpRequestInit } from '../../lib/types.js';
 import { SourceFetchError } from '../../lib/types.js';
 
@@ -137,7 +138,7 @@ export async function fetchDecoded(ctx: ConnectorContext, url: string, options: 
     const text = await ctx.http.getText(url, init);
     // HTML comments are ignored on purpose: ar_tucuman's only raw high bytes sit inside dead comments (verified live), and a
     // replacement character there loses no data.
-    if (text.replace(/<!--[\s\S]*?-->/g, '').includes('�')) {
+    if (stripHtmlComments(text).includes('�')) {
         ctx.log.warning(
             `[${sourceId}] response contains U+FFFD after UTF-8 decoding; the portal declares ${charset}. ` +
                 'Some accented characters may be lost until HttpClient.getRaw is available.',

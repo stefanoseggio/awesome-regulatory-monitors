@@ -77,6 +77,8 @@ export const SEC_DEFAULT_USER_AGENT = 'DeltaRegistrySECMonitor/1.0 (+https://api
 /** Product tokens of real web browsers: sending one would be user-agent impersonation, which the compliance doctrine forbids. */
 const BROWSER_USER_AGENT = /\b(?:Chrome|Chromium|CriOS|Safari|Firefox|FxiOS|Edg|EdgA|EdgiOS|Edge|OPR|Opera|AppleWebKit|Version)\/|like Gecko|Trident|MSIE/iu;
 const CONTACT_MARKER = /(?:https?:\/\/\S+|[\w.+-]+@[\w-]+\.[\w.-]+)/iu;
+/** The userAgent option is bounded to 200 characters; the contact check re-asserts it so the regex never sees more. */
+const USER_AGENT_MAX = 200;
 
 export const secEnforcementOptionsSchema = z.object({
     /** Which of the two official SEC feeds to poll (legacy input `sources`). */
@@ -91,8 +93,8 @@ export const secEnforcementOptionsSchema = z.object({
         .min(8, 'userAgent must identify your organisation (min 8 characters)')
         .max(200)
         .regex(/^[\x20-\x7e]+$/, 'userAgent must be printable ASCII (no control characters or newlines)')
-        .refine((ua) => !BROWSER_USER_AGENT.test(ua), 'userAgent must identify this client honestly; a web-browser User-Agent is not allowed')
-        .refine((ua) => CONTACT_MARKER.test(ua), 'userAgent must include a contact (an http(s) URL or an e-mail address), as the SEC fair-access policy asks')
+        .refine((ua) => ua.length > USER_AGENT_MAX || !BROWSER_USER_AGENT.test(ua), 'userAgent must identify this client honestly; a web-browser User-Agent is not allowed')
+        .refine((ua) => ua.length <= USER_AGENT_MAX && CONTACT_MARKER.test(ua), 'userAgent must include a contact (an http(s) URL or an e-mail address), as the SEC fair-access policy asks')
         .default(SEC_DEFAULT_USER_AGENT),
     /**
      * Legacy-compat only. Deliberately `unknown` (the ghost-billing bug lived in trusting this field's type).
@@ -241,7 +243,9 @@ function maskParentheses(text: string): { masked: string; restore: (s: string) =
  * title-based split; that is why the watchlist is matched against the whole cleaned title, not this list.
  */
 export function splitRespondents(title: string): string[] {
-    const cleaned = cleanFeedText(title).replace(/\s+et\s+al\.?$/iu, '');
+    // `cleanFeedText` has collapsed every whitespace run to one space, so the literal-space patterns below are equivalent
+    // to their `\\s` forms and linear on a title made of repeated whitespace.
+    const cleaned = cleanFeedText(title).replace(/ et al\.?$/iu, '');
     if (cleaned === '') return [];
     const { masked, restore } = maskParentheses(cleaned);
 
@@ -250,9 +254,9 @@ export function splitRespondents(title: string): string[] {
         parts = masked.split(';');
     } else {
         parts = [];
-        for (const chunk of masked.split(/\s+and\s+/iu)) {
-            chunk.split(/\s*,\s*/u).forEach((fragment, index) => {
-                const bare = fragment.replace(/^and\s+/iu, '').trim();
+        for (const chunk of masked.split(/ and /iu)) {
+            chunk.split(/ ?, ?/u).forEach((fragment, index) => {
+                const bare = fragment.replace(/^and /iu, '').trim();
                 if (bare === '') return;
                 // A legal-form/honorific suffix ("Inc.", "LLC", "CPA", "III") or a capacity ("as Administrator of ...")
                 // stays attached to the name before it - but only within the same " and " chunk (index > 0).

@@ -21,7 +21,7 @@
 import { z } from 'zod';
 
 import { clampInteger, describeSanitization, findKeywordMatch, sanitizeKeywordList } from './_guards.js';
-import { type BillingPort, DEFAULT_DATASET_ITEM_EVENT, DEFAULT_HIT_BILLER_OPTIONS, RESULT_EVENT, WATCHLIST_HIT_EVENT, WatchlistHitBiller } from './charging.js';
+import { type BillingPort, DEFAULT_DATASET_ITEM_EVENT, DEFAULT_HIT_BILLER_OPTIONS, hasPositivePrice, RESULT_EVENT, WATCHLIST_HIT_EVENT, WatchlistHitBiller } from './charging.js';
 import { createScrubber, collectSecrets } from './secrets.js';
 import { classifyRecord, type DeltaStore, effectiveMaxSeenIds, markProcessed, type ProcessedRecord } from './state.js';
 import {
@@ -206,7 +206,7 @@ export interface PricingCheck {
 export function checkRuntimePricing(engine: EngineDefinition, selected: readonly ResolvedSource[], billing: BillingPort, watchlistActive: boolean): PricingCheck {
     if (!billing.isPayPerEvent()) return { unpricedEvents: [] };
     const prices = billing.perEventPrices();
-    const priced = (name: string): boolean => Object.prototype.hasOwnProperty.call(prices, name) && Number.isFinite(prices[name]) && (prices[name] as number) > 0;
+    const priced = (name: string): boolean => hasPositivePrice(prices, name);
 
     if (priced(DEFAULT_DATASET_ITEM_EVENT)) {
         throw new FatalConfigError(
@@ -418,6 +418,22 @@ export async function runEngine(engine: EngineDefinition, rawInput: unknown, dep
     };
     await sinks.saveSummary(summary);
     return summary;
+}
+
+/**
+ * True when the run selected at least one source, EVERY selected source failed its fetch, and nothing was delivered.
+ * Such a run has produced nothing a consumer can use and must end FAILED (so schedulers, integrations and alerting
+ * see it) instead of SUCCEEDED with an empty dataset. A run in which at least one source answered, even with zero
+ * records, is a normal run: per-source errors stay isolated on `RUN_SUMMARY.sources[].error`.
+ */
+export function allSourcesFailed(summary: RunSummary): boolean {
+    return summary.sources.length > 0 && summary.totalEmitted === 0 && summary.sources.every((source) => source.error !== undefined);
+}
+
+/** One line per failed source, for the FAILED status message. Messages are already credential-scrubbed by the router. */
+export function describeSourceFailures(summary: RunSummary): string {
+    const failures = summary.sources.filter((source) => source.error !== undefined).map((source) => `${source.source}: ${source.error}`);
+    return `All ${failures.length} selected source(s) failed and nothing was delivered. ${failures.join(' | ')}`.slice(0, 2000);
 }
 
 function dedupeById(records: SourceRecord[]): SourceRecord[] {

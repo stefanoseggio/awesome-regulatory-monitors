@@ -7,7 +7,7 @@
         "sources": {
             "title": "Sources to run",
             "type": "array",
-            "description": "Source ids to run in this execution. Held sources are not selectable: au_grantconnect, adb_procurement, idb_procurement, ar_salta, ar_mendoza, ar_pba.",
+            "description": "Source ids to run in this execution. Held sources are not selectable: au_grantconnect, adb_procurement, idb_procurement, ar_cordoba, ar_salta, ar_mendoza, ar_pba.",
             "editor": "select",
             "items": {
                 "type": "string",
@@ -15,7 +15,6 @@
                     "ar_santafe",
                     "ar_tucuman",
                     "ar_entrerios",
-                    "ar_cordoba",
                     "cl_diario_oficial",
                     "eu_ted",
                     "us_florida",
@@ -26,7 +25,6 @@
                     "Province of Santa Fe (Argentina) Gestiones de Compra: public tenders / purchasing process…",
                     "Province of Tucumán (Argentina) public tenders (licitaciones públicas / privadas, concurs…",
                     "Province of Entre Ríos (Argentina) Unidad Central de Contrataciones: licitaciones, solici…",
-                    "Province of Córdoba (Argentina) active licitaciones from the Compras Públicas portal (con…",
                     "Chile Diario Oficial (electronic edition): laws, decrees, resolutions and notices publish…",
                     "EU TED procurement notices (contract notices and award notices, all EU member states) via…",
                     "State of Florida MyFloridaMarketPlace Vendor Information Portal: every state-agency solic…",

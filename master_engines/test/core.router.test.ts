@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 import { FakeBilling, RESULT_EVENT, WATCHLIST_HIT_EVENT } from '../lib/charging.js';
 import { createHeldConnector } from '../lib/connector_helpers.js';
-import { billingEventFor, type EngineDefinition, mergeCredentialFields, resolveSources, runEngine, type RunSinks, shouldEmit } from '../lib/router_core.js';
+import { allSourcesFailed, billingEventFor, describeSourceFailures, type EngineDefinition, mergeCredentialFields, resolveSources, runEngine, type RunSinks, shouldEmit } from '../lib/router_core.js';
 import { InMemoryDeltaStore } from '../lib/state.js';
 import {
     type Connector,
@@ -268,6 +268,58 @@ describe('failure isolation', () => {
         const engine = engineOf(stub('first', [rec('1', 'a')]), stub('second', [rec('2', 'a')]));
         await runEngine(engine, { sources: ['first', 'second'] }, { sinks: h.sinks, ctx, clock });
         expect(store.saves).toBe(2);
+    });
+});
+
+describe('a run in which every source failed', () => {
+    const boom = (id: string, message: string) =>
+        stub(id, async () => {
+            throw new Error(message);
+        });
+
+    it('is flagged when every selected source errored and nothing was delivered', async () => {
+        const h = harness();
+        const summary = await runEngine(engineOf(boom('a', 'upstream 503'), boom('b', 'timeout')), { sources: ['a', 'b'] }, { sinks: h.sinks, ctx, clock });
+        expect(h.rows).toEqual([]);
+        expect(allSourcesFailed(summary)).toBe(true);
+        expect(describeSourceFailures(summary)).toBe('All 2 selected source(s) failed and nothing was delivered. a: upstream 503 | b: timeout');
+        // the summary is still saved, so the failure is inspectable
+        expect(h.summaries).toHaveLength(1);
+    });
+
+    it('is also flagged for a single selected source that errored', async () => {
+        const h = harness();
+        const summary = await runEngine(engineOf(boom('only', 'HTTP 500')), { sources: ['only'] }, { sinks: h.sinks, ctx, clock });
+        expect(allSourcesFailed(summary)).toBe(true);
+    });
+
+    it('is NOT flagged when one source answered, even with zero records (partial failure stays isolated)', async () => {
+        const h = harness();
+        const summary = await runEngine(engineOf(boom('a', 'upstream 503'), stub('empty', [])), { sources: ['a', 'empty'] }, { sinks: h.sinks, ctx, clock });
+        expect(allSourcesFailed(summary)).toBe(false);
+    });
+
+    it('is NOT flagged when a failing source was selected next to a source that delivered rows', async () => {
+        const h = harness();
+        const summary = await runEngine(engineOf(boom('a', 'upstream 503'), stub('ok', [rec('1', 'a')])), { sources: ['a', 'ok'] }, { sinks: h.sinks, ctx, clock });
+        expect(allSourcesFailed(summary)).toBe(false);
+        expect(summary.totalEmitted).toBe(1);
+    });
+
+    it('is NOT flagged for a healthy source with nothing new (an unchanged re-run is a success)', async () => {
+        const store = new InMemoryDeltaStore();
+        const h = harness({ store });
+        const engine = engineOf(stub('ok', [rec('1', 'a')]));
+        await runEngine(engine, { sources: ['ok'] }, { sinks: h.sinks, ctx, clock });
+        const again = await runEngine(engine, { sources: ['ok'] }, { sinks: h.sinks, ctx, clock });
+        expect(again.totalEmitted).toBe(0);
+        expect(allSourcesFailed(again)).toBe(false);
+    });
+
+    it('is not flagged for a run that stopped on the charge limit after failing nothing', async () => {
+        const h = harness({ budgetUsd: 0.002 });
+        const summary = await runEngine(engineOf(stub('ok', [rec('1', 'a'), rec('2', 'a')])), { sources: ['ok'] }, { sinks: h.sinks, ctx, clock });
+        expect(allSourcesFailed(summary)).toBe(false);
     });
 });
 

@@ -26,6 +26,13 @@ export const WATCHLIST_HIT_EVENT = 'watchlist-hit';
 /** Apify's automatic per-dataset-item event. It must never be priced alongside explicit events (double billing). */
 export const DEFAULT_DATASET_ITEM_EVENT = 'apify-default-dataset-item';
 
+/** True when `name` is an OWN property of `prices` with a finite price greater than zero (the only state in which an event bills). */
+export function hasPositivePrice(prices: Readonly<Record<string, number>>, name: string): boolean {
+    if (!Object.prototype.hasOwnProperty.call(prices, name)) return false;
+    const price = prices[name];
+    return typeof price === 'number' && Number.isFinite(price) && price > 0;
+}
+
 export interface PortChargeResult {
     chargedCount: number;
     eventChargeLimitReached: boolean;
@@ -114,11 +121,11 @@ export class WatchlistHitBiller {
         if (!this.billing.isPayPerEvent()) return 'skipped_not_ppe';
 
         const prices = this.billing.perEventPrices();
-        const price = Object.prototype.hasOwnProperty.call(prices, WATCHLIST_HIT_EVENT) ? prices[WATCHLIST_HIT_EVENT] : undefined;
-        if (typeof price !== 'number' || !Number.isFinite(price) || price <= 0) {
+        if (!hasPositivePrice(prices, WATCHLIST_HIT_EVENT)) {
             this.hitsUnpriced += 1;
             return 'skipped_unpriced';
         }
+        const price = prices[WATCHLIST_HIT_EVENT] as number;
 
         if (this.hitsCharged >= this.options.maxHitsPerRun || this.spendMicro + toMicro(price) > toMicro(this.options.maxHitSpendUsd)) {
             this.hitsCapped += 1;

@@ -90,7 +90,7 @@ export const TENDERS_PRICING: EnginePricing = {
     memoryMbytes: 1024,
     startPriceUsd: 0.005,
     events: [
-        { name: 'tender-detail', title: 'Tender record', description: 'One tender delivered with its full detail (buyer, budget, dates, documents).', priceUsd: 0.003, basis: 'legacy-readme', evidence: 'santafe-compras-monitor/README.md:70; florida-tenders-monitor/README.md:30; tucuman-compras-monitor/README.md:32; entrerios-compras-monitor/README.md:8; diario-oficial-cl-monitor/README.md:9. Cordoba documents only "from $0.001" (cordoba-compras-monitor/README.md:8): $0.003 is the sibling rate and is PROVISIONAL for ar_cordoba.', primary: true },
+        { name: 'tender-detail', title: 'Tender record', description: 'One tender delivered with its full detail (buyer, budget, dates, documents).', priceUsd: 0.003, basis: 'legacy-readme', evidence: 'santafe-compras-monitor/README.md:70; florida-tenders-monitor/README.md:30; tucuman-compras-monitor/README.md:32; entrerios-compras-monitor/README.md:8; diario-oficial-cl-monitor/README.md:9.', primary: true },
         { name: 'tender-summary', title: 'Tender summary record', description: 'One tender delivered from the listing only (no detail page fetched).', priceUsd: 0.001, basis: 'legacy-readme', evidence: 'santafe-compras-monitor/README.md:71; florida-tenders-monitor/README.md:31' },
         { name: 'notice-record', title: 'Procurement notice', description: 'One World Bank procurement notice delivered to the dataset.', priceUsd: 0.001, basis: 'legacy-readme', evidence: 'actor-20-mdb-procurement-monitor/README.md:63' },
         { name: 'notice-new', title: 'New EU TED notice', description: 'A TED procurement notice never delivered before.', priceUsd: 0.02, basis: 'legacy-readme', evidence: 'eu-ted-procurement-delta-monitor/README.md:187' },
@@ -103,7 +103,6 @@ export const TENDERS_PRICING: EnginePricing = {
         ar_santafe: { newEvent: 'tender-detail' },
         ar_tucuman: { newEvent: 'tender-detail' },
         ar_entrerios: { newEvent: 'tender-detail' },
-        ar_cordoba: { newEvent: 'tender-detail' },
         cl_diario_oficial: { newEvent: 'tender-detail' },
         us_florida: { newEvent: 'tender-detail' },
         world_bank_notices: { newEvent: 'notice-record' },

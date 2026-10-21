@@ -62,10 +62,8 @@ describe.each(TARGETS.map((t) => [t.engine.slug, t] as const))('%s actor files',
 });
 
 describe('engine-specific build details', () => {
-    it('only the tenders image trusts the Cordoba CA bundle', () => {
-        expect(buildDockerfile(tendersEngine)).toContain('NODE_EXTRA_CA_CERTS=/usr/src/app/latam-global-tender-intelligence/certs/cordoba-sectigo-chain.pem');
-        expect(buildDockerfile(regtechEngine)).not.toContain('NODE_EXTRA_CA_CERTS');
-        expect(buildDockerfile(patentsEngine)).not.toContain('NODE_EXTRA_CA_CERTS');
+    it('no engine image adds a trust anchor: the only source that needed one (ar_cordoba) is held', () => {
+        for (const { engine } of TARGETS) expect(buildDockerfile(engine)).not.toContain('NODE_EXTRA_CA_CERTS');
     });
 
     it('installs reproducibly from the lockfile (npm ci)', () => {
@@ -75,12 +73,6 @@ describe('engine-specific build details', () => {
             expect(docker).toContain('npm ci --omit=dev');
             expect(docker).not.toContain('npm install');
         }
-    });
-
-    it('the image path of the CA bundle exists in the staged build context', async () => {
-        const { access } = await import('node:fs/promises');
-        const { fileURLToPath } = await import('node:url');
-        await expect(access(fileURLToPath(new URL('../latam-global-tender-intelligence/certs/cordoba-sectigo-chain.pem', import.meta.url)))).resolves.toBeUndefined();
     });
 
     it('offers the stateNamespace input', () => {

@@ -1,14 +1,13 @@
 import type { EngineDefinition } from '../lib/router_core.js';
 import { applyCatalogBilling } from '../pricing/apply_billing.js';
 import { TENDERS_PRICING } from '../pricing/event_catalog.js';
-import { arCordobaConnector } from './connectors/arCordoba.js';
 import { arEntreRiosConnector } from './connectors/arEntreRios.js';
 import { arSantaFeConnector } from './connectors/arSantaFe.js';
 import { arTucumanConnector } from './connectors/arTucuman.js';
 import { auGrantconnectConnector } from './connectors/auGrantconnect.js';
 import { clDiarioOficialConnector } from './connectors/clDiarioOficial.js';
 import { euTedConnector } from './connectors/euTed.js';
-import { arMendozaConnector, arPbaConnector, arSaltaConnector } from './connectors/held_argentina.js';
+import { arCordobaHeldConnector, arMendozaConnector, arPbaConnector, arSaltaConnector } from './connectors/held_argentina.js';
 import { adbProcurementConnector, idbProcurementConnector } from './connectors/heldMdb.js';
 import { itLombardiaGrantsConnector } from './connectors/itLombardiaGrants.js';
 import { usFloridaConnector } from './connectors/usFlorida.js';
@@ -18,7 +17,7 @@ export const TENDERS_USER_AGENT = 'latam-global-tender-intelligence/0.1 (+https:
 
 /**
  * Explicit registry - never glob the connectors directory. The three Argentine portals designated HELD by the
- * operator (`ar_salta`, `ar_mendoza`, `ar_pba`) must stay registered so that selecting one yields the held
+ * operator (`ar_salta`, `ar_mendoza`, `ar_pba`, `ar_cordoba`) must stay registered so that selecting one yields the held
  * reason instead of "unknown source".
  */
 export const tendersEngine: EngineDefinition = applyCatalogBilling(
@@ -29,7 +28,6 @@ export const tendersEngine: EngineDefinition = applyCatalogBilling(
             arSantaFeConnector,
             arTucumanConnector,
             arEntreRiosConnector,
-            arCordobaConnector,
             clDiarioOficialConnector,
             euTedConnector,
             usFloridaConnector,
@@ -38,6 +36,7 @@ export const tendersEngine: EngineDefinition = applyCatalogBilling(
             auGrantconnectConnector,
             adbProcurementConnector,
             idbProcurementConnector,
+            arCordobaHeldConnector,
             arSaltaConnector,
             arMendozaConnector,
             arPbaConnector,

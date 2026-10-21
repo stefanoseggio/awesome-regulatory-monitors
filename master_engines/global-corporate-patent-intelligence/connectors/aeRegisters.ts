@@ -285,16 +285,21 @@ export function normalizeArabicText(text: string | null): string | null {
  * "Acme (Middle East) LLC") are untouched, since the regex only starts matching at the legal-form
  * letters themselves.
  */
-const LEGAL_FORM_PATTERNS: [RegExp, string][] = [
-    [/(?:\(\s*)?\bf\.?\s*z\.?\s*-?\s*l\.?\s*l\.?\s*c\.?(?![a-zA-Z])(?:\s*\))?/gi, 'FZ-LLC'],
-    [/(?:\(\s*)?\bl\.?\s*l\.?\s*c\.?(?![a-zA-Z])(?:\s*\))?/gi, 'LLC'],
-    [/(?:\(\s*)?\bp\.?\s*j\.?\s*s\.?\s*c\.?(?![a-zA-Z])(?:\s*\))?/gi, 'PJSC'],
-    [/(?:\(\s*)?\bp\.?\s*s\.?\s*c\.?(?![a-zA-Z])(?:\s*\))?/gi, 'PSC'],
-    [/(?:\(\s*)?\bsole\s+establishment(?![a-zA-Z])(?:\s*\))?/gi, 'Sole Establishment'],
-    [/(?:\(\s*)?\bsole\s+proprietorship(?![a-zA-Z])(?:\s*\))?/gi, 'Sole Establishment'],
-    [/(?:\(\s*)?\best\.?(?![a-zA-Z])(?:\s*\))?/gi, 'Est.'],
-    [/(?:\(\s*)?\bltd\.?(?![a-zA-Z])(?:\s*\))?/gi, 'Ltd'],
-    [/(?:\(\s*)?\blimited(?![a-zA-Z])(?:\s*\))?/gi, 'Limited'],
+/**
+ * NOTE: these run only on text that `collapseWhitespace` has already reduced to single spaces, so a literal space (or an
+ * optional one) is exactly equivalent to `\\s+` / `\\s*` and, unlike them, cannot backtrack polynomially on a long run of
+ * whitespace. Equivalence with the original `\\s` forms is tested in test/review_redos.test.ts.
+ */
+export const LEGAL_FORM_PATTERNS: [RegExp, string][] = [
+    [/(?:\( ?)?\bf\.? ?z\.? ?-? ?l\.? ?l\.? ?c\.?(?![a-zA-Z])(?: ?\))?/gi, 'FZ-LLC'],
+    [/(?:\( ?)?\bl\.? ?l\.? ?c\.?(?![a-zA-Z])(?: ?\))?/gi, 'LLC'],
+    [/(?:\( ?)?\bp\.? ?j\.? ?s\.? ?c\.?(?![a-zA-Z])(?: ?\))?/gi, 'PJSC'],
+    [/(?:\( ?)?\bp\.? ?s\.? ?c\.?(?![a-zA-Z])(?: ?\))?/gi, 'PSC'],
+    [/(?:\( ?)?\bsole establishment(?![a-zA-Z])(?: ?\))?/gi, 'Sole Establishment'],
+    [/(?:\( ?)?\bsole proprietorship(?![a-zA-Z])(?: ?\))?/gi, 'Sole Establishment'],
+    [/(?:\( ?)?\best\.?(?![a-zA-Z])(?: ?\))?/gi, 'Est.'],
+    [/(?:\( ?)?\bltd\.?(?![a-zA-Z])(?: ?\))?/gi, 'Ltd'],
+    [/(?:\( ?)?\blimited(?![a-zA-Z])(?: ?\))?/gi, 'Limited'],
 ];
 
 /**
@@ -804,14 +809,38 @@ export interface AuraBootstrap {
  * search-results page's HTML, in a `/s/sfsites/l/{urlEncodedJson}/bootstrap.js` resource reference; this
  * reads them from a fresh page exactly as a browser session would before making any Aura call.
  */
+/**
+ * Finds the URL-encoded config in `/s/sfsites/l/{urlEncodedJson}/bootstrap.js` with `indexOf` scans.
+ * Equivalent to `/\/s\/sfsites\/l\/(%7B[^"'\s]+?%7D)\/bootstrap\.js/.exec(html)?.[1]` but linear: that regular
+ * expression is quadratic on a page made of many repeated `/s/sfsites/l/%7B` prefixes with no `bootstrap.js` after them.
+ */
+export function findAuraBootstrapConfig(html: string): string | null {
+    const prefix = '/s/sfsites/l/%7B';
+    const suffix = '%7D/bootstrap.js';
+    let from = 0;
+    for (;;) {
+        const start = html.indexOf(prefix, from);
+        if (start === -1) return null;
+        // The config is a run of characters that are not a quote or whitespace.
+        let runEnd = start + prefix.length;
+        while (runEnd < html.length && !/["'\s]/u.test(html.charAt(runEnd))) runEnd += 1;
+        const configStart = start + '/s/sfsites/l/'.length;
+        // `%7B` then at least one character, then the first `%7D/bootstrap.js` inside the same run (lazy match).
+        const hit = html.slice(configStart, runEnd).indexOf(suffix, '%7B'.length + 1);
+        if (hit !== -1) return html.slice(configStart, configStart + hit + '%7D'.length);
+        // No suffix in this run: no later prefix inside the same run can have one either, so skip the whole run.
+        from = runEnd;
+    }
+}
+
 export function extractAuraBootstrap(html: string): AuraBootstrap {
-    const bootstrapMatch = /\/s\/sfsites\/l\/(%7B[^"'\s]+?%7D)\/bootstrap\.js/.exec(html);
-    if (!bootstrapMatch || bootstrapMatch[1] === undefined) {
+    const bootstrapConfig = findAuraBootstrapConfig(html);
+    if (bootstrapConfig === null) {
         throw new Error("Could not locate the Aura bootstrap config in ADGM's search-results page - the site structure may have changed.");
     }
     let decoded: { fwuid?: string; loaded?: Record<string, string> };
     try {
-        decoded = JSON.parse(decodeURIComponent(bootstrapMatch[1])) as typeof decoded;
+        decoded = JSON.parse(decodeURIComponent(bootstrapConfig)) as typeof decoded;
     } catch {
         throw new Error("ADGM's Aura bootstrap config was found but could not be decoded - the site structure may have changed.");
     }

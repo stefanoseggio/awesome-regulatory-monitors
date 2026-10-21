@@ -50,7 +50,7 @@ export interface HttpRequestInit {
     /**
      * Transport HINT: PEM CERTIFICATE blocks to ADD to the trust store for this request (never a private key).
      * The default client cannot honour it on Node's global `fetch` and logs a warning instead of ignoring it
-     * silently; set `NODE_EXTRA_CA_CERTS` on the Actor process (the engine Dockerfiles do) for the same effect.
+     * silently; set `NODE_EXTRA_CA_CERTS` on the Actor process for the same effect (no engine image currently needs it).
      */
     tlsExtraCaPem?: string;
 }

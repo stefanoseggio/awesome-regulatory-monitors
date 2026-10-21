@@ -4,7 +4,7 @@
  */
 import { Actor, log } from 'apify';
 
-import { type BillingPort, RESULT_EVENT } from './charging.js';
+import { type BillingPort, hasPositivePrice, RESULT_EVENT } from './charging.js';
 import type { RunSinks } from './router_core.js';
 import { type DeltaState, type DeltaStore, parseState, type SourceDeltaState } from './state.js';
 import type { EngineSlug, Logger, RunSummary } from './types.js';
@@ -81,13 +81,25 @@ export class ApifyBilling implements BillingPort {
 export function createApifySinks(engine: EngineSlug, namespace: string = 'default'): RunSinks {
     return {
         async emit(row, eventName = RESULT_EVENT) {
-            // `pushData(row, eventName)` limits by remaining budget, pushes, then bills
-            // `eventName` in one step - a separate Actor.charge() afterwards would double-bill.
-            // The pricing must NOT also carry `apify-default-dataset-item`: with both priced,
-            // pushData bills both events per row (verified in the installed SDK).
+            // `pushData(row, eventName)` trims the batch to the remaining budget, PUSHES, and only then calls the
+            // platform's charge API (verified in the installed SDK, charging.js pushDataAndCharge): ordered, not
+            // transactional. A crash between the two leaves a delivered row unbilled; a row is never billed
+            // without having been pushed. A separate Actor.charge() afterwards would double-bill.
+            // The pricing must NOT also carry `apify-default-dataset-item`: with both priced, pushData bills both
+            // events per row (the router refuses such a run in checkRuntimePricing).
+            // An event with no positive price is not requested: the SDK would treat it as free anyway and log a
+            // warning for every row. The run summary already records it under `pricing.unpricedEvents`.
+            const pricing = Actor.getChargingManager().getPricingInfo();
+            if (!pricing.isPayPerEvent || !hasPositivePrice(pricing.perEventPrices ?? {}, eventName)) {
+                // Not pay-per-event, or this event is free: a plain push, no charge call, no per-row SDK warning.
+                await Actor.pushData(row);
+                return { emitted: true, limitReached: false };
+            }
             const charge = await Actor.pushData(row, eventName);
-            const emitted = charge === undefined ? true : charge.chargedCount > 0 || !Actor.getChargingManager().getPricingInfo().isPayPerEvent;
-            return { emitted, limitReached: charge?.eventChargeLimitReached ?? false };
+            // At the budget limit the SDK pushes and bills ONE more row on purpose, "so the Platform terminates the run";
+            // that row counts as delivered and `eventChargeLimitReached` then stops the router. A row that was trimmed
+            // away by the budget (chargedCount 0) was NOT pushed.
+            return { emitted: charge.chargedCount > 0, limitReached: charge.eventChargeLimitReached };
         },
         billing: new ApifyBilling(),
         store: new ApifyDeltaStore(`${engine}-delta-state`, namespace),

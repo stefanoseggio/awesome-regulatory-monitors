@@ -61,6 +61,7 @@ import * as cheerio from 'cheerio';
 import { z } from 'zod';
 
 import { fingerprintOf } from '../../lib/connector_helpers.js';
+import { capLength, trimEdgeChar } from '../../lib/safe_text.js';
 import { type Connector, type ConnectorContext, type RunParams, SourceFetchError, type SourceRecord } from '../../lib/types.js';
 
 export const WORLD_BANK_DEBARRED_FIRMS_URL = 'https://www.worldbank.org/en/projects-operations/procurement/debarred-firms';
@@ -127,7 +128,8 @@ const MONTH_FULL: Record<string, number> = {
  */
 export function parseWorldBankSanctionDate(value: string | null | undefined): Date | null {
     if (!value) return null;
-    const match = value.match(/([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})/);
+    // A table cell holding a date: bounded so the pattern below is quadratic on at most 256 characters.
+    const match = capLength(value, 256).match(/([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})/);
     if (!match) return null;
     const [, monthName, dd, yyyy] = match;
     if (monthName === undefined || dd === undefined || yyyy === undefined) return null;
@@ -141,16 +143,14 @@ function toIsoOrNull(date: Date | null): string | null {
 }
 
 export function slugify(value: string): string {
-    return (
-        value
-            .toLowerCase()
-            .normalize('NFKD')
-            // Strip combining diacritical marks (U+0300-U+036F) left behind by NFKD, e.g. "é" -> "e".
-            .replace(/[\u0300-\u036f]/g, '')
-            .replace(/[^a-z0-9]+/g, '-')
-            .replace(/^-+|-+$/g, '')
-            .slice(0, 80)
-    );
+    const dashed = value
+        .toLowerCase()
+        .normalize('NFKD')
+        // Strip combining diacritical marks (U+0300-U+036F) left behind by NFKD, e.g. "é" -> "e".
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '-');
+    // Linear edge trim instead of /^-+|-+$/ (quadratic on a long run of dashes).
+    return trimEdgeChar(dashed, '-').slice(0, 80);
 }
 
 // ---------------------------------------------------------------------------

@@ -22,8 +22,4 @@ COPY --from=builder --chown=myuser:myuser /usr/src/app/dist ./dist
 
 COPY --chown=myuser:myuser . ./
 
-# The Cordoba portal sends only its leaf certificate. certs/ holds the two PUBLIC Sectigo CA certificates it omits
-# (intermediate + root, no private key); NODE_EXTRA_CA_CERTS adds them to - never replaces - the trust store.
-ENV NODE_EXTRA_CA_CERTS=/usr/src/app/latam-global-tender-intelligence/certs/cordoba-sectigo-chain.pem
-
 CMD ["node", "dist/latam-global-tender-intelligence/main.js"]

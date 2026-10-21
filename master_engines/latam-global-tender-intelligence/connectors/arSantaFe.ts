@@ -74,6 +74,7 @@ import { z } from 'zod';
 
 import { describeSanitization, sanitizeKeywordList } from '../../lib/_guards.js';
 import { fingerprintOf } from '../../lib/connector_helpers.js';
+import { capLength, stripTrailingDash } from '../../lib/safe_text.js';
 import { HttpStatusError } from '../../lib/http.js';
 import { type Connector, type ConnectorContext, type RunParams, SourceFetchError, type SourceRecord } from '../../lib/types.js';
 import { errorMessage } from '../support/portalHttp.js';
@@ -456,14 +457,17 @@ const EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 // Argentine phone fragments: "+54 9 342 45196329", "(0342) 450-6600", "342-4910056", "342 5083261"
 const PHONE_RE = /(?:\+54[\s-]*)?(?:9[\s-]*)?\(?0?\d{2,4}\)?[\s-]*\d{3,4}[\s-]?\d{3,5}/g;
 
+/** A contact field is a short free-text cell; the e-mail pattern is quadratic on long runs, so it never sees more than this. */
+export const MAX_CONTACT_TEXT = 1000;
+
 export function extractEmails(value: string | null | undefined): string[] {
     if (!value) return [];
-    return [...new Set((value.match(EMAIL_RE) ?? []).map((e) => e.toLowerCase()))];
+    return [...new Set((capLength(value, MAX_CONTACT_TEXT).match(EMAIL_RE) ?? []).map((e) => e.toLowerCase()))];
 }
 
 export function extractPhones(value: string | null | undefined): string[] {
     if (!value) return [];
-    const withoutEmails = value.replace(EMAIL_RE, ' ');
+    const withoutEmails = capLength(value, MAX_CONTACT_TEXT).replace(EMAIL_RE, ' ');
     return [...new Set((withoutEmails.match(PHONE_RE) ?? []).map((p) => p.replace(/\s+/g, ' ').trim()))].filter(
         (p) => p.replace(/\D/g, '').length >= 8,
     );
@@ -657,15 +661,19 @@ function splitDateAndNote(value: string | null): { when: string | null; note: st
     if (!value) return { when: null, note: null };
     const idx = value.indexOf(' - ');
     if (idx === -1) {
-        const trimmed = value.replace(/\s*-\s*$/, '');
+        const trimmed = stripTrailingDash(value);
         return { when: blankToNull(trimmed), note: null };
     }
     return { when: blankToNull(value.slice(0, idx)), note: blankToNull(value.slice(idx + 3)) };
 }
 
+/** A listing title is one short line; anything longer is not parsed into parts (the pattern below is cubic on long input). */
+export const MAX_TITLE_PARSE_LENGTH = 200;
+
 /** "LICITACIÓN PÚBLICA Nº 18/2026" -> parts. */
-function parseTitle(title: string | null): { tipo: string | null; numero: string | null; anio: string | null } {
+export function parseTitle(title: string | null): { tipo: string | null; numero: string | null; anio: string | null } {
     if (!title) return { tipo: null, numero: null, anio: null };
+    if (title.length > MAX_TITLE_PARSE_LENGTH) return { tipo: title, numero: null, anio: null };
     const match = title.match(/^(.*?)\s+N[º°o.]*\s*(\S+?)\/(\d{4})\s*$/i);
     if (!match) return { tipo: title, numero: null, anio: null };
     return { tipo: collapse(match[1] ?? '') || null, numero: match[2] ?? null, anio: match[3] ?? null };
@@ -916,12 +924,13 @@ export function resolveDate(value: string, now: Date, field: string): string {
     if (absolute) {
         const m = Number(absolute[2]);
         const d = Number(absolute[3]);
-        if (m < 1 || m > 12 || d < 1 || d > 31) throw new Error(`${field} "${v}" is not a valid date`);
+        if (m < 1 || m > 12 || d < 1 || d > 31) throw new Error(`${field} "${capLength(v, 80)}" is not a valid date`);
         return v;
     }
-    const relative = v.match(/^(?:(\+|-|in\s+)\s*)?(\d+)\s*(day|week|month|year)s?(?:\s+ago)?$/i);
+    // A relative window is a few characters ("+30 days"); the pattern is quadratic on long whitespace runs.
+    const relative = capLength(v, 64) === v ? v.match(/^(?:(\+|-|in\s+)\s*)?(\d+)\s*(day|week|month|year)s?(?:\s+ago)?$/i) : null;
     if (!relative) {
-        throw new Error(`${field} must be YYYY-MM-DD, "today", or a relative window like "7 days" (back) or "+30 days" (forward) - got "${v}"`);
+        throw new Error(`${field} must be YYYY-MM-DD, "today", or a relative window like "7 days" (back) or "+30 days" (forward) - got "${capLength(v, 80)}"`);
     }
     const sign = relative[1] && relative[1].trim() !== '-' ? 1 : -1;
     const amount = Number(relative[2]) * sign;

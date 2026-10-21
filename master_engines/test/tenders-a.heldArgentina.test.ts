@@ -1,5 +1,5 @@
 /**
- * Held Argentine portals (ar_salta, ar_mendoza, ar_pba): they must NEVER be runnable.
+ * Held Argentine portals (ar_salta, ar_mendoza, ar_pba, ar_cordoba): they must NEVER be runnable.
  *
  * The central claim proved here: selecting any of them makes the real preflight (`resolveSources`, and `runEngine`
  * which calls it) throw FatalConfigError containing the held reason - even when `sourceOptions` are supplied for it,
@@ -7,10 +7,10 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { arCordobaConnector } from '../latam-global-tender-intelligence/connectors/arCordoba.js';
 import { arSantaFeConnector } from '../latam-global-tender-intelligence/connectors/arSantaFe.js';
+import { arTucumanConnector } from '../latam-global-tender-intelligence/connectors/arTucuman.js';
 import * as held from '../latam-global-tender-intelligence/connectors/held_argentina.js';
-import { arMendozaConnector, arPbaConnector, arSaltaConnector, PBA_HOLD_REASON, PORTFOLIO_HOLD_REASON } from '../latam-global-tender-intelligence/connectors/held_argentina.js';
+import { arCordobaHeldConnector, arMendozaConnector, arPbaConnector, arSaltaConnector, CORDOBA_HOLD_REASON, PBA_HOLD_REASON, PORTFOLIO_HOLD_REASON } from '../latam-global-tender-intelligence/connectors/held_argentina.js';
 import { type EngineDefinition, EngineInputSchema, resolveSources, runEngine } from '../lib/router_core.js';
 import { InMemoryDeltaStore } from '../lib/state.js';
 import { type Connector, FatalConfigError } from '../lib/types.js';
@@ -21,11 +21,12 @@ const HELD: Array<[string, Connector<Record<string, unknown>>, string, string]> 
     ['ar_salta', arSaltaConnector, 'salta-compras-monitor', PORTFOLIO_HOLD_REASON],
     ['ar_mendoza', arMendozaConnector, 'mendoza-compras-monitor', PORTFOLIO_HOLD_REASON],
     ['ar_pba', arPbaConnector, 'pba-tenders-monitor', PBA_HOLD_REASON],
+    ['ar_cordoba', arCordobaHeldConnector, 'cordoba-compras-monitor', CORDOBA_HOLD_REASON],
 ];
 
 const engine: EngineDefinition = {
     slug: 'latam-global-tender-intelligence',
-    connectors: [arSantaFeConnector, arCordobaConnector, arSaltaConnector, arMendozaConnector, arPbaConnector],
+    connectors: [arSantaFeConnector, arTucumanConnector, arCordobaHeldConnector, arSaltaConnector, arMendozaConnector, arPbaConnector],
 };
 
 function thrown(fn: () => unknown): unknown {
@@ -38,8 +39,8 @@ function thrown(fn: () => unknown): unknown {
 }
 
 describe('the held connectors themselves', () => {
-    it('exports exactly the three held connectors and nothing else', () => {
-        expect(Object.keys(held).sort()).toEqual(['PBA_HOLD_REASON', 'PORTFOLIO_HOLD_REASON', 'arMendozaConnector', 'arPbaConnector', 'arSaltaConnector']);
+    it('exports exactly the four held connectors and their reasons, and nothing else', () => {
+        expect(Object.keys(held).sort()).toEqual(['CORDOBA_HOLD_REASON', 'PBA_HOLD_REASON', 'PORTFOLIO_HOLD_REASON', 'arCordobaHeldConnector', 'arMendozaConnector', 'arPbaConnector', 'arSaltaConnector']);
     });
 
     it.each(HELD)('%s is status "held", for the right engine and legacy actor, with its reason recorded', (id, connector, legacyActor, reason) => {
@@ -97,28 +98,30 @@ describe('preflight (the real resolveSources)', () => {
     });
 
     it('selecting a held source next to active ones still fails the WHOLE run (no partial run), listing every held source in one pass', () => {
-        const input = EngineInputSchema.parse({ sources: ['ar_santafe', 'ar_cordoba', 'ar_salta', 'ar_mendoza', 'ar_pba'] });
+        const input = EngineInputSchema.parse({ sources: ['ar_santafe', 'ar_tucuman', 'ar_cordoba', 'ar_salta', 'ar_mendoza', 'ar_pba'] });
         const error = thrown(() => resolveSources(engine, input)) as Error;
         expect(error).toBeInstanceOf(FatalConfigError);
         expect(error.message).toContain('Source "ar_salta" is HELD');
         expect(error.message).toContain('Source "ar_mendoza" is HELD');
         expect(error.message).toContain('Source "ar_pba" is HELD');
+        expect(error.message).toContain('Source "ar_cordoba" is HELD');
+        expect(error.message).toContain(CORDOBA_HOLD_REASON);
         expect(error.message).toContain(PORTFOLIO_HOLD_REASON);
         expect(error.message).toContain(PBA_HOLD_REASON);
         expect(error.message).not.toContain('ar_santafe');
-        expect(error.message).not.toContain('ar_cordoba');
+        expect(error.message).not.toContain('ar_tucuman');
     });
 
     it('the active sources of the same group resolve fine on their own (so the failures above are caused by the held status alone)', () => {
-        const resolved = resolveSources(engine, EngineInputSchema.parse({ sources: ['ar_santafe', 'ar_cordoba'] }));
-        expect(resolved.map((r) => r.connector.id)).toEqual(['ar_santafe', 'ar_cordoba']);
+        const resolved = resolveSources(engine, EngineInputSchema.parse({ sources: ['ar_santafe', 'ar_tucuman'] }));
+        expect(resolved.map((r) => r.connector.id)).toEqual(['ar_santafe', 'ar_tucuman']);
     });
 
     it('an unknown source lists only ACTIVE connectors as available, never the held ones', () => {
         const error = thrown(() => resolveSources(engine, EngineInputSchema.parse({ sources: ['ar_nowhere'] }))) as Error;
         expect(error.message).toContain('Unknown source "ar_nowhere"');
-        expect(error.message).toContain('Available: ar_santafe, ar_cordoba.');
-        expect(error.message).not.toMatch(/Available:[^.]*ar_(salta|mendoza|pba)/);
+        expect(error.message).toContain('Available: ar_santafe, ar_tucuman.');
+        expect(error.message).not.toMatch(/Available:[^.]*ar_(salta|mendoza|pba|cordoba)/);
     });
 });
 
