@@ -1,6 +1,6 @@
 /**
- * Regression tests for the findings of the independent review of the run lease, the fail-closed records and the router's
- * failure paths. Each test names the finding it pins (F-01 .. F-10). They are written to the behaviour the code must have; the
+ * Regression tests for the findings of the independent reviews of the run lease, the fail-closed records and the router's
+ * failure paths. Each test names the finding it pins (F-01 .. F-10 of the first review, LEASE-01 .. MOCK-03 of the second). They are written to the behaviour the code must have; the
  * review's reproductions showed the opposite on the code before the fixes.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -676,7 +676,7 @@ describe('LEASE-04 a failed acquire leaves no lease behind, even for a source th
     });
 });
 
-describe('LEASE-06 the status of another run is allowed ten seconds, then it is unknown', () => {
+describe('MOCK-03 the status of another run is allowed ten seconds, then it is unknown', () => {
     afterEach(() => {
         vi.useRealTimers();
     });

@@ -207,7 +207,7 @@ describe.concurrent('platform parity: a plain run at home', () => {
         });
     });
 
-    it('(a4) memory is read by name: a listing that hides every record does not make a source read as never seen', async () => {
+    it('(a4) LEASE-02: memory is read by name: a listing that hides every record does not make a source read as never seen', async () => {
         await withPlatform({ maxKeysPerPage: 2, listingHides: () => true }, async (platform) => {
             const kv = platform.kv(STORE);
             const ids = ['s1', 's2', 's3', 's4', 's5'];
@@ -223,7 +223,7 @@ describe.concurrent('platform parity: a plain run at home', () => {
         });
     });
 
-    it('(a5) the listing fallback of load() reads every page of the listing and ignores keys of other namespaces; load(sources) finds records the listing hides', async () => {
+    it('(a5) LEASE-02: the listing fallback of load() reads every page of the listing and ignores keys of other namespaces; load(sources) finds records the listing hides', async () => {
         await withPlatform({ maxKeysPerPage: 2, listingHides: (k) => k === key('state', 's4') }, async (platform) => {
             const kv = platform.kv(STORE);
             const ids = ['s1', 's2', 's3', 's4', 's5'];
