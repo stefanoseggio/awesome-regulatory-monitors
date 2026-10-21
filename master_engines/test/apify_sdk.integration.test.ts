@@ -272,11 +272,23 @@ describe('real Apify SDK: overlapping runs of the same namespace (run leases)', 
     const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
     const billedRows = (sb: Sandbox) => sb.pushes().filter((p) => p.event === 'doc-new').length;
     const leased = (extra: Record<string, string>) => ppe({ LEASES: '1', LEASE_SETTLE_MS: '300', ...extra });
+    /**
+     * Waits until the process `runLabel` has pushed `count` rows. A fixed sleep decided "A is in the middle of its run" by the clock,
+     * which is wrong whenever the machine is busy (a child process can take several seconds to start under the full suite).
+     */
+    async function untilPushed(sb: Sandbox, runLabel: string, count: number): Promise<void> {
+        const deadline = Date.now() + 80_000;
+        while (sb.pushes(runLabel).length < count) {
+            if (Date.now() > deadline) throw new Error(`run ${runLabel} did not push ${count} rows in time`);
+            await sleep(25);
+        }
+    }
+    const why = (c: { result: ChildResult | null; stderr: string; exitCode: number }) => JSON.stringify({ exitCode: c.exitCode, error: c.result?.error, stderrTail: c.stderr.slice(-400) });
 
     it('a second process started while the first is still delivering is refused before it pushes or bills anything; the first delivers every row exactly once', async () => {
         const sb = sandbox();
-        const first = child(sb, 'A', leased({ ROWS: '40', ROW_DELAY_MS: '60', RUN_ID: 'run-a' }));
-        await sleep(1_800); // past the lease acquisition and the first rows of A
+        const first = child(sb, 'A', leased({ ROWS: '40', ROW_DELAY_MS: '150', RUN_ID: 'run-a' }));
+        await untilPushed(sb, 'A', 3); // A holds its lease and is delivering
         const second = await child(sb, 'B', leased({ ROWS: '40', RUN_ID: 'run-b' }));
         expect(second.result?.ok).toBe(false);
         expect(second.result?.fatal).toBe(true);
@@ -294,9 +306,9 @@ describe('real Apify SDK: overlapping runs of the same namespace (run leases)', 
 
     it('without leases the same overlap delivers and bills the same rows twice (the control that shows what the lease prevents)', async () => {
         const sb = sandbox();
-        const first = child(sb, 'A', ppe({ ROWS: '40', ROW_DELAY_MS: '60' }));
-        await sleep(1_800);
-        const second = child(sb, 'B', ppe({ ROWS: '40', ROW_DELAY_MS: '60' }));
+        const first = child(sb, 'A', ppe({ ROWS: '40', ROW_DELAY_MS: '150' }));
+        await untilPushed(sb, 'A', 3);
+        const second = child(sb, 'B', ppe({ ROWS: '40', ROW_DELAY_MS: '150' }));
         await Promise.all([first, second]);
         expect(sb.pushes().length).toBeGreaterThan(40);
         expect(billedRows(sb)).toBeGreaterThan(40);
@@ -327,11 +339,12 @@ describe('real Apify SDK: overlapping runs of the same namespace (run leases)', 
 
     it('different namespaces overlap freely', async () => {
         const sb = sandbox();
-        const first = child(sb, 'A', leased({ ROWS: '20', ROW_DELAY_MS: '40', RUN_ID: 'run-a', NS: 'team-a' }));
-        await sleep(1_500);
+        const first = child(sb, 'A', leased({ ROWS: '20', ROW_DELAY_MS: '150', RUN_ID: 'run-a', NS: 'team-a' }));
+        await untilPushed(sb, 'A', 3);
         const second = await child(sb, 'B', leased({ ROWS: '20', RUN_ID: 'run-b', NS: 'team-b' }));
-        expect(second.result?.ok).toBe(true);
-        expect((await first).result?.ok).toBe(true);
+        expect(second.result?.ok, why(second)).toBe(true);
+        const firstDone = await first;
+        expect(firstDone.result?.ok, why(firstDone)).toBe(true);
         expect(sb.pushes()).toHaveLength(40);
     }, 180_000);
 });
