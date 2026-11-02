@@ -64,6 +64,13 @@
  *   - length <= {@link MAX_KEYWORD_LENGTH} (200) code points after cleaning                           (`too_long`)
  *   - de-duplicated case-insensitively; the first spelling wins
  *   - at most {@link MAX_KEYWORDS} (500) accepted; the rest are rejected as `over_limit`
+ *
+ * The WATCHLIST has a higher floor, {@link MIN_WATCHLIST_KEYWORD_LENGTH} (3), applied by {@link sanitizeWatchlist} to the three
+ * length rules above (code points after cleaning, visible code points, glyphs) and to the count of letters or digits. Two letters
+ * or digits, bare ("BP", "GE", "3M") or padded with punctuation ("a.b", "S.A."), are refused there as `too_short`. The reason is
+ * money: every match of a watchlist keyword is a billed `watchlist-hit`, and a two-character keyword ("AG", "SA", "LL") is a
+ * substring of a large share of company names. Every other caller keeps the floor of 2, because a two-character entry is a real
+ * value there (the SSIC division "62" of `sg_acra`, a two-letter sponsor). Finding F-11 of the review of 2026-11-02.
  *   - at most {@link MAX_CANDIDATES} (5,000) entries are inspected, and the string entries of at most
  *     {@link MAX_RAW_KEYWORD_UNITS} units that are inspected add up to at most
  *     {@link MAX_TOTAL_RAW_UNITS} (200,000) UTF-16 units (longer entries are rejected at once and cost nothing); the remainder is not read and is reported as ONE
@@ -96,6 +103,8 @@
  */
 
 export const MIN_KEYWORD_LENGTH = 2;
+/** The floor of the watchlist (see the header): `sanitizeWatchlist`, the Python port and the n8n Code nodes all use it. */
+export const MIN_WATCHLIST_KEYWORD_LENGTH = 3;
 export const MAX_KEYWORD_LENGTH = 200;
 export const MAX_KEYWORDS = 500;
 /** A raw keyword longer than this (UTF-16 units) is rejected before normalisation, whose cost is quadratic in the worst case. */
@@ -295,16 +304,26 @@ function cutUnits(text: string, max: number): string {
  * This function never throws and never returns an element that could match the
  * empty string.
  */
-export function sanitizeKeywordList(input: unknown): SanitizedKeywordList {
+export function sanitizeKeywordList(input: unknown, minLength: number = MIN_KEYWORD_LENGTH): SanitizedKeywordList {
+    // The floor can be raised, never lowered below the structural minimum.
+    const floor = Number.isInteger(minLength) && minLength > MIN_KEYWORD_LENGTH ? minLength : MIN_KEYWORD_LENGTH;
     try {
-        return sanitizeUnchecked(input);
+        return sanitizeUnchecked(input, floor);
     } catch {
         // A hostile in-process value (a revoked Proxy, a getter that throws) must disable the watchlist, not the run.
         return { keywords: [], needles: [], rejected: [{ value: '[unreadable value]', reason: 'not_a_string' }], malformedContainer: true };
     }
 }
 
-function sanitizeUnchecked(input: unknown): SanitizedKeywordList {
+/**
+ * The watchlist (`watchlistNames`) of a run: {@link sanitizeKeywordList} with the floor of {@link MIN_WATCHLIST_KEYWORD_LENGTH}.
+ * The only function that may feed the billed `watchlist-hit` event.
+ */
+export function sanitizeWatchlist(input: unknown): SanitizedKeywordList {
+    return sanitizeKeywordList(input, MIN_WATCHLIST_KEYWORD_LENGTH);
+}
+
+function sanitizeUnchecked(input: unknown, floor: number): SanitizedKeywordList {
     const result: SanitizedKeywordList = { keywords: [], needles: [], rejected: [], malformedContainer: false };
 
     if (input === undefined || input === null) return result;
@@ -360,16 +379,16 @@ function sanitizeUnchecked(input: unknown): SanitizedKeywordList {
             continue;
         }
         // Length in code points, not UTF-16 units: one astral-plane letter is ONE character, not two.
-        if (codePointLength(cleaned) < MIN_KEYWORD_LENGTH) {
+        if (codePointLength(cleaned) < floor) {
             result.rejected.push({ value: preview(candidate), reason: 'too_short' });
             continue;
         }
         // One glyph that NFKC expands (a circled number, the numero sign, a ligature) is one character typed, not two.
-        if (countVisible(candidate, MIN_KEYWORD_LENGTH) < MIN_KEYWORD_LENGTH) {
+        if (countVisible(candidate, floor) < floor) {
             result.rejected.push({ value: preview(candidate), reason: 'too_short' });
             continue;
         }
-        const lettersOrDigits = countLettersOrDigits(cleaned, 2);
+        const lettersOrDigits = countLettersOrDigits(cleaned, floor);
         if (lettersOrDigits === 0) {
             result.rejected.push({ value: preview(candidate), reason: 'no_letter_or_digit' });
             continue;
@@ -379,9 +398,14 @@ function sanitizeUnchecked(input: unknown): SanitizedKeywordList {
             result.rejected.push({ value: preview(candidate), reason: 'single_letter_or_digit' });
             continue;
         }
+        // Above the structural floor only: two letters or digits, bare or padded with punctuation ("BP", "a.b"), are short of a watchlist floor of 3.
+        if (lettersOrDigits < floor) {
+            result.rejected.push({ value: preview(candidate), reason: 'too_short' });
+            continue;
+        }
         // One expanding glyph plus punctuation ("⑳.", "№.") passes the count of visible code points and, once expanded, the letter
         // count: what was typed is still one character. Punctuation and marks are not characters of their own.
-        if (countGlyphs(candidate, MIN_KEYWORD_LENGTH) < MIN_KEYWORD_LENGTH) {
+        if (countGlyphs(candidate, floor) < floor) {
             result.rejected.push({ value: preview(candidate), reason: 'too_short' });
             continue;
         }

@@ -33,9 +33,10 @@ import {
     MAX_NORMALISE_PASSES,
     MAX_RAW_KEYWORD_UNITS,
     MAX_TOTAL_RAW_UNITS,
-    MIN_KEYWORD_LENGTH,
+    MIN_WATCHLIST_KEYWORD_LENGTH,
     normaliseKeyword,
     sanitizeKeywordList,
+    sanitizeWatchlist,
 } from '../lib/_guards.js';
 import { ALL_PRICING } from '../pricing/event_catalog.js';
 import {
@@ -206,7 +207,7 @@ describe('distribution data files', () => {
         it('records the guard limits, the removed code point and White_Space ranges and the namespace rule the Python package validates against', () => {
             expect(data.schemaVersion).toBe(1);
             expect(data.limits.watchlist).toEqual({
-                minKeywordLength: MIN_KEYWORD_LENGTH,
+                minKeywordLength: MIN_WATCHLIST_KEYWORD_LENGTH,
                 maxKeywordLength: MAX_KEYWORD_LENGTH,
                 maxKeywords: MAX_KEYWORDS,
                 maxRawKeywordUnits: MAX_RAW_KEYWORD_UNITS,
@@ -288,7 +289,7 @@ describe('distribution data files', () => {
 
         it('has the same guard constants in the Python port source', () => {
             const python = read('distribution/python/src/regulatory_engines/_guards.py');
-            const constants = { MIN_KEYWORD_LENGTH, MAX_KEYWORD_LENGTH, MAX_KEYWORDS, MAX_RAW_KEYWORD_UNITS, MAX_CANDIDATES, MAX_BARE_STRING_UNITS, MAX_HAYSTACK_UNITS, MAX_NORMALISE_PASSES, MAX_COMBINING_RUN, MAX_TOTAL_RAW_UNITS };
+            const constants = { MIN_KEYWORD_LENGTH: MIN_WATCHLIST_KEYWORD_LENGTH, MAX_KEYWORD_LENGTH, MAX_KEYWORDS, MAX_RAW_KEYWORD_UNITS, MAX_CANDIDATES, MAX_BARE_STRING_UNITS, MAX_HAYSTACK_UNITS, MAX_NORMALISE_PASSES, MAX_COMBINING_RUN, MAX_TOTAL_RAW_UNITS };
             for (const [name, value] of Object.entries(constants)) expect(python, name).toContain(`${name} = ${value}\n`);
         });
     });
@@ -327,7 +328,7 @@ describe('distribution data files', () => {
 
         it('every expected value is what the TypeScript guard returns for the input', () => {
             for (const entry of corpus.sanitize) {
-                const list = sanitizeKeywordList(entry.input);
+                const list = sanitizeWatchlist(entry.input);
                 expect(
                     { keywords: list.keywords, needles: list.needles, rejected: list.rejected, malformedContainer: list.malformedContainer },
                     entry.name,
@@ -335,7 +336,7 @@ describe('distribution data files', () => {
                 expect(describeSanitization(list), entry.name).toBe(entry.description);
             }
             for (const entry of corpus.normalise) expect(normaliseKeyword(entry.input), entry.name).toBe(entry.expected);
-            for (const entry of corpus.match) expect(findKeywordMatch(entry.haystack, sanitizeKeywordList(entry.keywords)), entry.name).toBe(entry.expected);
+            for (const entry of corpus.match) expect(findKeywordMatch(entry.haystack, sanitizeWatchlist(entry.keywords)), entry.name).toBe(entry.expected);
         });
 
         it('names the five ghost-billing inputs', () => {
@@ -381,13 +382,13 @@ describe('distribution data files', () => {
             const marker = (text: string) => ({ value: text, reason: 'over_limit' });
             const rawCap = sanitizeCase('raw cap: 4096 units around a keyword are cleaned, 4097 are too_long');
             expect((rawCap.input as string[]).map((text) => text.length)).toEqual([MAX_RAW_KEYWORD_UNITS, MAX_RAW_KEYWORD_UNITS + 1]);
-            expect(rawCap.expected.keywords).toEqual(['ab']);
+            expect(rawCap.expected.keywords).toEqual(['abc']);
             expect(rawCap.expected.rejected.map((r) => r.reason)).toEqual(['too_long']);
-            expect(rawCap.input).toEqual([`${zw.repeat(MAX_RAW_KEYWORD_UNITS - 2)}ab`, `${zw.repeat(MAX_RAW_KEYWORD_UNITS - 1)}cd`]);
+            expect(rawCap.input).toEqual([`${zw.repeat(MAX_RAW_KEYWORD_UNITS - 3)}abc`, `${zw.repeat(MAX_RAW_KEYWORD_UNITS - 1)}cd`]);
 
             const tags = sanitizeCase('raw cap: tag characters count two units each (4096 accepted, 4097 too_long)');
             expect((tags.input as string[]).map((text) => text.length)).toEqual([MAX_RAW_KEYWORD_UNITS, MAX_RAW_KEYWORD_UNITS + 1]);
-            expect(tags.expected.keywords).toEqual(['ab']);
+            expect(tags.expected.keywords).toEqual(['abcd']);
             expect(tags.expected.rejected.map((r) => r.reason)).toEqual(['too_long']);
 
             const surrogate = sanitizeCase('unicode: lone surrogate at the raw cap is invalid_unicode, one unit over it is too_long');
@@ -457,7 +458,7 @@ describe('distribution data files', () => {
             expect(apart.expected.rejected.map((r) => r.reason)).toEqual(['empty_after_normalisation']);
             const composed = sanitizeCase('marks: removal exposes a run on the second pass (the base composes with the first mark, so 16 remain)');
             expect(composed.expected.keywords).toHaveLength(2);
-            expect(composed.expected.keywords[0]?.length, 'b, a with its acute composed, then 16 marks').toBe(18);
+            expect(composed.expected.keywords[0]?.length, 'b, c, a with its acute composed, then 16 marks').toBe(19);
             expect(composed.expected.rejected.map((r) => r.reason)).toEqual(['empty_after_normalisation']);
             const attack = sanitizeCase('marks: the descending-class attack shape (NFKC must reorder it) is empty at once');
             expect((attack.input as string[])[0]?.length).toBe(MAX_RAW_KEYWORD_UNITS);
@@ -490,7 +491,7 @@ describe('distribution data files', () => {
                 ['cut: an astral character straddling unit 8192 and no whitespace', null],
                 ['cut: astral characters count two units each (the haystack is exactly 8192 units)', found],
                 ['cut: astral characters count two units each (8193 units and no whitespace)', null],
-                ['cut: astral characters before the cut count two units each', 'z\u{1f600}z'],
+                ['cut: astral characters before the cut count two units each', 'z\u{1f600}z\u{1f600}z'],
                 ['cut: a combining accent just beyond the window no longer creates a hit for the unaccented word', null],
                 ['cut: the accented word inside the window is the accented word', 'caf\u00e9'],
                 ['marks: 16 marks in a haystack are fine and the keyword before them is found', found],
@@ -511,7 +512,7 @@ describe('distribution data files', () => {
                 ['alnum: single-alphanumeric keywords are rejected, so they never match', null],
                 ['alnum: a pasted list with legal-form fragments matches only the names', null],
                 ['glyph: one expanding character is not a keyword, so it never matches its expansion', null],
-                ['glyph: two expanding characters are a keyword that matches their expansion', '2020'],
+                ['glyph: three expanding characters are a keyword that matches their expansion', '202020'],
                 ['expansion: a field of U+FDFA ligatures is cut out, the keyword after it is found', 'acme'],
                 ['expansion: a short haystack with a ligature inside the 4x allowance is searched', 'acme'],
                 ['expansion: a field past the allowance is cut out, the keyword next to it is found', 'acme'],
@@ -560,7 +561,7 @@ describe('distribution data files', () => {
 
         it('every accepted keyword list is a fixed point of the guard: sanitising it again accepts all of it and rejects nothing', () => {
             for (const entry of corpus.sanitize) {
-                const again = sanitizeKeywordList(entry.expected.keywords);
+                const again = sanitizeWatchlist(entry.expected.keywords);
                 expect({ keywords: again.keywords, needles: again.needles, rejected: again.rejected }, entry.name).toEqual({ keywords: entry.expected.keywords, needles: entry.expected.needles, rejected: [] });
             }
             for (const entry of corpus.normalise) expect(normaliseKeyword(entry.expected), entry.name).toBe(entry.expected);
@@ -584,8 +585,8 @@ describe('distribution data files', () => {
                     const once = normaliseKeyword(text);
                     if (normaliseKeyword(once) !== once) failures.push(`normalise: ${JSON.stringify(text)}`);
                 }
-                const first = sanitizeKeywordList(texts);
-                const again = sanitizeKeywordList(first.keywords);
+                const first = sanitizeWatchlist(texts);
+                const again = sanitizeWatchlist(first.keywords);
                 if (JSON.stringify([again.keywords, again.needles, again.rejected]) !== JSON.stringify([first.keywords, first.needles, []])) failures.push(`sanitize: ${JSON.stringify(texts)}`);
             }
             expect(failures.slice(0, 5)).toEqual([]);
@@ -1068,26 +1069,26 @@ describe('n8n templates', () => {
         it('has a Code node that cleans to a fixed point: a keyword whose second cleaning pass changes it is judged as the settled text', async () => {
             // "e", ZERO WIDTH SPACE, COMBINING ACUTE: removing the space exposes a sequence NFKC composes to U+00E9, one code point, so it is too_short. The
             // guard repeats the cleaning until nothing changes, so that is decided at once and the engine's own pass over what is sent changes nothing.
-            expect(sanitizeKeywordList(['e\u200b\u0301']).keywords).toEqual([]);
-            expect(sanitizeKeywordList(['e\u200b\u0301']).rejected.map((item) => item.reason)).toEqual(['too_short']);
+            expect(sanitizeWatchlist(['e\u200b\u0301']).keywords).toEqual([]);
+            expect(sanitizeWatchlist(['e\u200b\u0301']).rejected.map((item) => item.reason)).toEqual(['too_short']);
             await expect(runCodeNode(workflow, { watchlistNames: ['e\u200b\u0301'] })).rejects.toThrow(/refusing to run unfiltered/u);
-            // "ae" + ZWSP + acute settles to "a" + U+00E9 (two letters, accepted); "a" + ZWSP + two acutes settles to U+00E1 + U+0301, which holds ONE letter.
-            const result = await runCodeNode(workflow, { watchlistNames: ['e\u200b\u0301', 'a\u200b\u0301\u0301', 'ae\u200b\u0301', 'Acme'] });
+            // "abe" + ZWSP + acute settles to "ab" + U+00E9 (three letters, accepted; "ae" would be short of the watchlist floor); "a" + ZWSP + two acutes settles to U+00E1 + U+0301, which holds ONE letter.
+            const result = await runCodeNode(workflow, { watchlistNames: ['e\u200b\u0301', 'a\u200b\u0301\u0301', 'abe\u200b\u0301', 'Acme'] });
             const sent = result[0].json.input.watchlistNames as string[];
-            expect(sent).toEqual(['a\u00e9', 'Acme']);
-            expect(sanitizeKeywordList(sent).keywords, 'what is sent is a fixed point of the guard').toEqual(sent);
-            expect(sanitizeKeywordList(sent).rejected, 'and a second pass rejects nothing').toEqual([]);
-            expect(result[0].json.watchlist).toEqual({ accepted: 2, rejected: 2, rejectedByReason: { too_short: 1, single_letter_or_digit: 1 } });
+            expect(sent).toEqual(['ab\u00e9', 'Acme']);
+            expect(sanitizeWatchlist(sent).keywords, 'what is sent is a fixed point of the guard').toEqual(sent);
+            expect(sanitizeWatchlist(sent).rejected, 'and a second pass rejects nothing').toEqual([]);
+            expect(result[0].json.watchlist).toEqual({ accepted: 2, rejected: 2, rejectedByReason: { too_short: 2 } });
         });
 
         it('has a Code node that gives up on a text that has not settled after 8 cleaning passes (7 changes and one pass that finds nothing is still fine)', async () => {
             // cleanOnce is edited to append an "x" until the text holds K of them: it settles after K changing passes plus one pass that changes nothing.
             const settlesAfter = (changes: number) => (code: string) =>
                 replaceOnce(code, /return (normalised\.replace\([^\n]*\.trim\(\));/u, `const base = $1;\n    return (base.match(/x/gu) ?? []).length < ${changes} ? base + 'x' : base;`);
-            const seven = await runCodeNode(workflow, { watchlistNames: ['ab'] }, settlesAfter(MAX_NORMALISE_PASSES - 1));
-            expect(seven[0].json.input.watchlistNames).toEqual(['abxxxxxxx']);
-            await expect(runCodeNode(workflow, { watchlistNames: ['ab'] }, settlesAfter(MAX_NORMALISE_PASSES))).rejects.toThrow(/1 entries rejected/u);
-            await expect(runCodeNode(workflow, { watchlistNames: ['ab', '\u200b', 'Acme'] }, settlesAfter(MAX_NORMALISE_PASSES))).rejects.toThrow(/3 entries rejected/u);
+            const seven = await runCodeNode(workflow, { watchlistNames: ['abc'] }, settlesAfter(MAX_NORMALISE_PASSES - 1));
+            expect(seven[0].json.input.watchlistNames).toEqual(['abcxxxxxxx']);
+            await expect(runCodeNode(workflow, { watchlistNames: ['abc'] }, settlesAfter(MAX_NORMALISE_PASSES))).rejects.toThrow(/1 entries rejected/u);
+            await expect(runCodeNode(workflow, { watchlistNames: ['abc', '\u200b', 'Acme'] }, settlesAfter(MAX_NORMALISE_PASSES))).rejects.toThrow(/3 entries rejected/u);
         });
 
         it('has a Code node that rejects a lone surrogate before any cleaning, as invalid_unicode', async () => {
@@ -1102,8 +1103,8 @@ describe('n8n templates', () => {
 
         it('has a Code node with the raw keyword cap, the candidate cap, the total budget and the bare-string cut of the TypeScript guard', async () => {
             const zw = '\u200b';
-            const raw = await runCodeNode(workflow, { watchlistNames: [`${zw.repeat(MAX_RAW_KEYWORD_UNITS - 2)}ab`, `${zw.repeat(MAX_RAW_KEYWORD_UNITS - 1)}cd`] });
-            expect(raw[0].json.input.watchlistNames).toEqual(['ab']);
+            const raw = await runCodeNode(workflow, { watchlistNames: [`${zw.repeat(MAX_RAW_KEYWORD_UNITS - 3)}abc`, `${zw.repeat(MAX_RAW_KEYWORD_UNITS - 1)}cd`] });
+            expect(raw[0].json.input.watchlistNames).toEqual(['abc']);
             expect(raw[0].json.watchlist.rejectedByReason).toEqual({ too_long: 1 });
 
             const short = Array.from({ length: MAX_CANDIDATES - 1 }, () => 'a');
@@ -1158,9 +1159,9 @@ describe('n8n templates', () => {
         it('has a Code node that treats a text with more than 16 consecutive combining marks as empty, on every cleaning pass, before normalising it', async () => {
             const marks = (count: number, mark = '\u0301') => mark.repeat(count);
             const result = await runCodeNode(workflow, {
-                watchlistNames: [`ab${marks(16)}`, `ab${marks(17)}`, `cb${'\u0301\u200b'.repeat(17)}`, `ba${'\u0301\u200b'.repeat(17)}`, `ba${'\u0301\u200b'.repeat(18)}`, `ab${marks(17, '\uff9e')}`, 'Acme'],
+                watchlistNames: [`abd${marks(16)}`, `abd${marks(17)}`, `cbd${'\u0301\u200b'.repeat(17)}`, `bca${'\u0301\u200b'.repeat(17)}`, `bca${'\u0301\u200b'.repeat(18)}`, `abd${marks(17, '\uff9e')}`, 'Acme'],
             });
-            expect(result[0].json.input.watchlistNames).toEqual([`ab${marks(16)}`, `b\u00e1${marks(16)}`, 'Acme']);
+            expect(result[0].json.input.watchlistNames).toEqual([`abd${marks(16)}`, `bc\u00e1${marks(16)}`, 'Acme']);
             expect(result[0].json.watchlist).toEqual({ accepted: 3, rejected: 4, rejectedByReason: { empty_after_normalisation: 4 } });
             // the descending-class attack: NFKC would reorder 4094 marks, which is quadratic (about 18 ms each); 48 of them (just under the 200000 unit budget) must cost milliseconds
             const attack = Array.from({ length: 48 }, (_unused, index) => `${String.fromCharCode(97 + (index % 26))}${String.fromCharCode(97 + (Math.floor(index / 26) % 26))}${marks(1365, '\u0345')}${marks(1365, '\u0300')}${marks(1364, '\u0316')}`);
@@ -1217,7 +1218,7 @@ describe('n8n templates', () => {
         };
         // The generator's copy of the removal pattern has no g flag, so compare the character class alone.
         expect(literal(generatorSource, 'REMOVED_BY_THE_GUARD').replace(/\/u$/u, '/gu')).toBe(literal(guardSource, 'INVISIBLE'));
-        const constants = { MIN_KEYWORD_LENGTH, MAX_KEYWORD_LENGTH, MAX_KEYWORDS, MAX_RAW_KEYWORD_UNITS, MAX_CANDIDATES, MAX_BARE_STRING_UNITS, MAX_NORMALISE_PASSES, MAX_TOTAL_RAW_UNITS };
+        const constants = { MIN_KEYWORD_LENGTH: MIN_WATCHLIST_KEYWORD_LENGTH, MAX_KEYWORD_LENGTH, MAX_KEYWORDS, MAX_RAW_KEYWORD_UNITS, MAX_CANDIDATES, MAX_BARE_STRING_UNITS, MAX_NORMALISE_PASSES, MAX_TOTAL_RAW_UNITS };
         expect(literal(guardSource, 'COMBINING_RUN_TOO_LONG'), 'the pattern is MAX_COMBINING_RUN + 1 marks').toBe(`/[\\p{M}\\uFF9E\\uFF9F]{${MAX_COMBINING_RUN + 1}}/u`);
         for (const file of TEMPLATE_FILES) {
             const code = byName(load(file), 'Build run input').parameters.jsCode as string;

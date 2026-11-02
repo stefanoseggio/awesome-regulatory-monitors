@@ -597,7 +597,8 @@ function refCandidates(input: unknown): RefCandidates | null {
     return null;
 }
 
-function refSanitize(input: unknown): RefResult {
+/** The independent reference. `floor` is the keyword floor: 2 for sanitizeKeywordList (connector options), 3 for the watchlist. */
+function refSanitize(input: unknown, floor: number = REF_MIN_CODE_POINTS): RefResult {
     const out: RefResult = { keywords: [], needles: [], reasons: [], malformed: false, firstValid: new Map() };
     const found = refCandidates(input);
     if (found === null) {
@@ -632,15 +633,17 @@ function refSanitize(input: unknown): RefResult {
         const points = codePoints(cleaned);
         if (points === 0) {
             out.reasons.push('empty_after_normalisation');
-        } else if (points < REF_MIN_CODE_POINTS) {
+        } else if (points < floor) {
             out.reasons.push('too_short');
-        } else if (refVisibleCodePoints(candidate) < REF_MIN_CODE_POINTS) {
+        } else if (refVisibleCodePoints(candidate) < floor) {
             out.reasons.push('too_short');
         } else if (refCountLettersOrNumbers(cleaned) === 0) {
             out.reasons.push('no_letter_or_digit');
         } else if (refCountLettersOrNumbers(cleaned) === 1) {
             out.reasons.push('single_letter_or_digit');
-        } else if (refCountGlyphs(candidate) < REF_MIN_CODE_POINTS) {
+        } else if (refCountLettersOrNumbers(cleaned) < floor) {
+            out.reasons.push('too_short');
+        } else if (refCountGlyphs(candidate) < floor) {
             out.reasons.push('too_short');
         } else if (points > REF_MAX_CODE_POINTS) {
             out.reasons.push('too_long');
@@ -661,6 +664,11 @@ function refSanitize(input: unknown): RefResult {
     if (candidates.length > inspected) out.reasons.push('over_limit');
     if (found.bareStringCut) out.reasons.push('over_limit');
     return out;
+}
+
+/** The watchlist: the same reference with the floor of 3 (finding F-11). */
+function refSanitizeWatchlist(input: unknown): RefResult {
+    return refSanitize(input, 3);
 }
 
 function refFind(haystack: unknown, ref: RefResult): string | null {
@@ -2924,7 +2932,7 @@ describe('PART 3 poisoned watchlists never bill, end to end through runEngine', 
             const label = `poison scenario #${i} watchlist=${render(watchlist)}`;
 
             // The premise, established independently of the code under test: every entry is invalid after cleaning.
-            expect(refSanitize(watchlist).keywords, `${label}: premise (reference accepts nothing)`).toEqual([]);
+            expect(refSanitizeWatchlist(watchlist).keywords, `${label}: premise (reference accepts nothing)`).toEqual([]);
 
             const h = makeHarness();
             const summary = await run(records, watchlist, h);
@@ -2996,7 +3004,7 @@ function genValidScenario(i: number): ValidScenario {
     }
     const shape = rng.float();
     const watchlist: unknown = shape < 0.7 ? entries : entries.filter((e) => typeof e === 'string').join(rng.pick([',', ';', '\n']));
-    const oracle = refSanitize(watchlist);
+    const oracle = refSanitizeWatchlist(watchlist);
 
     const texts: Array<string | undefined> = [];
     const rowCount = rng.range(6, 20);
@@ -3095,7 +3103,7 @@ describe('PART 3 valid watchlists are charged exactly once per matched row and n
 
         for (let i = 0; i < VALID_SCENARIOS; i += 1) {
             const s = genValidScenario(i);
-            const oracle = refSanitize(s.watchlist);
+            const oracle = refSanitizeWatchlist(s.watchlist);
             const label = `valid scenario #${i} (${s.mode}, price ${s.priceMicro}e-6, cap ${s.capMicro}e-6, hitCap ${s.hitCap}) watchlist=${render(s.watchlist)}`;
             const prices = priceBookFor(s, i);
             const h = makeHarness({ ppe: s.mode !== 'notPpe', prices });
@@ -3169,7 +3177,7 @@ describe('PART 3 valid watchlists are charged exactly once per matched row and n
         for (let i = 0; i < BUDGET_SCENARIOS; i += 1) {
             const s = genValidScenario(10_000 + i);
             const rng = makeRng(caseSeed(i, 0x801));
-            const oracle = refSanitize(s.watchlist);
+            const oracle = refSanitizeWatchlist(s.watchlist);
             // Three price patterns. With a cheap hit the budget can still afford a hit on the very row whose own charge
             // exhausted it, which the router must NOT spend (the SDK would overcharge by one to stop the run). The middling
             // pattern (a 0.03 hit against a 0.05 row) can leave too little for the next row; the dedicated test below pins
@@ -3224,7 +3232,7 @@ describe('PART 3 a row whose own charge is refused outright stops the run before
     it('with a 0.05 row and a 0.03 hit, a hit that leaves less than one row price makes the next row the refused one', async () => {
         const rowCount = 12;
         const texts = Array.from({ length: rowCount }, () => 'Acme Corp LLC');
-        const oracle = refSanitize(['acme']);
+        const oracle = refSanitizeWatchlist(['acme']);
         const prices = { [RESULT_EVENT]: 0.05, [WATCHLIST_HIT_EVENT]: 0.03 };
         let refusedWithRowsLeft = 0;
         for (const budget of [0.11, 0.12, 0.19, 0.2, 0.27, 0.28, 0.35, 0.36]) {
@@ -3327,8 +3335,8 @@ describe('PART 3 attacker scenarios through runEngine', () => {
     });
 
     it('a 1 MB string of one repeated valid keyword is accepted once and charged once per matching row', async () => {
-        const flood = 'ab,'.repeat(350_000);
-        const records = makeRecords(['Cabin', 'zzz', 'AB']);
+        const flood = 'abc,'.repeat(262_500);
+        const records = makeRecords(['Cabcd', 'zzz', 'ABC']);
         const h = makeHarness();
         const summary = await run(records, flood, h);
         expect(summary.watchlist.accepted).toBe(1);

@@ -15,7 +15,7 @@
     },
     "stateNamespacePattern": "^[a-z0-9-]{1,40}$",
     "watchlist": {
-      "minKeywordLength": 2,
+      "minKeywordLength": 3,
       "maxKeywordLength": 200,
       "maxKeywords": 500,
       "maxRawKeywordUnits": 4096,

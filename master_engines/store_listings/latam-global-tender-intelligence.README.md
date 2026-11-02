@@ -60,7 +60,7 @@ A run ends `FAILED` when preflight finds a problem (an unknown or held source, a
 
 ## Watchlist
 
-`watchlistNames` is a list of keywords matched case-insensitively as substrings against each record's text (buyer, object, issuing authority and similar). Entries shorter than two characters, blank or punctuation-only entries are ignored; with no valid keyword nothing matches. A matching record is flagged `is_watchlist_match` and billed a **Watchlist hit** event on top of its row event. Two hard ceilings apply per run: `maxWatchlistHitsPerRun` (default 200) and `maxWatchlistSpendUsd` (default 50). Use broad keywords with care.
+`watchlistNames` is a list of keywords matched case-insensitively as substrings against each record's text (buyer, object, issuing authority and similar). Entries shorter than three characters (letters or digits, not counting punctuation), blank or punctuation-only entries are ignored; with no valid keyword nothing matches. A matching record is flagged `is_watchlist_match` and billed a **Watchlist hit** event on top of its row event. Two hard ceilings apply per run: `maxWatchlistHitsPerRun` (default 200) and `maxWatchlistSpendUsd` (default 50). Use broad keywords with care.
 
 ## Pricing
 

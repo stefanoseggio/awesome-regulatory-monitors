@@ -20,7 +20,7 @@
  */
 import { z } from 'zod';
 
-import { clampInteger, describeSanitization, findKeywordMatch, sanitizeKeywordList } from './_guards.js';
+import { clampInteger, describeSanitization, findKeywordMatch, sanitizeWatchlist } from './_guards.js';
 import { type BillingPort, DEFAULT_DATASET_ITEM_EVENT, DEFAULT_HIT_BILLER_OPTIONS, hasPositivePrice, RESULT_EVENT, WATCHLIST_HIT_EVENT, WatchlistHitBiller } from './charging.js';
 import { LeaseLostError, type RunLeasePort } from './lease.js';
 import { createScrubber, collectSecrets } from './secrets.js';
@@ -88,7 +88,7 @@ export const EngineInputSchema = z.object({
     maxItemsPerSource: z.number().int().min(1).max(10_000).default(500),
     /**
      * Deliberately `unknown`: the SEC ghost-billing bug lived in trusting this
-     * field's type. It is only ever read through `sanitizeKeywordList`.
+     * field's type. It is only ever read through `sanitizeWatchlist`.
      */
     watchlistNames: z.unknown().optional(),
     maxWatchlistHitsPerRun: z.number().int().min(0).max(100_000).default(DEFAULT_HIT_BILLER_OPTIONS.maxHitsPerRun),
@@ -268,7 +268,7 @@ export async function runEngine(engine: EngineDefinition, rawInput: unknown, dep
     };
 
     // 4. WATCHLIST - sanitised exactly once, up front.
-    const watchlist = sanitizeKeywordList(input.watchlistNames);
+    const watchlist = sanitizeWatchlist(input.watchlistNames);
     if (input.watchlistNames !== undefined) ctx.log.info(describeSanitization(watchlist));
 
     // LIVE pricing check (pay-per-event runs): refuse a double-billing configuration, record unpriced events.

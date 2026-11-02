@@ -122,7 +122,7 @@ export function buildInputSchema(engine: EngineDefinition): Record<string, unkno
             title: 'Watchlist keywords',
             type: 'array',
             description:
-                'Case-insensitive substrings matched against each record\'s names. Entries shorter than 2 characters, blank or punctuation-only entries are ignored. With no valid keyword nothing matches and the watchlist-hit event is never charged.',
+                'Case-insensitive substrings matched against each record\'s names. Entries shorter than 3 characters, blank or punctuation-only entries are ignored. With no valid keyword nothing matches and the watchlist-hit event is never charged.',
             editor: 'stringList',
             default: [],
         },

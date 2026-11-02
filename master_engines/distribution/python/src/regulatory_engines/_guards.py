@@ -16,8 +16,9 @@ Validation, per keyword and in this order:
     more than ``MAX_COMBINING_RUN`` consecutive combining marks is empty, tested before every pass's NFKC, and so is a text that NFKC
     expands to more than four times its length plus 16 units) -> at least ``MIN_KEYWORD_LENGTH`` code points after cleaning and at least
     that many visible code points BEFORE it (one glyph that NFKC expands, such as the circled number twenty, is one character) ->
-    at least one letter or number (``no_letter_or_digit``) and at least TWO (``single_letter_or_digit``: ``c.``, ``a |`` and ``-0`` are the
-    one-letter needle in disguise) -> at least 2 glyphs (letters, numbers, symbols) before NFKC (``too_short``: an expanding glyph plus punctuation is one
+    at least one letter or number (``no_letter_or_digit``), at least TWO (``single_letter_or_digit``: ``c.``, ``a |`` and ``-0`` are the
+    one-letter needle in disguise) and at least ``MIN_KEYWORD_LENGTH`` (``too_short``: ``BP`` and ``a.b`` are short of the watchlist floor) -> at least
+    ``MIN_KEYWORD_LENGTH`` glyphs (letters, numbers, symbols) before NFKC (``too_short``: an expanding glyph plus punctuation is one
     character) -> at most ``MAX_KEYWORD_LENGTH`` -> case-insensitive de-duplication (first spelling wins) ->
     at most ``MAX_KEYWORDS`` accepted.
 At most ``MAX_CANDIDATES`` entries are inspected, and the string entries inspected (those of ``MAX_RAW_KEYWORD_UNITS`` units or fewer;
@@ -28,7 +29,7 @@ that cut anything off, its last piece (which the cut may have truncated) is drop
 White_Space character inside that window (nothing is searched when the window has none). A haystack with a run of more than ``MAX_COMBINING_RUN``
 combining marks is searched with the run cut to its first ``MAX_COMBINING_RUN`` marks (one hostile field must not hide a record); a KEYWORD with such a
 run is rejected. ``find_keyword_match`` and ``describe_sanitization`` never raise, and ``find_keyword_match`` re-checks every needle (at least
-``MIN_KEYWORD_LENGTH`` code points and two letters or numbers) and reads at most ``MAX_KEYWORDS`` of them.
+two code points and two letters or numbers, the structural floor of the TypeScript guard) and reads at most ``MAX_KEYWORDS`` of them.
 
 What "invisible" means is NOT read from ``unicodedata``: JavaScript removes every Default_Ignorable_Code_Point and Bidi_Control
 character plus the C0/C1 controls, and Python's tables can neither list those properties nor be trusted to equal Node's Unicode
@@ -58,7 +59,11 @@ from typing import Any
 from ._js import JS_WHITESPACE_CHARS, has_surrogate, js_includes, to_js_string, utf16_cut, utf16_length
 from .registry import load_registry
 
-MIN_KEYWORD_LENGTH = 2
+# The floor of the watchlist (finding F-11): the Python port, like the n8n Code nodes, cleans a watchlist and nothing else. The TypeScript guard keeps
+# a floor of 2 for the connector options it also reads (the SSIC division "62"); see MIN_KEYWORD_LENGTH and MIN_WATCHLIST_KEYWORD_LENGTH in lib/_guards.ts.
+MIN_KEYWORD_LENGTH = 3
+# What a needle of a hand-built list must have (the TypeScript guard re-checks needles against its structural floor, not the watchlist floor).
+_STRUCTURAL_MIN_LENGTH = 2
 MAX_KEYWORD_LENGTH = 200
 MAX_KEYWORDS = 500
 MAX_RAW_KEYWORD_UNITS = 4096
@@ -357,13 +362,17 @@ def _sanitize(value: Any) -> SanitizedKeywordList:
         if _count_visible(candidate, MIN_KEYWORD_LENGTH) < MIN_KEYWORD_LENGTH:
             rejected.append(RejectedKeyword(_preview(candidate), "too_short"))
             continue
-        letters_or_digits = _count_letters_or_digits(cleaned, 2)
+        letters_or_digits = _count_letters_or_digits(cleaned, MIN_KEYWORD_LENGTH)
         if letters_or_digits == 0:
             rejected.append(RejectedKeyword(_preview(candidate), "no_letter_or_digit"))
             continue
         # One letter or digit padded with punctuation ("c.", "a |", "-0") matches almost everything: the one-letter needle in disguise.
         if letters_or_digits == 1:
             rejected.append(RejectedKeyword(_preview(candidate), "single_letter_or_digit"))
+            continue
+        # Two letters or digits, bare or padded with punctuation ("BP", "a.b"), are short of the watchlist floor of 3.
+        if letters_or_digits < MIN_KEYWORD_LENGTH:
+            rejected.append(RejectedKeyword(_preview(candidate), "too_short"))
             continue
         # One expanding glyph padded with punctuation ("circled twenty" + a full stop) is still one character typed.
         if _count_glyphs(candidate, MIN_KEYWORD_LENGTH) < MIN_KEYWORD_LENGTH:
@@ -411,7 +420,7 @@ def find_keyword_match(haystack: Any, keyword_list: SanitizedKeywordList) -> str
     """The first accepted keyword found in ``haystack`` (case-insensitive, NFKC-normalised substring match over UTF-16 units), or ``None``. Never raises.
 
     An empty list never matches, an empty or non-string haystack never matches, and a needle that is not a string of at most 400 units with at least
-    ``MIN_KEYWORD_LENGTH`` code points and two letters or numbers, no lone surrogate and no NUL is skipped (a hand-built list cannot match ``".."`` or half
+    two code points and two letters or numbers, no lone surrogate and no NUL is skipped (a hand-built list cannot match ``".."`` or half
     of an astral character), exactly as the TypeScript guard does. At most ``MAX_KEYWORDS`` needles are read. A haystack of more than ``MAX_HAYSTACK_UNITS`` UTF-16 units is searched only up to the last whitespace
     character inside that window, cut before cleaning (see ``_cut_haystack``); a run of more than ``MAX_COMBINING_RUN`` combining marks in the
     searched text is cut to its first ``MAX_COMBINING_RUN`` marks. A haystack that NFKC would grow past four times its length plus 16 units is searched in pieces
@@ -466,7 +475,7 @@ def _is_usable_needle(needle: Any) -> bool:
         utf16_length(seen) <= 2 * MAX_KEYWORD_LENGTH
         and _PIECE_SEPARATOR not in seen
         and not has_surrogate(seen)
-        and _code_point_length(seen) >= MIN_KEYWORD_LENGTH
+        and _code_point_length(seen) >= _STRUCTURAL_MIN_LENGTH
         and _count_letters_or_digits(seen, 2) >= 2
     )
 

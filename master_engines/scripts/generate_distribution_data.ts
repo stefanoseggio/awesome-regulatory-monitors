@@ -35,9 +35,9 @@ import {
     MAX_NORMALISE_PASSES,
     MAX_RAW_KEYWORD_UNITS,
     MAX_TOTAL_RAW_UNITS,
-    MIN_KEYWORD_LENGTH,
+    MIN_WATCHLIST_KEYWORD_LENGTH,
     normaliseKeyword,
-    sanitizeKeywordList,
+    sanitizeWatchlist,
 } from '../lib/_guards.js';
 import { DEFAULT_HIT_BILLER_OPTIONS, START_EVENT, WATCHLIST_HIT_EVENT } from '../lib/charging.js';
 import { billingEventFor, type EngineDefinition, EngineInputSchema } from '../lib/router_core.js';
@@ -149,7 +149,7 @@ export function buildEnginesData(): Record<string, unknown> {
             maxItemsPerSource: { min: maxItems.minValue, max: maxItems.maxValue, default: EngineInputSchema.shape.maxItemsPerSource.parse(undefined) },
             stateNamespacePattern: NAMESPACE_PATTERN.source,
             watchlist: {
-                minKeywordLength: MIN_KEYWORD_LENGTH,
+                minKeywordLength: MIN_WATCHLIST_KEYWORD_LENGTH,
                 maxKeywordLength: MAX_KEYWORD_LENGTH,
                 maxKeywords: MAX_KEYWORDS,
                 maxRawKeywordUnits: MAX_RAW_KEYWORD_UNITS,
@@ -249,7 +249,7 @@ function randomWatchlistInput(rng: () => number): unknown {
     }
     if (roll < 0.22) {
         // Invisible padding of 4090 to 4101 units around a short word: some entries are within the raw cap (and cleaned), some are one unit over it.
-        const word = ['ab', 'Acme', 'x', '\u00e9'][Math.floor(rng() * 4)] ?? 'ab';
+        const word = ['abc', 'Acme', 'x', '\u00e9'][Math.floor(rng() * 4)] ?? 'abc';
         const filler = PADDING_CHARS[Math.floor(rng() * PADDING_CHARS.length)] ?? '\u200b';
         const padding = filler.repeat(MAX_RAW_KEYWORD_UNITS - 6 + Math.floor(rng() * 12) - word.length);
         const entry = rng() < 0.5 ? `${padding}${word}` : `${word}${padding}`;
@@ -386,12 +386,12 @@ const NAMED_SANITIZE_CASES = (): NamedCase[] => {
         { name: 'unicode: lone surrogate at the raw cap is invalid_unicode, one unit over it is too_long', input: [`${repeat('a', raw - 1)}\ud800`, `${repeat('a', raw)}\ud800`] },
         { name: 'unicode: a keyword that is long once cleaned and has a lone surrogate', input: [`${repeat('a', 300)}\ud800`] },
         // defect class 2: a raw keyword longer than 4096 UTF-16 units is too_long before any Unicode work
-        { name: 'raw cap: 4096 units around a keyword are cleaned, 4097 are too_long', input: [`${repeat('\u200b', raw - 2)}ab`, `${repeat('\u200b', raw - 1)}cd`] },
-        { name: 'raw cap: tag characters count two units each (4096 accepted, 4097 too_long)', input: [`${repeat('\u{e0020}', raw / 2 - 1)}ab`, `${repeat('\u{e0020}', raw / 2 - 1)}cde`] },
+        { name: 'raw cap: 4096 units around a keyword are cleaned, 4097 are too_long', input: [`${repeat('\u200b', raw - 3)}abc`, `${repeat('\u200b', raw - 1)}cd`] },
+        { name: 'raw cap: tag characters count two units each (4096 accepted, 4097 too_long)', input: [`${repeat('\u{e0020}', raw / 2 - 2)}abcd`, `${repeat('\u{e0020}', raw / 2 - 1)}cde`] },
         { name: 'raw cap: 4096 and 4097 letters are too_long either way', input: [repeat('a', raw), repeat('a', raw + 1)] },
         { name: 'raw cap: a run of combining marks is rejected before it is normalised', input: [`a${repeat('\u0301', raw + 100)}`, `a${repeat('\u0301', 100)}`] },
         { name: 'raw cap: invisible padding is too_long, not empty', input: [repeat('\u200b', raw + 50)] },
-        { name: 'raw cap: the cap is per entry, not for the list', input: [`${repeat('\u200b', raw - 2)}ab`, `${repeat('\u200b', raw - 2)}cd`] },
+        { name: 'raw cap: the cap is per entry, not for the list', input: [`${repeat('\u200b', raw - 3)}abc`, `${repeat('\u200b', raw - 3)}cde`] },
         { name: 'raw cap: one long piece of a bare string', input: `Acme,${repeat('b', raw + 50)},Beta Ltd` },
         { name: 'raw cap: a long entry next to non-strings', input: [`${repeat('\u200b', raw)}ab`, 7, { k: 'v' }, 'Acme'] },
         // defect class 3: every Default_Ignorable_Code_Point and Bidi_Control character, and the C0 and C1 controls, are removed
@@ -444,7 +444,7 @@ const NAMED_SANITIZE_CASES = (): NamedCase[] => {
         { name: 'length: measured after NFKC expansion', input: [repeat('\ufb03', 70)] },
         { name: 'length: 200 after NFKC expansion', input: [`${repeat('\ufb03', 66)}ab`] },
         { name: 'length: padded with invisible characters', input: [`${repeat('\u200b', 300)}ab`] },
-        { name: 'length: padded with tag characters and variation selectors', input: [`${repeat('\u{e0100}', 300)}ab`, `ab${repeat('\ufe0f', 300)}`] },
+        { name: 'length: padded with tag characters and variation selectors', input: [`${repeat('\u{e0100}', 300)}abc`, `abc${repeat('\ufe0f', 300)}`] },
         { name: 'length: long rejected string is previewed truncated', input: [repeat('Lorem ipsum ', 40)] },
         { name: 'order: over 200 characters without a letter is too_long, exactly 200 is no_letter_or_digit, one is too_short', input: [repeat('-', 201), repeat('-', 200), '-'] },
         // letter-or-digit rule
@@ -470,26 +470,26 @@ const NAMED_SANITIZE_CASES = (): NamedCase[] => {
             input: `${repeat(' ', MAX_BARE_STRING_UNITS - 17)},Alpha Corp,Beta\u{1f600},Gamma Corp`,
         },
         // MAX_COMBINING_RUN: a text with more than 16 consecutive combining marks (\p{M}) is empty, checked on every cleaning pass BEFORE normalising
-        { name: 'marks: 16 consecutive combining marks are fine, 17 make the keyword empty', input: [`ab${repeat('\u0301', 16)}`, `cd${repeat('\u0323', 16)}`, `ab${repeat('\u0301', 17)}`, `cd${repeat('\u0323', 17)}`, 'Acme'] },
+        { name: 'marks: 16 consecutive combining marks are fine, 17 make the keyword empty', input: [`abc${repeat('\u0301', 16)}`, `cde${repeat('\u0323', 16)}`, `abc${repeat('\u0301', 17)}`, `cde${repeat('\u0323', 17)}`, 'Acme'] },
         { name: 'marks: 15, 16 and 17 marks in the middle of a word', input: [`Ac${repeat('\u0301', 15)}me`, `Ac${repeat('\u0308', 16)}me`, `Ac${repeat('\u0300', 17)}me`] },
         {
             name: 'marks: 17 different marks (Mn, Mc and Me) count together, 16 do not',
-            input: [`ab${MARKS_17}`, `ab${MARKS_17.slice(0, -1)}`, `cd${repeat('\u0903', 17)}`, `cd${repeat('\u20dd', 17)}`, `cd${repeat('\u0903', 16)}`],
+            input: [`abc${MARKS_17}`, `abc${MARKS_17.slice(0, -1)}`, `cde${repeat('\u0903', 17)}`, `cde${repeat('\u20dd', 17)}`, `cde${repeat('\u0903', 16)}`],
         },
         { name: 'marks: marks kept apart by letters never form a run', input: [`${'a\u0301'.repeat(40)}`, `a${repeat('\u0301', 10)}b${repeat('\u0301', 10)}`] },
-        { name: 'marks: removal exposes a run on the second pass (the base does not compose with the first mark)', input: [`cb${'\u0301\u200b'.repeat(17)}`, `cb${'\u0301\u200b'.repeat(16)}`, 'Acme'] },
-        { name: 'marks: removal exposes a run on the second pass (the base composes with the first mark, so 16 remain)', input: [`ba${'\u0301\u200b'.repeat(17)}`, `ba${'\u0301\u200b'.repeat(18)}`, 'Acme'] },
-        { name: 'marks: variation selectors and the combining grapheme joiner are marks, so the run check sees them before they are removed', input: [`ab${repeat('\ufe0f', 17)}`, `ab${repeat('\ufe0f', 16)}`, `Acme${repeat('\u034f', 17)}`, `Acme${repeat('\u034f', 16)}`, `${repeat('\u{e0100}', 17)}ab`, `${repeat('\u{e0100}', 16)}ab`] },
+        { name: 'marks: removal exposes a run on the second pass (the base does not compose with the first mark)', input: [`cbd${'\u0301\u200b'.repeat(17)}`, `cbd${'\u0301\u200b'.repeat(16)}`, 'Acme'] },
+        { name: 'marks: removal exposes a run on the second pass (the base composes with the first mark, so 16 remain)', input: [`bca${'\u0301\u200b'.repeat(17)}`, `bca${'\u0301\u200b'.repeat(18)}`, 'Acme'] },
+        { name: 'marks: variation selectors and the combining grapheme joiner are marks, so the run check sees them before they are removed', input: [`abc${repeat('\ufe0f', 17)}`, `abc${repeat('\ufe0f', 16)}`, `Acme${repeat('\u034f', 17)}`, `Acme${repeat('\u034f', 16)}`, `${repeat('\u{e0100}', 17)}ab`, `${repeat('\u{e0100}', 16)}ab`] },
         { name: 'marks: invisible characters that are not marks are removed, whatever their number', input: [`${repeat('\u200b', 17)}ab`, `${repeat('\u200b', 40)}cd`, `ef${repeat('\u2060', 17)}gh`] },
-        { name: 'marks: marks that NFKC produces (halfwidth voiced sound marks) are seen on the next pass', input: [`ab${repeat('\uff9e', 17)}`, `ab${repeat('\uff9e', 16)}`, `cd${repeat('\uff9f', 17)}`] },
+        { name: 'marks: marks that NFKC produces (halfwidth voiced sound marks) are seen on the next pass', input: [`abc${repeat('\uff9e', 17)}`, `abc${repeat('\uff9e', 16)}`, `cde${repeat('\uff9f', 17)}`] },
         {
             name: 'marks: U+FF9E and U+FF9F count in the run before NFKC (they become marks of class 8, which NFKC reorders behind higher classes)',
-            input: [`ab${'\u0301\uff9e'.repeat(8)}`, `ab${'\u0301\uff9e'.repeat(9)}`, `ab${'\u0301\uff9e'.repeat(8)}\u0301`, `cd${'\uff9f\u0300'.repeat(9)}`, `cd${'\uff9f\u0300'.repeat(8)}`, 'Acme'],
+            input: [`abc${'\u0301\uff9e'.repeat(8)}`, `abc${'\u0301\uff9e'.repeat(9)}`, `abc${'\u0301\uff9e'.repeat(8)}\u0301`, `cde${'\uff9f\u0300'.repeat(9)}`, `cde${'\uff9f\u0300'.repeat(8)}`, 'Acme'],
         },
-        { name: 'marks: the quadratic shape with U+FF9E (interleaved with a class-230 mark) is empty at once', input: [`ab${'\u0301\uff9e'.repeat(2000)}`, `ab${'\uff9e\u0301'.repeat(1500)}\uff9e`] },
-        { name: 'marks: the descending-class attack shape (NFKC must reorder it) is empty at once', input: [`ab${repeat('\u0345', 1365)}${repeat('\u0300', 1365)}${repeat('\u0316', 1364)}`, `cd${repeat('\u0345', 6)}${repeat('\u0300', 5)}${repeat('\u0316', 5)}`] },
+        { name: 'marks: the quadratic shape with U+FF9E (interleaved with a class-230 mark) is empty at once', input: [`abc${'\u0301\uff9e'.repeat(2000)}`, `abc${'\uff9e\u0301'.repeat(1500)}\uff9e`] },
+        { name: 'marks: the descending-class attack shape (NFKC must reorder it) is empty at once', input: [`abc${repeat('\u0345', 1365)}${repeat('\u0300', 1365)}${repeat('\u0316', 1363)}`, `cde${repeat('\u0345', 6)}${repeat('\u0300', 5)}${repeat('\u0316', 5)}`] },
         { name: 'marks: runs after an astral base and between astral letters', input: [`\u{1d400}${repeat('\u0301', 17)}`, `x\u{1d400}${repeat('\u0301', 16)}`, `\u{20bb7}${repeat('\u0308', 17)}y`] },
-        { name: 'marks: a long run is empty_after_normalisation, not too_long, when the keyword is within the raw cap', input: [`ab${repeat('\u0301', 4000)}`, `ab${repeat('\u0301', 4094)}`] },
+        { name: 'marks: a long run is empty_after_normalisation, not too_long, when the keyword is within the raw cap', input: [`abc${repeat('\u0301', 4000)}`, `abc${repeat('\u0301', 4093)}`] },
         // MAX_BARE_STRING_UNITS: a longer bare string is cut, the last piece (which the cut may have truncated) is dropped and reported
         {
             name: 'string: 200001 units, the cut falls inside the last piece, which is dropped',
@@ -515,13 +515,15 @@ const NAMED_SANITIZE_CASES = (): NamedCase[] => {
         },
         // at least two letters or numbers: one alphanumeric character padded with punctuation is the one-letter needle in disguise
         { name: 'alnum: one letter or digit padded with punctuation is single_letter_or_digit', input: ['c.', 'd.', 'a.', '(a)', 'a |', '-0', '.0', '1)', 'A-', '(1)', '..a'] },
-        { name: 'alnum: two letters or digits are enough, wherever the punctuation sits', input: ['BP', 'GE', '3M', 'a.b', 'a-1', '(ab)', '1.2', 'S.A.'] },
+        { name: 'alnum: two letters or digits are short of the watchlist floor, wherever the punctuation sits', input: ['BP', 'GE', '3M', 'a.b', 'a-1', '(ab)', '1.2', 'S.A.'] },
+        { name: 'alnum: three letters or digits are the watchlist floor, wherever the punctuation sits', input: ['IBM', 'a.b.c', 'a-1b', '(abc)', '1.2.3', 'S.A.R', 'UBS', '3M1'] },
         { name: 'alnum: a pasted company list drops the legal-form fragments and keeps the names', input: 'Smith, J.\nBrown, A.; Acme Corp' },
         { name: 'alnum: no letter or digit at all stays no_letter_or_digit, and the order of the checks is length first', input: ['--', '..', '()', '-'.repeat(201), '!!!!'] },
         { name: 'alnum: a letter plus a combining mark is one alphanumeric character', input: ['q\u0307', 'a\u0345', 'a\u0345\u0345', 'ab\u0345'] },
         // one visible glyph that NFKC expands is one character, not a two-character keyword
         { name: 'glyph: one expanding compatibility character is too_short', input: ['\u2473', '\u2116', '\ufb01', '\u2474', '\u249c', '\u2488', '\ufdfa', '\u00bd', '\u2460'] },
         { name: 'glyph: two expanding characters are two characters', input: ['\u2473\u2473', '\u2116\u2116', '\ufb01\ufb01', '\u2460\u2461'] },
+        { name: 'glyph: three expanding characters are three characters', input: ['\u2473\u2473\u2473', '\u2116\u2116\u2116', '\ufb01\ufb01\ufb01', '\u2460\u2461\u2462'] },
         { name: 'glyph: one expanding glyph padded with punctuation is still one character (too_short); typed words and two glyphs are kept', input: ['\u2473.', '\u2116.', '\ufb01.', '(\u2473)', '\u2116-', '\u3392,', 'no.', 'S.A.', 'a.b', '\u2116\u2116', '\u2473\u2473.', '\u2116 x', 'AT&T'] },
         { name: 'glyph: a visible character plus an invisible one is still one character', input: ['\u2473\u200b', '\u200b\u2116', '\ufb01\u00ad'] },
         // the NFKC expansion cap: a text that grows to more than 4x its length plus 16 units is empty
@@ -601,7 +603,7 @@ const NAMED_MATCH_CASES = (): MatchCase[] => {
         { name: 'dotted capital I', haystack: '\u0130STANBUL Holdings', keywords: ['istanbul'] },
         { name: 'final sigma in the haystack', haystack: '\u03a3\u0391\u03a3 SA', keywords: ['\u03c3\u03b1\u03c2'] },
         { name: 'sharp s', haystack: 'Stra\u00dfe 1', keywords: ['strasse'] },
-        { name: 'astral letters', haystack: '\u{1d400}\u{1d401} Holdings', keywords: ['ab'] },
+        { name: 'astral letters', haystack: '\u{1d400}\u{1d401}\u{1d402} Holdings', keywords: ['abc'] },
         { name: 'keyword spelling of the list is returned, not the haystack spelling', haystack: 'BANCO SANTANDER', keywords: ['Banco Santander'] },
         // a keyword with a lone surrogate is invalid_unicode, so it can no longer match half of an astral character
         { name: 'a needle ending in a lone high surrogate is rejected and matches nothing', haystack: 'xa\u{1f600}y', keywords: ['a\ud83d'] },
@@ -635,7 +637,7 @@ const NAMED_MATCH_CASES = (): MatchCase[] => {
         { name: 'cut: an astral character straddling unit 8192 and no whitespace', haystack: `${'z'.repeat(unitsMax - 1)}\u{1f600}Acme`, keywords: ['zzz', 'Acme'] },
         { name: 'cut: astral characters count two units each (the haystack is exactly 8192 units)', haystack: `${'z'.repeat(unitsMax - 4 - 200)}${'\u{1f600}'.repeat(100)}Acme`, keywords: ['Acme'] },
         { name: 'cut: astral characters count two units each (8193 units and no whitespace)', haystack: `${'z'.repeat(unitsMax - 4 - 200 + 1)}${'\u{1f600}'.repeat(100)}Acme`, keywords: ['Acme'] },
-        { name: 'cut: astral characters before the cut count two units each', haystack: `${'z\u{1f600}'.repeat(2730)} Acme${'z'.repeat(25)}`, keywords: ['Acme', 'z\u{1f600}z'] },
+        { name: 'cut: astral characters before the cut count two units each', haystack: `${'z\u{1f600}'.repeat(2730)} Acme${'z'.repeat(25)}`, keywords: ['Acme', 'z\u{1f600}z\u{1f600}z'] },
         { name: 'cut: a combining accent just beyond the window no longer creates a hit for the unaccented word', haystack: `${'z'.repeat(unitsMax - 5)} cafe\u0301 Paris`, keywords: ['cafe'] },
         { name: 'cut: the accented word inside the window is the accented word', haystack: `${'z'.repeat(unitsMax - 20)} cafe\u0301 Paris${'z'.repeat(30)}`, keywords: ['cafe', 'caf\u00e9'] },
         ...[
@@ -686,7 +688,7 @@ const NAMED_MATCH_CASES = (): MatchCase[] => {
         { name: 'alnum: single-alphanumeric keywords are rejected, so they never match', haystack: 'Pfizer Inc. | Acme Ltd. | S.A. 2024-01-02', keywords: ['c.', 'd.', 'a |', '-0', '(a)', '1)'] },
         { name: 'alnum: a pasted list with legal-form fragments matches only the names', haystack: 'Banco Santander S.A.', keywords: ['Smith', 'J.', 'A.'] },
         { name: 'glyph: one expanding character is not a keyword, so it never matches its expansion', haystack: 'Annual report 2020', keywords: ['\u2473', '\u2116'] },
-        { name: 'glyph: two expanding characters are a keyword that matches their expansion', haystack: 'Annual report 2020', keywords: ['\u2473\u2473'] },
+        { name: 'glyph: three expanding characters are a keyword that matches their expansion', haystack: 'Annual report 202020', keywords: ['\u2473\u2473\u2473'] },
         // the NFKC expansion cap applies to a haystack too
         { name: 'expansion: a field of U+FDFA ligatures is cut out, the keyword after it is found', haystack: `${'\ufdfa'.repeat(8000)} acme`, keywords: ['acme'] },
         { name: 'expansion: a short haystack with a ligature inside the 4x allowance is searched', haystack: `${'\ufdfa'.repeat(3)} acme corp`, keywords: ['acme'] },
@@ -712,7 +714,7 @@ export function buildGuardParityData(): Record<string, unknown> {
     for (let index = 0; index < 320; index += 1) sanitizeInputs.push({ name: `seeded ${String(index).padStart(3, '0')}`, input: randomWatchlistInput(rng) });
     const sanitize = sanitizeInputs.map(({ name, input: built }) => {
         const input = roundTrip(built);
-        const list = sanitizeKeywordList(input);
+        const list = sanitizeWatchlist(input);
         return {
             name,
             input,
@@ -743,7 +745,7 @@ export function buildGuardParityData(): Record<string, unknown> {
     const match = matchInputs.map(({ name, haystack: builtHaystack, keywords: builtKeywords }) => {
         const haystack = roundTrip(builtHaystack);
         const keywords = roundTrip(builtKeywords);
-        return { name, haystack, keywords, expected: findKeywordMatch(haystack, sanitizeKeywordList(keywords)) };
+        return { name, haystack, keywords, expected: findKeywordMatch(haystack, sanitizeWatchlist(keywords)) };
     });
 
     return {
