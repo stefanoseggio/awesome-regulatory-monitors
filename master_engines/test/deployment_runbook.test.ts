@@ -24,6 +24,7 @@ import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { buildPricingPutBody } from '../pricing/build_put_payloads.js';
+import { ROBOTS_EXCEPTIONS } from '../lib/robots_policy.js';
 import { ALL_PRICING } from '../pricing/event_catalog.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url)); // master_engines/
@@ -168,7 +169,7 @@ function iso(ms: number): string {
 }
 
 function generate(outDir: string, args: string[]): void {
-    const result = spawnSync('npx', ['tsx', 'scripts/generate_pricing_payloads.ts', ...args, `--out=${outDir}`], { cwd: ROOT, env: cleanEnv({}), encoding: 'utf8' });
+    const result = spawnSync(process.execPath, [join(ROOT, 'node_modules', 'tsx', 'dist', 'cli.mjs'), 'scripts/generate_pricing_payloads.ts', ...args, `--out=${outDir}`], { cwd: ROOT, env: cleanEnv({}), encoding: 'utf8' });
     if (result.status !== 0) throw new Error(`generator failed: ${result.stderr}`);
 }
 
@@ -204,9 +205,14 @@ describe('the runbook is made of blocks the test can run', () => {
         for (const code of [...executable.values(), ...manual.values()]) expect(code.trim().length).toBeGreaterThan(20);
     });
 
-    it('never puts the token on a command line: the requests carry it through a header file read from a pipe', () => {
+    it('never puts the token on a command line: the requests carry it as a curl configuration read from standard input', () => {
         const text = [...executable.values(), ...manual.values()].join('\n');
-        expect(text).toContain('-H @<(printf');
+        expect(text).toContain('header = "Authorization: Bearer %s"');
+        expect(text).toContain('-K -');
+        // process substitution does not exist for the native curl of Windows (it would be handed /proc/<pid>/fd/<n>), and a backslash in a jq program does not survive Git Bash
+        expect(text).not.toContain('@<(');
+        // (the line-continuation backslashes of bash are fine; a backslash INSIDE a jq string is what Git Bash drops)
+        expect(executable.get('payload-guard')).not.toMatch(/"[^"\n]*\\[^"\n]*"/u);
         expect(text).not.toMatch(/-H\s+["']Authorization/u);
         expect(text).not.toMatch(/--header\s+["']Authorization/u);
         expect(text).not.toMatch(/apify login[^\n]*\bapify_api_/u);
@@ -509,6 +515,20 @@ describe('the pricing steps, rehearsed against a local stand-in for the Apify AP
         }
     }, 60_000);
 
+    it('a token with a character that could change the curl configuration is refused before any request', async () => {
+        const server = await freshApi();
+        try {
+            for (const token of ['abc"def', 'abc\ndef', 'abc def', 'abc\\def', 'abc%sdef', 'url = "http://elsewhere.invalid"']) {
+                const result = await bash(block('env'), cleanEnv({ APIFY_API_BASE: server.url, APIFY_TOKEN: token }));
+                expect(result.code, JSON.stringify(token)).not.toBe(0);
+                expect(result.stdout + result.stderr, JSON.stringify(token)).toContain('cannot be handed to curl');
+            }
+            expect(server.requests).toHaveLength(0);
+        } finally {
+            await server.stop();
+        }
+    }, 60_000);
+
     it('without APIFY_TOKEN the shared definitions stop before any request', async () => {
         const server = await freshApi();
         try {
@@ -556,10 +576,22 @@ describe('the payload generator keeps the reviewed reference files out of a depl
         expect(snapshot()).toEqual(beforeFiles);
     }, 60_000);
 
+    it('the deploy:payloads block asks for --strict, and the generator then emits all three engines: every price is documented or ratified, the start is 0.005 and the hit 0.15', () => {
+        expect(executable.get('payloads')).toContain('--strict');
+        const outDir = join(PAYLOAD_DIR, 'rehearsal-strict');
+        generate(outDir, [`--now=${iso(Date.now())}`, '--strict']);
+        created.push('rehearsal-strict');
+        for (const slug of SLUGS) {
+            const events = readJson<ReturnType<typeof buildPricingPutBody>['body']>(join(outDir, `${slug}.put.json`)).pricingInfos[0]!.pricingPerEvent.actorChargeEvents;
+            expect(events['apify-actor-start']?.eventPriceUsd, slug).toBe(0.005);
+            expect(events['watchlist-hit']?.eventPriceUsd, slug).toBe(0.15);
+        }
+    }, 60_000);
+
     it('an empty --out is refused, and a missing --now still is', () => {
-        const empty = spawnSync('npx', ['tsx', 'scripts/generate_pricing_payloads.ts', `--now=${iso(Date.now())}`, '--out='], { cwd: ROOT, env: cleanEnv({}), encoding: 'utf8' });
+        const empty = spawnSync(process.execPath, [join(ROOT, 'node_modules', 'tsx', 'dist', 'cli.mjs'), 'scripts/generate_pricing_payloads.ts', `--now=${iso(Date.now())}`, '--out='], { cwd: ROOT, env: cleanEnv({}), encoding: 'utf8' });
         expect(empty.status).toBe(2);
-        const noNow = spawnSync('npx', ['tsx', 'scripts/generate_pricing_payloads.ts', '--out=stage/payloads/never'], { cwd: ROOT, env: cleanEnv({}), encoding: 'utf8' });
+        const noNow = spawnSync(process.execPath, [join(ROOT, 'node_modules', 'tsx', 'dist', 'cli.mjs'), 'scripts/generate_pricing_payloads.ts', '--out=stage/payloads/never'], { cwd: ROOT, env: cleanEnv({}), encoding: 'utf8' });
         expect(noNow.status).toBe(2);
         expect(existsSync(join(PAYLOAD_DIR, 'never'))).toBe(false);
     }, 60_000);
@@ -618,5 +650,22 @@ describe('what the runbook states equals the committed artefacts', () => {
         // the provisional and operator-stated events named in the gates are the ones the notice files report
         const provisional = SLUGS.flatMap((slug) => readJson<{ provisionalEvents: string[] }>(join(ROOT, 'pricing', 'payloads', `${slug}.notice.json`)).provisionalEvents).sort();
         expect(provisional).toEqual(['crawler-signal', 'grant-updated', 'sg-entity-updated', 'uae-entity-updated']);
+    });
+
+    it('records the decisions G1 to G5 of 2026-11-02: the locked prices, the one robots.txt exception with its endpoints, and the review schedule instead of a sunset', () => {
+        const gates = markdown.slice(markdown.indexOf('**The five gates, decided on 2026-11-02.**'), markdown.indexOf('## 1. What is deployed'));
+        expect(gates).toContain('**Locked at $0.005 per started GB**');
+        expect(gates).toContain('**Locked at $0.15.**');
+        expect(gates).toContain('**Ratified as they stand.**');
+        expect(gates).toContain('**single recorded exception**');
+        expect(gates).toContain('**Not retired, and not by a timer.**');
+        // the exception named in the document is the one the code records, endpoint by endpoint
+        expect(ROBOTS_EXCEPTIONS).toHaveLength(1);
+        for (const endpoint of ROBOTS_EXCEPTIONS[0]?.endpoints ?? []) expect(gates).toContain(`\`${endpoint}\``);
+        // the document the gate G5 points to exists, next to the runbook, and lists 23 legacy Actors
+        const schedule = join(REPO, 'docs', 'deployment', 'legacy_actor_review_schedule.md');
+        expect(existsSync(schedule)).toBe(true);
+        expect(gates).toContain('[`legacy_actor_review_schedule.md`](legacy_actor_review_schedule.md)');
+        expect(readFileSync(schedule, 'utf8')).toContain('23 legacy Actors');
     });
 });

@@ -82,6 +82,7 @@ import * as cheerio from 'cheerio';
 import { z } from 'zod';
 
 import { fingerprintOf } from '../../lib/connector_helpers.js';
+import { DIARIO_ROBOTS_ALLOWED_SECTIONS, diarioSectionHeldReason } from '../../lib/robots_policy.js';
 import { type Connector, type ConnectorContext, type RunParams, SourceFetchError, type SourceRecord } from '../../lib/types.js';
 import { errorMessage } from '../support/portalHttp.js';
 
@@ -300,20 +301,35 @@ export function toSourceRecord(entry: GazetteEntry, sectionUrl: string): SourceR
 // Connector
 // ---------------------------------------------------------------------------
 
-export const clDiarioOficialOptionsSchema = z
+/**
+ * Structure of the options, without the robots.txt policy: every section the code can read is accepted. Only the tests of the dormant section readers use this schema;
+ * the connector uses {@link clDiarioOficialOptionsSchema}.
+ */
+export const clDiarioOficialStructuralOptionsSchema = z
     .object({
         /** Sections of today's edition to read. The default section (normas_generales) is the one the legacy actor confirmed end to end. */
         sections: z.array(z.enum(SECTION_NAMES)).min(1).default(['normas_generales']),
     })
     .strict();
-export type ClDiarioOficialOptions = z.infer<typeof clDiarioOficialOptionsSchema>;
+export type ClDiarioOficialOptions = z.infer<typeof clDiarioOficialStructuralOptionsSchema>;
+
+/**
+ * The options the connector accepts: the structure above plus the robots.txt policy (decision G4, 2026-11-02, lib/robots_policy.ts). robots.txt allows only
+ * `/edicionelectronica/index.php` (normas generales) and disallows the other six sections, which are therefore HELD: recognised only to be refused with their reason.
+ */
+export const clDiarioOficialOptionsSchema = clDiarioOficialStructuralOptionsSchema.superRefine((options, issueCtx) => {
+    const allowed: readonly string[] = DIARIO_ROBOTS_ALLOWED_SECTIONS;
+    options.sections.forEach((section, index) => {
+        if (!allowed.includes(section)) issueCtx.addIssue({ code: z.ZodIssueCode.custom, path: ['sections', index], message: diarioSectionHeldReason(section) });
+    });
+});
 
 export const clDiarioOficialConnector: Connector<ClDiarioOficialOptions> = {
     id: DIARIO_OFICIAL_SOURCE_ID,
     engine: 'latam-global-tender-intelligence',
     legacyActor: 'diario-oficial-cl-monitor',
     description:
-        'Chile Diario Oficial (electronic edition): laws, decrees, resolutions and notices published TODAY in the selected sections (normas generales, particulares, judiciales, avisos destacados, empresas y cooperativas, marcas y patentes, minería), with issuing ministry / agency, description and the official PDF link. Open site, no credentials, no proxy; requires plain (non-impersonating) HTTP.',
+        'Chile Diario Oficial (electronic edition): laws, decrees, resolutions and notices published TODAY in the normas generales section (the only section robots.txt allows; the other six are held by the robots.txt policy), with issuing ministry / agency, description and the official PDF link. Open site, no credentials, no proxy; requires plain (non-impersonating) HTTP.',
     status: 'active',
     optionsSchema: clDiarioOficialOptionsSchema,
 

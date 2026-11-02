@@ -14,7 +14,11 @@
 import {
     APIFY_DEFAULT_START_PRICE_USD,
     type EnginePricing,
+    type PriceRatification,
     RECORD_LEVEL_EVENTS,
+    START_PRICE_LOCKED_USD,
+    START_PRICE_RATIFICATION,
+    WATCHLIST_HIT_PRICE_LOCKED_USD,
     START_PRICE_MAX_USD,
     START_PRICE_MIN_USD,
 } from './event_catalog.js';
@@ -77,6 +81,10 @@ export interface NoticeMetadata {
     reasonForChange: string;
     provisionalEvents: string[];
     operatorStatedEvents: string[];
+    /** The events whose price is not in a legacy README but was decided (G2, G3), with the decision. */
+    ratifiedEvents: Array<{ name: string; gate: string; decidedOn: string; decidedPriceUsd: number; priceMatchesDecision: boolean; rationale: string; reviewWhen: string }>;
+    /** Decision G1: the start price, and whether the start price of this body is the one that was decided. */
+    startPriceRatification: PriceRatification & { priceMatchesDecision: boolean };
     notes: string[];
 }
 
@@ -86,7 +94,7 @@ export interface BuildOptions {
     /** true -> `startedAt = now + 14 days`; false -> `startedAt = now`. Default true: the conservative assumption. */
     hasPayingUsers?: boolean;
     reasonForChange?: string;
-    /** Refuse to build while any event is not 'legacy-readme'. */
+    /** Refuse to build while any event is neither documented ('legacy-readme') nor ratified, and while the start or hit price differs from the locked decision (G1, G2). */
     strict?: boolean;
 }
 
@@ -146,8 +154,20 @@ export function buildPricingPutBody(pricing: EnginePricing, options: BuildOption
 
     const provisional = pricing.events.filter((e) => e.basis === 'provisional').map((e) => e.name);
     const operatorStated = pricing.events.filter((e) => e.basis === 'operator-stated').map((e) => e.name);
-    if (options.strict && (provisional.length > 0 || operatorStated.length > 0)) {
-        throw new Error(`--strict: ${pricing.engine} has non-documented prices (provisional: ${provisional.join(', ') || 'none'}; operator-stated: ${operatorStated.join(', ') || 'none'}).`);
+    const unratified = pricing.events.filter((e) => e.basis !== 'legacy-readme' && e.ratification === undefined).map((e) => e.name);
+    const moved = pricing.events.filter((e) => e.ratification !== undefined && e.ratification.priceUsd !== e.priceUsd).map((e) => `${e.name}: decided at ${e.ratification?.priceUsd}, priced at ${e.priceUsd}`);
+    if (options.strict && unratified.length > 0) {
+        throw new Error(`--strict: ${pricing.engine} has non-documented prices without a ratification (${unratified.join(', ')}; provisional: ${provisional.join(', ') || 'none'}; operator-stated: ${operatorStated.join(', ') || 'none'}). Decide them (a PriceRatification in pricing/event_catalog.ts) before emitting.`);
+    }
+    if (options.strict && moved.length > 0) {
+        throw new Error(`--strict: ${pricing.engine} has a ratified price that moved since the decision (${moved.join('; ')}). Take a new decision (a PriceRatification with the new price) before sending it.`);
+    }
+    if (options.strict && pricing.startPriceUsd !== START_PRICE_LOCKED_USD) {
+        throw new Error(`--strict: ${pricing.engine} prices apify-actor-start at ${pricing.startPriceUsd}; decision G1 locked it at ${START_PRICE_LOCKED_USD}.`);
+    }
+    const hit = pricing.events.find((e) => e.name === 'watchlist-hit');
+    if (options.strict && hit !== undefined && hit.priceUsd !== WATCHLIST_HIT_PRICE_LOCKED_USD) {
+        throw new Error(`--strict: ${pricing.engine} prices watchlist-hit at ${hit.priceUsd}; decision G2 locked it at ${WATCHLIST_HIT_PRICE_LOCKED_USD}.`);
     }
 
     const hasPayingUsers = options.hasPayingUsers ?? true;
@@ -203,6 +223,10 @@ export function buildPricingPutBody(pricing: EnginePricing, options: BuildOption
         reasonForChange,
         provisionalEvents: provisional,
         operatorStatedEvents: operatorStated,
+        ratifiedEvents: pricing.events
+            .filter((e) => e.ratification !== undefined)
+            .map((e) => ({ name: e.name, gate: e.ratification!.gate, decidedOn: e.ratification!.decidedOn, decidedPriceUsd: e.ratification!.priceUsd, priceMatchesDecision: e.ratification!.priceUsd === e.priceUsd, rationale: e.ratification!.rationale, reviewWhen: e.ratification!.reviewWhen })),
+        startPriceRatification: { ...START_PRICE_RATIFICATION, priceMatchesDecision: START_PRICE_RATIFICATION.priceUsd === pricing.startPriceUsd },
         notes: [
             `The default apify-actor-start price is $${APIFY_DEFAULT_START_PRICE_USD}; ${pricing.startPriceUsd} is ${Math.round(pricing.startPriceUsd / APIFY_DEFAULT_START_PRICE_USD)}x that. Apify only recommends keeping the default; it documents no maximum.`,
             `With ${pricing.memoryMbytes} MB the start event is charged ${Math.max(1, Math.ceil(pricing.memoryMbytes / 1024))} time(s) per run = $${perRun}, even when a run delivers no records.`,

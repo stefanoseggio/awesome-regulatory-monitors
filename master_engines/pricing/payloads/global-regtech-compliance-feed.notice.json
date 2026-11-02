@@ -16,6 +16,35 @@
     "operatorStatedEvents": [
         "watchlist-hit"
     ],
+    "ratifiedEvents": [
+        {
+            "name": "crawler-signal",
+            "gate": "G3",
+            "decidedOn": "2026-11-02",
+            "decidedPriceUsd": 0.015,
+            "priceMatchesDecision": true,
+            "rationale": "Rule R-FLIP: the first snapshot of a domain delivers the complete permission and Content-Signal state, the payload that a permission flip delivers, and is priced as a flip ($0.015, ai-crawler-content-signal-permission-monitor/README.md:38-39). It is the one ratified price that bills something the legacy actor delivered free of charge (its baseline row); it is ratified because this engine delivers the snapshot as a record like any other.",
+            "reviewWhen": "After 30 days: compare the first snapshots billed with the flips billed; if callers re-seed the same domains so often that first snapshots exceed flips by more than 10 to 1, lower the price (a decrease is immediate)."
+        },
+        {
+            "name": "watchlist-hit",
+            "gate": "G2",
+            "decidedOn": "2026-11-02",
+            "decidedPriceUsd": 0.15,
+            "priceMatchesDecision": true,
+            "rationale": "Locked at $0.15 per matched record in all three engines. Evidence: the live price of the same event on the legacy Actors on 2026-10-17 (public Apify API, anonymous; extracted by the owner's suite into data/fleet_contracts.json, not part of this repository) was $0.15 for sec-enforcement-litigation-delta-feed and clinicaltrials-orange-book-delta, $0.12 for ai-crawler-content-signal-permission-monitor, $0.10 for regione-lombardia-grants-registry-monitor and singapore-acra-registry-monitor. $0.15 is the highest of them and one rule for three engines; the tender engine's only watchlist source (Lombardia) therefore rises from $0.10 to $0.15. A hit is charged once, after the row event was billed and the delivery journal written, and only for a valid keyword (>= 2 alphanumerics); the default caps (200 hits and $50 per run) bound the exposure (docs/audits/2026-10-21_pricing_exposure.md).",
+            "reviewWhen": "After 30 days or at the first customer complaint about hits: a decrease is immediate, an increase needs 14 days of notice, so the lower value is the cheaper one to try if conversion is poor."
+        }
+    ],
+    "startPriceRatification": {
+        "gate": "G1",
+        "priceUsd": 0.005,
+        "decidedOn": "2026-11-02",
+        "decidedBy": "delegate of the owner under the owner's mandate of 2026-11-02 (authority to settle G1 to G5)",
+        "rationale": "Locked at $0.005 per started GB of memory (regtech 2,048 MB = 2 events = $0.01 per run; tenders and patents 1,024 MB = $0.005). Infrastructure: the marketplace keeps 20 percent, so one start event nets $0.004, which pays for 72 seconds of one GB of compute at $0.20 per GB-hour and 36 seconds at $0.40 (net / rate x 3600), the least a run costs that boots a container and fetches one page. Market: in the public Store sample of 2026-10-17 (692 listings with a start event, popularity-biased) $0.005 is at the 65th percentile (405 listings below, 97 equal, 190 above); 287 of 692 (41.5 percent) charge $0.005 or more and 288 (41.6 percent) keep the platform default of $0.00005; the median of the 30-day users is 20 for listings at $0.005 or more and 18 at the default (descriptive, no causal claim). The operator-requested range is $0.002 to $0.01.",
+        "reviewWhen": "After 30 days of runs, compare the median billed run time with 36 to 72 seconds per GB: a start fee that over-recovers can be lowered at once; an increase needs 14 days of notice (Terms 9.4) and counts as the month's one price-raising change.",
+        "priceMatchesDecision": true
+    },
     "notes": [
         "The default apify-actor-start price is $0.00005; 0.005 is 100x that. Apify only recommends keeping the default; it documents no maximum.",
         "With 2048 MB the start event is charged 2 time(s) per run = $0.01, even when a run delivers no records.",

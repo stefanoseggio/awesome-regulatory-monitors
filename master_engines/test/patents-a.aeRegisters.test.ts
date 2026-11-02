@@ -24,6 +24,7 @@ import {
     type AdgmEntityRow,
     aeRegistersConnector,
     aeRegistersOptionsSchema,
+    aeRegistersStructuralOptionsSchema,
     buildAuraContext,
     buildAuraRequestBody,
     buildDifcRequestBody,
@@ -124,7 +125,9 @@ function uaeServer(spec: UaeServer) {
     };
 }
 
-const options = (subSources?: string[]) => aeRegistersConnector.optionsSchema.parse(subSources ? { subSources } : {});
+// The connector-level tests below exercise the DIFC transport as well, which the robots.txt policy (decision G4, 2026-11-02) keeps out of reach of a caller: they build
+// their options with the structural schema, both registers by default. The options a CALLER can give are tested with `resolve(...)` and `aeRegistersOptionsSchema` below.
+const options = (subSources: string[] = ['adgm', 'difc']) => aeRegistersStructuralOptionsSchema.parse({ subSources });
 const aura500 = (request: RecordedRequest) => new HttpStatusError(request.url, 500, 'Internal Server Error');
 
 describe('bilingual normalisation (verbatim port of the legacy bilingualNormalizer.ts)', () => {
@@ -543,23 +546,34 @@ describe('options validation (through the real router preflight)', () => {
     const resolve = (sourceOptions: Record<string, unknown> | undefined) =>
         resolveSources(engine, EngineInputSchema.parse({ sources: ['ae_registers'], sourceOptions: sourceOptions === undefined ? {} : { ae_registers: sourceOptions } }));
 
-    it('is an active, anonymous connector of the patent engine with room for both registers in delta memory', () => {
+    it('is an active, anonymous connector of the patent engine with room for the registers in delta memory', () => {
         expect(aeRegistersConnector.id).toBe('ae_registers');
         expect(aeRegistersConnector.engine).toBe('global-corporate-patent-intelligence');
         expect(aeRegistersConnector.legacyActor).toBe('uae-corporate-registry-monitor');
         expect(aeRegistersConnector.status).toBe('active');
         expect(aeRegistersConnector.requiredOptions ?? []).toEqual([]);
         expect(aeRegistersConnector.maxSeenIds).toBe(AE_MAX_SEEN_IDS);
-        expect(AE_ACTIVE_SUB_SOURCES).toEqual(['adgm', 'difc']);
+        // DIFC is HELD by the robots.txt policy (decision G4, 2026-11-02): only ADGM can be selected
+        expect(AE_ACTIVE_SUB_SOURCES).toEqual(['adgm']);
     });
 
-    it('defaults to both active registers with no options at all', () => {
-        expect(resolve(undefined)[0]!.options).toEqual({ subSources: ['adgm', 'difc'] });
-        expect(resolve({})[0]!.options).toEqual({ subSources: ['adgm', 'difc'] });
+    it('defaults to the one active register (ADGM) with no options at all', () => {
+        expect(resolve(undefined)[0]!.options).toEqual({ subSources: ['adgm'] });
+        expect(resolve({})[0]!.options).toEqual({ subSources: ['adgm'] });
+    });
+
+    it('refuses the DIFC sub-source at preflight with the robots.txt policy as its reason, alone or mixed, in any spelling', () => {
+        for (const subSources of [['difc'], ['adgm', 'difc'], [' DIFC '], ['Difc', 'Adgm']]) {
+            expect(() => resolve({ subSources }), JSON.stringify(subSources)).toThrow(FatalConfigError);
+            expect(() => resolve({ subSources }), JSON.stringify(subSources)).toThrow(/sub-source "difc" is held by the robots\.txt policy \(decision G4, 2026-11-02\): https:\/\/www\.difc\.com\/robots\.txt disallows \/api\//);
+        }
+        expect(aeRegistersConnector.optionsSchema.safeParse({ subSources: ['difc'] }).success).toBe(false);
     });
 
     it('normalises sub-source names: case, surrounding space, duplicates; keeps the requested order', () => {
-        expect(aeRegistersOptionsSchema.parse({ subSources: [' DIFC ', 'Adgm', 'difc'] }).subSources).toEqual(['difc', 'adgm']);
+        expect(aeRegistersOptionsSchema.parse({ subSources: [' ADGM ', 'Adgm', 'adgm'] }).subSources).toEqual(['adgm']);
+        // the structural schema (dormant DIFC transport) keeps the order of the registers it is given
+        expect(aeRegistersStructuralOptionsSchema.parse({ subSources: [' DIFC ', 'Adgm', 'difc'] }).subSources).toEqual(['difc', 'adgm']);
     });
 
     it('refuses the held dubai_pulse sub-source at preflight with its reason, alone or mixed', () => {
@@ -569,7 +583,7 @@ describe('options validation (through the real router preflight)', () => {
     });
 
     it('rejects unknown sub-sources (including the legacy DUBAI_MAINLAND / ADGM_FREEZONE ids), an empty list and a non-list', () => {
-        expect(() => resolve({ subSources: ['sharjah'] })).toThrow(/unknown sub-source "sharjah"; available: adgm, difc/);
+        expect(() => resolve({ subSources: ['sharjah'] })).toThrow(/unknown sub-source "sharjah"; available: adgm\./);
         expect(() => resolve({ subSources: ['DUBAI_MAINLAND'] })).toThrow(/unknown sub-source "DUBAI_MAINLAND"/);
         expect(() => resolve({ subSources: ['ADGM_FREEZONE'] })).toThrow(/unknown sub-source/);
         expect(() => resolve({ subSources: [] })).toThrow(/Select at least one sub-source/);
@@ -584,10 +598,13 @@ describe('options validation (through the real router preflight)', () => {
 });
 
 describe('end to end through the real router', () => {
-    const input = (extra: Record<string, unknown> = {}) => ({ sources: ['ae_registers'], deltaMode: 'onlyChanged', ...extra });
+    // DIFC is held for callers (decision G4, 2026-11-02), but its transport must keep working through the router for the day the policy changes: the end-to-end tests run a
+    // copy of the connector whose options use the structural schema, with both registers selected. ADGM-only runs through the real connector are in the tests above.
+    const bothRegisters = { ...aeRegistersConnector, optionsSchema: aeRegistersStructuralOptionsSchema };
+    const input = (extra: Record<string, unknown> = {}) => ({ sources: ['ae_registers'], sourceOptions: { ae_registers: { subSources: ['adgm', 'difc'] } }, deltaMode: 'onlyChanged', ...extra });
 
     it('first run emits both registers as first_seen with the router envelope and the legacy field names', async () => {
-        const result = await runThroughRouter(aeRegistersConnector, input(), makeCtx(uaeServer({ adgm: adgmFixtureRows, difc: difcFixtureRows })));
+        const result = await runThroughRouter(bothRegisters, input(), makeCtx(uaeServer({ adgm: adgmFixtureRows, difc: difcFixtureRows })));
         expect(result.rows).toHaveLength(4);
         const row = result.rows.find((r) => r.record_id === 'ADGM_FREEZONE::22086')!;
         expect(row).toMatchObject({
@@ -610,21 +627,21 @@ describe('end to end through the real router', () => {
     it('delta memory: unchanged emits nothing; a status change and a cosmetic edit each re-emit as updated, distinguishable by status_fingerprint', async () => {
         const store = new InMemoryDeltaStore();
         const serve = (adgm: AdgmEntityRow[], difc: DifcCompanyRow[]) => makeCtx(uaeServer({ adgm, difc }));
-        await runThroughRouter(aeRegistersConnector, input(), serve(adgmFixtureRows, difcFixtureRows), store);
+        await runThroughRouter(bothRegisters, input(), serve(adgmFixtureRows, difcFixtureRows), store);
 
-        const second = await runThroughRouter(aeRegistersConnector, input(), serve(adgmFixtureRows, difcFixtureRows), store);
+        const second = await runThroughRouter(bothRegisters, input(), serve(adgmFixtureRows, difcFixtureRows), store);
         expect(second.rows).toHaveLength(0);
         expect(second.summary.sources[0]).toMatchObject({ fetched: 4, unchanged: 4 });
 
         const statusChanged = [{ ...zeroSevenTwoSeven, Entity_Status__c: 'Deregistered', License_Status__c: 'License cancelled' }, testEntity];
-        const third = await runThroughRouter(aeRegistersConnector, input(), serve(statusChanged, difcFixtureRows), store);
+        const third = await runThroughRouter(bothRegisters, input(), serve(statusChanged, difcFixtureRows), store);
         expect(third.rows).toHaveLength(1);
         expect(third.rows[0]).toMatchObject({ record_id: 'ADGM_FREEZONE::22086', delta_status: 'updated', registration_status: 'Deregistered', license_status: 'License cancelled' });
         const statusFingerprintAfterChange = third.rows[0]!.status_fingerprint;
         expect(statusFingerprintAfterChange).not.toBe('1345e799976260d9385e820a0cb3a399782cf8865576b35661ade7386309b891');
 
         const cosmetic = [{ ...statusChanged[0]!, Addresses__r: [{ Full_Address__c: 'New Tower, Al Maryah Island' }] }, testEntity];
-        const fourth = await runThroughRouter(aeRegistersConnector, input(), serve(cosmetic, difcFixtureRows), store);
+        const fourth = await runThroughRouter(bothRegisters, input(), serve(cosmetic, difcFixtureRows), store);
         expect(fourth.rows).toHaveLength(1);
         expect(fourth.rows[0]).toMatchObject({ delta_status: 'updated', registered_address: 'New Tower, Al Maryah Island', status_fingerprint: statusFingerprintAfterChange });
     });
@@ -632,7 +649,7 @@ describe('end to end through the real router', () => {
     it('delta memory keeps more than the default 5,000 ids: a 6,000-entity register is fully "unchanged" on the second run', async () => {
         const rows = Array.from({ length: 6000 }, (_, i) => adgmRow(i + 1));
         const store = new InMemoryDeltaStore();
-        const run = () => runThroughRouter(aeRegistersConnector, input({ sources: ['ae_registers'], sourceOptions: { ae_registers: { subSources: ['adgm'] } }, maxItemsPerSource: 6000 }), makeCtx(uaeServer({ adgm: rows })), store);
+        const run = () => runThroughRouter(bothRegisters, input({ sources: ['ae_registers'], sourceOptions: { ae_registers: { subSources: ['adgm'] } }, maxItemsPerSource: 6000 }), makeCtx(uaeServer({ adgm: rows })), store);
         expect((await run()).rows).toHaveLength(6000);
         const second = await run();
         expect(second.rows).toHaveLength(0);
@@ -640,7 +657,7 @@ describe('end to end through the real router', () => {
     }, 30_000);
 
     it('the watchlist matches register names and trade names, and bills one watchlist-hit per matched row', async () => {
-        const result = await runThroughRouter(aeRegistersConnector, input({ watchlistNames: ['holding', 'managing office'] }), makeCtx(uaeServer({ adgm: adgmFixtureRows, difc: difcFixtureRows })));
+        const result = await runThroughRouter(bothRegisters, input({ watchlistNames: ['holding', 'managing office'] }), makeCtx(uaeServer({ adgm: adgmFixtureRows, difc: difcFixtureRows })));
         const matched = result.rows.filter((r) => r.is_watchlist_match);
         expect(matched.map((r) => [r.record_id, r.matched_watchlist_keyword])).toEqual([
             ['ADGM_FREEZONE::22086', 'holding'],
@@ -650,13 +667,13 @@ describe('end to end through the real router', () => {
         expect(result.billing.totalFor(WATCHLIST_HIT_EVENT)).toBe(3);
 
         const withTrade = [{ ...zeroSevenTwoSeven, Trade_Names__r: [{ Name_in_English__c: 'Seven Two Seven Capital', Status__c: 'Active' }] }, testEntity];
-        const byTrade = await runThroughRouter(aeRegistersConnector, input({ watchlistNames: ['seven two seven'] }), makeCtx(uaeServer({ adgm: withTrade, difc: difcFixtureRows })));
+        const byTrade = await runThroughRouter(bothRegisters, input({ watchlistNames: ['seven two seven'] }), makeCtx(uaeServer({ adgm: withTrade, difc: difcFixtureRows })));
         expect(byTrade.rows.filter((r) => r.is_watchlist_match).map((r) => r.record_id)).toEqual(['ADGM_FREEZONE::22086']);
     });
 
     it('ghost-billing guard: empty, blank and one-letter watchlists match nothing and bill nothing', async () => {
         for (const watchlistNames of [[''], [' '], ['a'], '', [], undefined, null, 3]) {
-            const result = await runThroughRouter(aeRegistersConnector, input({ watchlistNames }), makeCtx(uaeServer({ adgm: adgmFixtureRows, difc: difcFixtureRows })));
+            const result = await runThroughRouter(bothRegisters, input({ watchlistNames }), makeCtx(uaeServer({ adgm: adgmFixtureRows, difc: difcFixtureRows })));
             expect(result.rows).toHaveLength(4);
             expect(result.rows.some((r) => r.is_watchlist_match)).toBe(false);
             expect(result.billing.totalFor(WATCHLIST_HIT_EVENT)).toBe(0);
@@ -665,7 +682,7 @@ describe('end to end through the real router', () => {
 
     it('today\'s outage end to end: the run completes, nothing is emitted or billed, and the summary carries the source error', async () => {
         const stub = makeCtx(uaeServer({ adgm: () => auraError, difc: (_o, request) => new HttpStatusError(request.url, 500, 'Internal Server Error') }));
-        const result = await runThroughRouter(aeRegistersConnector, input(), stub);
+        const result = await runThroughRouter(bothRegisters, input(), stub);
         expect(result.rows).toHaveLength(0);
         expect(result.billing.calls).toEqual([]);
         expect(result.summary.sources[0]!.error).toMatch(/every selected UAE register sub-source failed/);
@@ -674,7 +691,7 @@ describe('end to end through the real router', () => {
 
     it('selecting the held dubai_pulse aborts the run in preflight: no request is made', async () => {
         const stub = makeCtx(uaeServer({ adgm: adgmFixtureRows, difc: difcFixtureRows }));
-        await expect(runThroughRouter(aeRegistersConnector, { sources: ['ae_registers'], sourceOptions: { ae_registers: { subSources: ['adgm', 'dubai_pulse'] } } }, stub)).rejects.toThrow(/dubai_pulse" is held/);
+        await expect(runThroughRouter(bothRegisters, { sources: ['ae_registers'], sourceOptions: { ae_registers: { subSources: ['adgm', 'dubai_pulse'] } } }, stub)).rejects.toThrow(/dubai_pulse" is held/);
         expect(stub.requests).toHaveLength(0);
     });
 

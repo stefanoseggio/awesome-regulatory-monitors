@@ -707,7 +707,7 @@ describe('the exposure script on controlled inputs', () => {
         const schema = JSON.parse(await readFile(join(ROOT, c.slug, '.actor', 'input_schema.json'), 'utf8')) as { properties: Record<string, Record<string, unknown>> };
         edits.schema?.(schema);
         await writeFile(join(root, c.slug, '.actor', 'input_schema.json'), `${JSON.stringify(schema, null, 4)}\n`);
-        await symlink(join(ROOT, c.slug, 'connectors'), join(root, c.slug, 'connectors'), 'dir');
+        await symlink(join(ROOT, c.slug, 'connectors'), join(root, c.slug, 'connectors'), process.platform === 'win32' ? 'junction' : 'dir');
         return root;
     }
 
@@ -831,7 +831,7 @@ describe('the exposure script on controlled inputs', () => {
         await mkdir(join(root, 'scripts'), { recursive: true });
         await cp(join(ROOT, 'scripts', 'audit_pricing_exposure.ts'), join(root, 'scripts', 'audit_pricing_exposure.ts'));
         for (const entry of ['lib', 'pricing', 'package.json', 'tsconfig.json', ...CASES.map((c) => c.slug)]) await cp(join(ROOT, entry), join(root, entry), { recursive: true });
-        await symlink(join(ROOT, 'node_modules'), join(root, 'node_modules'), 'dir');
+        await symlink(join(ROOT, 'node_modules'), join(root, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir');
         const args = ['--import', 'tsx', join(root, 'scripts', 'audit_pricing_exposure.ts')];
 
         // Control: the unmodified copy prints the same report as the real tree, so the failure below can only come from the edit.

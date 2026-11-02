@@ -22,6 +22,7 @@ import {
     classifySectionPage,
     clDiarioOficialConnector,
     clDiarioOficialOptionsSchema,
+    clDiarioOficialStructuralOptionsSchema,
     DIARIO_OFICIAL_SOURCE_ID,
     hasNoPublicationsNotice,
     isBotCheckStub,
@@ -167,7 +168,25 @@ describe('parseTable', () => {
 describe('options validation', () => {
     it('defaults to the one section the legacy actor confirmed end to end', () => {
         expect(clDiarioOficialOptionsSchema.parse({})).toEqual({ sections: ['normas_generales'] });
-        expect(clDiarioOficialOptionsSchema.parse({ sections: ['bom', 'marcas_patentes'] })).toEqual({ sections: ['bom', 'marcas_patentes'] });
+        // the structure still knows every section (the readers of the other six are dormant, not deleted)
+        expect(clDiarioOficialStructuralOptionsSchema.parse({ sections: ['bom', 'marcas_patentes'] })).toEqual({ sections: ['bom', 'marcas_patentes'] });
+    });
+
+    it('holds the six sections that robots.txt disallows: each is refused at preflight with the policy as its reason, alone or mixed with the allowed one', () => {
+        const held = SECTION_NAMES.filter((name) => name !== 'normas_generales');
+        expect(held).toHaveLength(6);
+        for (const section of held) {
+            for (const sections of [[section], ['normas_generales', section]]) {
+                const parsed = clDiarioOficialOptionsSchema.safeParse({ sections });
+                expect(parsed.success, JSON.stringify(sections)).toBe(false);
+                const message = parsed.success ? '' : parsed.error.issues.map((issue) => issue.message).join(' | ');
+                expect(message).toContain(`section "${section}" of the Chilean Diario Oficial is held by the robots.txt policy (decision G4, 2026-11-02)`);
+                expect(message).toContain('disallows /edicionelectronica/ and allows only /edicionelectronica/index.php');
+            }
+        }
+        const input = EngineInputSchema.parse({ sources: ['cl_diario_oficial'], sourceOptions: { cl_diario_oficial: { sections: ['bom'] } } });
+        expect(() => resolveSources({ slug: 'latam-global-tender-intelligence', connectors: [clDiarioOficialConnector] }, input)).toThrow(/held by the robots\.txt policy/);
+        expect(clDiarioOficialOptionsSchema.parse({ sections: ['normas_generales', 'normas_generales'] })).toEqual({ sections: ['normas_generales', 'normas_generales'] });
     });
 
     it('rejects unknown sections, an empty list and unknown keys in preflight', () => {
@@ -186,7 +205,8 @@ describe('options validation', () => {
 });
 
 describe('fetch (stubbed http)', () => {
-    const options = (input: Record<string, unknown> = {}) => clDiarioOficialOptionsSchema.parse(input);
+    // the readers of every section are tested through the structural schema: the robots.txt policy keeps six of them out of reach of a caller
+    const options = (input: Record<string, unknown> = {}) => clDiarioOficialStructuralOptionsSchema.parse(input);
 
     it('maps publications to SourceRecords: CVE as id, legacy fields, PDF as source_url, ministry + agency + description as watchText', async () => {
         const stub = makeCtx(sectionHandler({ [URL_INDEX]: EDITION_HTML }), { now: NOW });

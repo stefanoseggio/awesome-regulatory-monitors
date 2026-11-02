@@ -384,7 +384,7 @@
         {
           "id": "cl_diario_oficial",
           "status": "active",
-          "description": "Chile Diario Oficial (electronic edition): laws, decrees, resolutions and notices published TODAY in the selected sections (normas generales, particulares, judiciales, avisos destacados, empresas y cooperativas, marcas y patentes, miner\u00eda), with issuing ministry / agency, description and the official PDF link. Open site, no credentials, no proxy; requires plain (non-impersonating) HTTP.",
+          "description": "Chile Diario Oficial (electronic edition): laws, decrees, resolutions and notices published TODAY in the normas generales section (the only section robots.txt allows; the other six are held by the robots.txt policy), with issuing ministry / agency, description and the official PDF link. Open site, no credentials, no proxy; requires plain (non-impersonating) HTTP.",
           "heldReason": null,
           "requiredOptions": [],
           "billing": {
@@ -559,7 +559,7 @@
     "global-corporate-patent-intelligence": {
       "slug": "global-corporate-patent-intelligence",
       "title": "Global Corporate & Patent Intelligence - PTAB, EPO, trials, company registers",
-      "description": "One Actor for corporate and IP change monitoring: USPTO PTAB trials and EPO opposition watch (bring your own keys), ClinicalTrials.gov + FDA Orange Book, Singapore ACRA and UAE (ADGM/DIFC) registers. Receive only new or changed records.",
+      "description": "One Actor for corporate and IP change monitoring: USPTO PTAB trials and EPO opposition watch (bring your own keys), ClinicalTrials.gov + FDA Orange Book, Singapore ACRA and the UAE ADGM register. Receive only new or changed records.",
       "memoryMbytes": 1024,
       "startEvent": "apify-actor-start",
       "startPriceUsd": 0.005,
@@ -638,7 +638,7 @@
         {
           "id": "ae_registers",
           "status": "active",
-          "description": "UAE corporate registers - ADGM (Abu Dhabi Global Market) and DIFC (Dubai International Financial Centre) public entity registers, anonymous, with bilingual-safe names and registration / licence status. Dubai Pulse mainland licences are held (unverified wire protocol).",
+          "description": "UAE corporate registers - the ADGM (Abu Dhabi Global Market) public entity register, anonymous, with bilingual-safe names and registration / licence status. The DIFC register is held by the robots.txt policy (its API path is disallowed) and Dubai Pulse mainland licences are held (unverified wire protocol).",
           "heldReason": null,
           "requiredOptions": [],
           "billing": {

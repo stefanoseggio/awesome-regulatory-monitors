@@ -7,9 +7,9 @@
  * baseline-completion bookkeeping, notifier.ts, timeBudget.ts), main.ts and Actor.pushData / charge
  * are the router's business and are not ported.
  *
- * SUB-SOURCES (option `subSources`, default both)
+ * SUB-SOURCES (option `subSources`, default adgm; difc is HELD by the robots.txt policy, decision G4 2026-11-02)
  *   adgm  Abu Dhabi Global Market public register (Salesforce Aura guest RPC)         ACTIVE
- *   difc  Dubai International Financial Centre public register (Next.js API route)    ACTIVE
+ *   difc  Dubai International Financial Centre public register (Next.js API route)    HELD (robots.txt disallows /api/)
  *   dubai_pulse  Dubai mainland DED licences via Dubai Pulse                          HELD (see below)
  *
  * WHY dubai_pulse IS HELD, NOT PORTED. The legacy actor's own record (AGENTS.md section 0.2, source
@@ -104,6 +104,7 @@ import { z } from 'zod';
 
 import { fingerprintOf } from '../../lib/connector_helpers.js';
 import { HttpStatusError } from '../../lib/http.js';
+import { DIFC_ROBOTS_HELD_REASON } from '../../lib/robots_policy.js';
 import { type Connector, type ConnectorContext, type RunParams, SourceFetchError, type SourceRecord } from '../../lib/types.js';
 
 export const AE_SOURCE_ID = 'ae_registers';
@@ -120,7 +121,13 @@ const MAX_HTML_BYTES = 5_000_000;
 const MAX_PAGE_BYTES = 10_000_000;
 
 export type AeSubSource = 'adgm' | 'difc';
-export const AE_ACTIVE_SUB_SOURCES: readonly AeSubSource[] = ['adgm', 'difc'];
+/**
+ * The sub-sources a caller can select. DIFC is HELD by the robots.txt policy (decision G4, 2026-11-02, lib/robots_policy.ts): https://www.difc.com/robots.txt disallows
+ * `/api/` and the register is read through POST /api/handleRequest. Its transport and parser below stay, tested, but `aeRegistersOptionsSchema` refuses `difc`.
+ */
+export const AE_ACTIVE_SUB_SOURCES: readonly AeSubSource[] = ['adgm'];
+/** Every register the code can read, held or not: the structural schema (tests of the dormant DIFC transport) accepts all of them. */
+export const AE_ALL_SUB_SOURCES: readonly AeSubSource[] = ['adgm', 'difc'];
 
 export const DUBAI_PULSE_HELD_REASON =
     'sub-source "dubai_pulse" is held: the legacy actor never verified its wire protocol against live traffic (response envelope, status vocabulary and authentication are guesses behind a 14-day access-approval gate), and a live probe on 2026-10-21 got an API-gateway "Unauthorized application request" that does not confirm the assumed raw-key Authorization header. Use "adgm" and/or "difc".';
@@ -1015,17 +1022,25 @@ const subSourceSchema = z.string().transform((raw, issueCtx): AeSubSource => {
     return z.NEVER;
 });
 
-/** Unknown keys are rejected so a copied-over legacy option (`dubaiPulseApiKey`, `dataSources`, ...) fails loudly. */
-export const aeRegistersOptionsSchema = z
+/**
+ * Structure of the options, without the robots.txt policy: every register the code can read is accepted. Unknown keys are rejected so a copied-over legacy option
+ * (`dubaiPulseApiKey`, `dataSources`, ...) fails loudly. Only the tests of the dormant DIFC transport use this schema; the connector uses {@link aeRegistersOptionsSchema}.
+ */
+export const aeRegistersStructuralOptionsSchema = z
     .object({
         subSources: z
             .array(subSourceSchema)
-            .min(1, 'Select at least one sub-source (adgm, difc).')
+            .min(1, 'Select at least one sub-source (adgm).')
             .transform((list) => [...new Set(list)])
-            .default(['adgm', 'difc']),
+            .default(['adgm']),
     })
     .strict();
-export type AeRegistersOptions = z.infer<typeof aeRegistersOptionsSchema>;
+export type AeRegistersOptions = z.infer<typeof aeRegistersStructuralOptionsSchema>;
+
+/** The options the connector accepts: the structure above plus the robots.txt policy, which refuses `difc` at preflight with its reason. */
+export const aeRegistersOptionsSchema = aeRegistersStructuralOptionsSchema.superRefine((options, issueCtx) => {
+    if (options.subSources.includes('difc')) issueCtx.addIssue({ code: z.ZodIssueCode.custom, path: ['subSources'], message: DIFC_ROBOTS_HELD_REASON });
+});
 
 // ---------------------------------------------------------------------------
 // Fetching
@@ -1082,7 +1097,7 @@ export const aeRegistersConnector: Connector<AeRegistersOptions> = {
     engine: 'global-corporate-patent-intelligence',
     legacyActor: 'uae-corporate-registry-monitor',
     description:
-        'UAE corporate registers - ADGM (Abu Dhabi Global Market) and DIFC (Dubai International Financial Centre) public entity registers, anonymous, with bilingual-safe names and registration / licence status. Dubai Pulse mainland licences are held (unverified wire protocol).',
+        'UAE corporate registers - the ADGM (Abu Dhabi Global Market) public entity register, anonymous, with bilingual-safe names and registration / licence status. The DIFC register is held by the robots.txt policy (its API path is disallowed) and Dubai Pulse mainland licences are held (unverified wire protocol).',
     status: 'active',
     maxSeenIds: AE_MAX_SEEN_IDS,
     optionsSchema: aeRegistersOptionsSchema,

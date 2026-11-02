@@ -25,9 +25,11 @@
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+/** File names are compared with the allowlist and printed with `/` on every platform (`path.relative` yields `\\` on Windows). */
+const toPosix = (p) => p.split(sep).join('/');
 const PACKAGE_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(join(PACKAGE_ROOT, 'package.json'));
 const ts = require('typescript');
@@ -76,12 +78,12 @@ for (const file of walk(OPTIONS.root)) {
         if (node.kind === ts.SyntaxKind.RegularExpressionLiteral) {
             const text = node.getText();
             const last = text.lastIndexOf('/');
-            found.push({ file: relative(OPTIONS.root, file), line, source: text.slice(1, last), flags: text.slice(last + 1) });
+            found.push({ file: toPosix(relative(OPTIONS.root, file)), line, source: text.slice(1, last), flags: text.slice(last + 1) });
         } else if ((ts.isNewExpression(node) || ts.isCallExpression(node)) && node.expression.getText() === 'RegExp') {
             const arg = node.arguments?.[0];
             const flagsArg = node.arguments?.[1];
             if (arg && (ts.isStringLiteral(arg) || ts.isNoSubstitutionTemplateLiteral(arg))) {
-                found.push({ file: relative(OPTIONS.root, file), line, source: arg.text, flags: flagsArg && ts.isStringLiteral(flagsArg) ? flagsArg.text : '' });
+                found.push({ file: toPosix(relative(OPTIONS.root, file)), line, source: arg.text, flags: flagsArg && ts.isStringLiteral(flagsArg) ? flagsArg.text : '' });
             } else {
                 dynamicCount += 1;
             }

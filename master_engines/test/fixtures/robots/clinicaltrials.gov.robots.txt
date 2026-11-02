@@ -1,0 +1,18 @@
+User-agent: *
+
+Disallow: /api/
+
+# Allow access to the internal API to let SPA function properly
+Allow: /api/int/
+Allow: /api/seo/
+
+Disallow: /search?
+Disallow: /expert-search?
+
+# this is ported from 'classic' site
+# Some docs say must be a whole number of seconds.
+# Crawlers differ whether this means delay-between-calls or whether it is max-requests-in-window.
+# Google ignore this value, but supposedly honored by yandex and bing.
+Crawl-delay: 1
+
+Sitemap: https://clinicaltrials.gov/assets/sitemap.xml

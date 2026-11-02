@@ -23,12 +23,12 @@
                     },
                     "uae-entity-new": {
                         "eventTitle": "New UAE register entity",
-                        "eventDescription": "An ADGM or DIFC registration never delivered before.",
+                        "eventDescription": "An ADGM registration never delivered before.",
                         "eventPriceUsd": 0.02
                     },
                     "uae-entity-updated": {
                         "eventTitle": "Updated UAE register entity",
-                        "eventDescription": "A previously delivered ADGM/DIFC entity whose status or content changed, or one re-sent unchanged by a full-snapshot run.",
+                        "eventDescription": "A previously delivered ADGM entity whose status or content changed, or one re-sent unchanged by a full-snapshot run.",
                         "eventPriceUsd": 0.01
                     },
                     "sg-entity-new": {

@@ -33,7 +33,7 @@ export const ENGINE_META: Record<string, EngineMeta> = {
     'global-corporate-patent-intelligence': {
         title: 'Global Corporate & Patent Intelligence - PTAB, EPO, trials, company registers',
         description:
-            'One Actor for corporate and IP change monitoring: USPTO PTAB trials and EPO opposition watch (bring your own keys), ClinicalTrials.gov + FDA Orange Book, Singapore ACRA and UAE (ADGM/DIFC) registers. Receive only new or changed records.',
+            'One Actor for corporate and IP change monitoring: USPTO PTAB trials and EPO opposition watch (bring your own keys), ClinicalTrials.gov + FDA Orange Book, Singapore ACRA and the UAE ADGM register. Receive only new or changed records.',
         sourceOptionsExample: '{"clinicaltrials_orange_book": {"sponsors": ["Pfizer"]}}',
     },
 };

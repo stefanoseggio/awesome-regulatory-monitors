@@ -156,11 +156,68 @@ describe('buildPricingPutBody', () => {
         expect(buildPricingPutBody(TENDERS_PRICING, { now: NOW }).notice.startEventPerRunUsd).toBe(0.005);
     });
 
-    it('flags non-documented prices and --strict refuses them', () => {
+    it('flags non-documented prices; --strict accepts them once decided (G1 to G3) and still refuses an undecided one, a moved start price and a moved hit price', () => {
         const { notice } = buildPricingPutBody(REGTECH_PRICING, { now: NOW });
+        // the provenance of the numbers is unchanged: a ratification records a decision, it does not turn a guess into a documented price
         expect(notice.operatorStatedEvents).toEqual(['watchlist-hit']);
         expect(notice.provisionalEvents).toEqual(['crawler-signal']);
-        expect(() => buildPricingPutBody(REGTECH_PRICING, { now: NOW, strict: true })).toThrow(/--strict/);
+        expect(notice.ratifiedEvents.map((e) => [e.name, e.gate, e.decidedOn])).toEqual([
+            ['crawler-signal', 'G3', '2026-11-02'],
+            ['watchlist-hit', 'G2', '2026-11-02'],
+        ]);
+        expect(notice.startPriceRatification).toMatchObject({ gate: 'G1', decidedOn: '2026-11-02' });
+        for (const pricing of ALL_PRICING) expect(() => buildPricingPutBody(pricing, { now: NOW, strict: true }), pricing.engine).not.toThrow();
+
+        // an undecided non-documented price is refused
+        const undecided = structuredClone(REGTECH_PRICING);
+        delete undecided.events.find((e) => e.name === 'crawler-signal')!.ratification;
+        expect(() => buildPricingPutBody(undecided, { now: NOW, strict: true })).toThrow(/without a ratification \(crawler-signal/);
+        // the locked start price (G1) and hit price (G2): inside the operator's range or not, strict mode refuses a different number
+        const moved = structuredClone(REGTECH_PRICING);
+        moved.startPriceUsd = 0.01;
+        expect(() => buildPricingPutBody(moved, { now: NOW })).not.toThrow();
+        expect(() => buildPricingPutBody(moved, { now: NOW, strict: true })).toThrow(/decision G1 locked it at 0\.005/);
+        // a ratified price that moved since the decision is refused too: the decision was about the old number
+        const dearerSignal = structuredClone(REGTECH_PRICING);
+        dearerSignal.events.find((e) => e.name === 'crawler-signal')!.priceUsd = 0.02;
+        const flagged = buildPricingPutBody(dearerSignal, { now: NOW }).notice;
+        expect(flagged.ratifiedEvents.find((e) => e.name === 'crawler-signal')).toMatchObject({ decidedPriceUsd: 0.015, priceMatchesDecision: false });
+        expect(() => buildPricingPutBody(dearerSignal, { now: NOW, strict: true })).toThrow(/ratified price that moved since the decision \(crawler-signal: decided at 0\.015, priced at 0\.02\)/);
+        expect(notice.ratifiedEvents.every((e) => e.priceMatchesDecision)).toBe(true);
+        expect(notice.startPriceRatification.priceMatchesDecision).toBe(true);
+        expect(buildPricingPutBody(moved, { now: NOW }).notice.startPriceRatification.priceMatchesDecision).toBe(false);
+        const cheaperHit = structuredClone(REGTECH_PRICING);
+        const hit = cheaperHit.events.find((e) => e.name === 'watchlist-hit')!;
+        hit.priceUsd = 0.1;
+        // first the price moved away from the decision it carries ...
+        expect(() => buildPricingPutBody(cheaperHit, { now: NOW, strict: true })).toThrow(/ratified price that moved since the decision \(watchlist-hit: decided at 0\.15, priced at 0\.1\)/);
+        // ... and a fresh decision at the new price is still not the locked one (G2 is changed in the catalogue constant, not by editing an event)
+        hit.ratification!.priceUsd = 0.1;
+        expect(() => buildPricingPutBody(cheaperHit, { now: NOW, strict: true })).toThrow(/decision G2 locked it at 0\.15/);
+    });
+
+    it('every non-documented price carries a complete decision: who, when, why and what reopens it', () => {
+        const undocumented = ALL_PRICING.flatMap((p) => p.events.filter((e) => e.basis !== 'legacy-readme').map((e) => ({ engine: p.engine, event: e })));
+        expect(undocumented.map(({ event }) => event.name).sort()).toEqual(['crawler-signal', 'grant-updated', 'sg-entity-updated', 'uae-entity-updated', 'watchlist-hit', 'watchlist-hit', 'watchlist-hit']);
+        for (const { engine, event } of undocumented) {
+            const r = event.ratification;
+            expect(r, `${engine}/${event.name} has no ratification`).toBeDefined();
+            expect(r?.decidedOn).toBe('2026-11-02');
+            expect(r?.priceUsd, `${engine}/${event.name} was decided at another price than it carries`).toBe(event.priceUsd);
+            expect(r?.decidedBy).toContain('mandate of 2026-11-02');
+            expect((r?.rationale ?? '').length, `${engine}/${event.name} rationale`).toBeGreaterThan(120);
+            expect((r?.reviewWhen ?? '').length, `${engine}/${event.name} reviewWhen`).toBeGreaterThan(60);
+            expect(r?.gate).toBe(event.name === 'watchlist-hit' ? 'G2' : 'G3');
+        }
+        // a documented price needs no ratification, and none was added to one
+        for (const p of ALL_PRICING) for (const e of p.events.filter((x) => x.basis === 'legacy-readme')) expect(e.ratification, `${p.engine}/${e.name}`).toBeUndefined();
+    });
+
+    it('the start price is the G1 lock in every engine and the hit price the G2 lock in every engine', () => {
+        for (const p of ALL_PRICING) {
+            expect(p.startPriceUsd, p.engine).toBe(0.005);
+            expect(p.events.find((e) => e.name === 'watchlist-hit')?.priceUsd, p.engine).toBe(0.15);
+        }
     });
 
     it('refuses to build from an invalid catalog and from a bad timestamp', () => {
