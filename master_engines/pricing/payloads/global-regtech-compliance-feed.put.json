@@ -17,7 +17,7 @@
                         "isPrimaryEvent": true
                     },
                     "debarment-record": {
-                        "eventTitle": "Debarment / sanction record",
+                        "eventTitle": "World Bank sanction record",
                         "eventDescription": "One World Bank \"Other Sanctions\" record delivered to the dataset.",
                         "eventPriceUsd": 0.003
                     },

@@ -19,7 +19,7 @@ export interface EngineMeta {
 
 export const ENGINE_META: Record<string, EngineMeta> = {
     'global-regtech-compliance-feed': {
-        title: 'Global RegTech Compliance Feed - sanctions, enforcement, debarment, recalls',
+        title: 'Global RegTech Compliance Feed - sanctions, enforcement, recalls',
         description:
             'One Actor, six regulatory delta sources: OFAC sanctioned vessels, World Bank sanctions, UK Modern Slavery statements, SEC enforcement releases, AI-crawler permission signals and FDA/EMA drug-safety records. Choose sources per run, keep per-source options, and receive only new or changed records.',
         sourceOptionsExample: '{"fda_ema_recalls": {"subSources": ["fda"]}}',

@@ -152,7 +152,7 @@
   "engines": {
     "global-regtech-compliance-feed": {
       "slug": "global-regtech-compliance-feed",
-      "title": "Global RegTech Compliance Feed - sanctions, enforcement, debarment, recalls",
+      "title": "Global RegTech Compliance Feed - sanctions, enforcement, recalls",
       "description": "One Actor, six regulatory delta sources: OFAC sanctioned vessels, World Bank sanctions, UK Modern Slavery statements, SEC enforcement releases, AI-crawler permission signals and FDA/EMA drug-safety records. Choose sources per run, keep per-source options, and receive only new or changed records.",
       "memoryMbytes": 2048,
       "startEvent": "apify-actor-start",
@@ -272,7 +272,7 @@
         },
         {
           "name": "debarment-record",
-          "title": "Debarment / sanction record",
+          "title": "World Bank sanction record",
           "priceUsd": 0.003,
           "basis": "legacy-readme"
         },
