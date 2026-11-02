@@ -1,0 +1,29 @@
+{
+  "global-regtech-compliance-feed": {
+    "title": "Global RegTech Compliance Feed - Sanctions & Enforcement",
+    "seoTitle": "RegTech Compliance Feed: OFAC, SEC, FDA, Modern Slavery",
+    "description": "Six public regulatory sources in one Actor: OFAC sanctioned vessels, World Bank Other Sanctions, UK Modern Slavery statements, SEC enforcement releases, AI-crawler permissions and FDA/EMA drug-safety records. Choose sources per run and receive only new or changed records.",
+    "seoDescription": "Delta feed of OFAC vessel sanctions, SEC enforcement releases, UK modern slavery statements, FDA/EMA recalls and AI-crawler rules, as JSON.",
+    "categories": [
+      "BUSINESS"
+    ]
+  },
+  "latam-global-tender-intelligence": {
+    "title": "LatAm & Global Tender Intelligence - Public Tenders Feed",
+    "seoTitle": "Public Tender Monitor: Argentina, Chile, EU TED, Florida",
+    "description": "Public tenders, notices and grants from eight open sources: Santa Fe, Tucuman and Entre Rios (Argentina), Chile Diario Oficial, EU TED, Florida bids, World Bank notices and Regione Lombardia grants. Choose sources per run and receive only new or changed records.",
+    "seoDescription": "Delta feed of public tenders and grants: EU TED, Florida, World Bank, Chile Diario Oficial, Lombardia and three Argentine provinces, as JSON.",
+    "categories": [
+      "BUSINESS"
+    ]
+  },
+  "global-corporate-patent-intelligence": {
+    "title": "Corporate & Patent Intelligence - PTAB, EPO, Registers",
+    "seoTitle": "Patent & Corporate Monitor: PTAB, EPO, ClinicalTrials, ACRA",
+    "description": "Patent disputes and company registers in one Actor: USPTO PTAB trials and EPO opposition watch (your own API keys), ClinicalTrials.gov and FDA Orange Book, Singapore ACRA and the UAE ADGM register. Receive only new or changed records.",
+    "seoDescription": "Delta feed of USPTO PTAB trials, EPO opposition events, ClinicalTrials.gov, FDA Orange Book, Singapore ACRA and ADGM entities. Bring your own keys.",
+    "categories": [
+      "BUSINESS"
+    ]
+  }
+}

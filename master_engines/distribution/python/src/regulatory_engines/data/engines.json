@@ -152,8 +152,8 @@
   "engines": {
     "global-regtech-compliance-feed": {
       "slug": "global-regtech-compliance-feed",
-      "title": "Global RegTech Compliance Feed - sanctions, enforcement, recalls",
-      "description": "One Actor, six regulatory delta sources: OFAC sanctioned vessels, World Bank sanctions, UK Modern Slavery statements, SEC enforcement releases, AI-crawler permission signals and FDA/EMA drug-safety records. Choose sources per run, keep per-source options, and receive only new or changed records.",
+      "title": "Global RegTech Compliance Feed - Sanctions & Enforcement",
+      "description": "Six public regulatory sources in one Actor: OFAC sanctioned vessels, World Bank Other Sanctions, UK Modern Slavery statements, SEC enforcement releases, AI-crawler permissions and FDA/EMA drug-safety records. Choose sources per run and receive only new or changed records.",
       "memoryMbytes": 2048,
       "startEvent": "apify-actor-start",
       "startPriceUsd": 0.005,
@@ -333,8 +333,8 @@
     },
     "latam-global-tender-intelligence": {
       "slug": "latam-global-tender-intelligence",
-      "title": "LatAm & Global Tender Intelligence - public procurement delta feed",
-      "description": "One Actor for public tenders and grants: Argentine provincial portals (Santa Fe, Tucuman, Entre Rios), Chile Diario Oficial, EU TED, Florida MFMP, World Bank notices and Regione Lombardia grants. Held sources (ar_cordoba, ar_salta, ar_mendoza, ar_pba, au_grantconnect, ADB, IDB) are refused with their reason.",
+      "title": "LatAm & Global Tender Intelligence - Public Tenders Feed",
+      "description": "Public tenders, notices and grants from eight open sources: Santa Fe, Tucuman and Entre Rios (Argentina), Chile Diario Oficial, EU TED, Florida bids, World Bank notices and Regione Lombardia grants. Choose sources per run and receive only new or changed records.",
       "memoryMbytes": 1024,
       "startEvent": "apify-actor-start",
       "startPriceUsd": 0.005,
@@ -558,8 +558,8 @@
     },
     "global-corporate-patent-intelligence": {
       "slug": "global-corporate-patent-intelligence",
-      "title": "Global Corporate & Patent Intelligence - PTAB, EPO, trials, company registers",
-      "description": "One Actor for corporate and IP change monitoring: USPTO PTAB trials and EPO opposition watch (bring your own keys), ClinicalTrials.gov + FDA Orange Book, Singapore ACRA and the UAE ADGM register. Receive only new or changed records.",
+      "title": "Corporate & Patent Intelligence - PTAB, EPO, Registers",
+      "description": "Patent disputes and company registers in one Actor: USPTO PTAB trials and EPO opposition watch (your own API keys), ClinicalTrials.gov and FDA Orange Book, Singapore ACRA and the UAE ADGM register. Receive only new or changed records.",
       "memoryMbytes": 1024,
       "startEvent": "apify-actor-start",
       "startPriceUsd": 0.005,
