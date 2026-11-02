@@ -16,7 +16,7 @@ Typical users: IP and litigation teams watching patent disputes, pharma competit
 
 ## How to use it
 
-1. Open the **Input** tab and choose one or more `sources`. Start with one.
+1. Open the **Input** tab and choose one or more `sources`. Start with one. The form is prefilled with a small snapshot (`deltaMode: "all"`, 10 records per source) so that the first run shows data at once; for a scheduled Task set `deltaMode` to `onlyChanged` and raise `maxItemsPerSource`.
 2. Add the credentials the source needs (see "Credentials").
 3. Run it. The first run of a source treats every record it reads as new (see "Control your spend" below).
 4. Put the same input in a **Task** and attach an Apify **Schedule**. Each Task keeps its own delta memory, so later runs deliver only what changed.

@@ -77,6 +77,11 @@ describe.each(TARGETS.map((t) => [t.engine.slug, t] as const))('%s Store README'
         expect(readme).toContain('`maxWatchlistSpendUsd` (default 50)');
     });
 
+    it('says what the prefilled form does and what a scheduled Task should use instead (F-23)', () => {
+        expect(readme).toContain('The form is prefilled with a small snapshot (`deltaMode: "all"`, 10 records per source)');
+        expect(readme).toContain('for a scheduled Task set `deltaMode` to `onlyChanged` and raise `maxItemsPerSource`');
+    });
+
     it('discloses what the first run, the full-snapshot mode and the watchlist bill', () => {
         expect(readme).toMatch(/first run of a source delivers up to `maxItemsPerSource` records[^.]*and bills each one/u);
         expect(readme).toMatch(/With `deltaMode: "all"` every delivered record is billed/u);

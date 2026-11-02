@@ -40,6 +40,16 @@ export const ENGINE_META: Record<string, EngineMeta> = {
 
 const SOURCE_TITLE_MAX = 90;
 
+/**
+ * The Apify Store runs every published Actor daily on the input the form is prefilled with and expects status SUCCEEDED and a
+ * non-empty default dataset within 5 minutes (https://docs.apify.com/platform/actors/publishing/test); an Actor that keeps
+ * failing is marked under maintenance (ranks lower) and then deprecated (not searchable). A delta-only prefill would deliver
+ * nothing on the second day, because the delta memory of the runner persists, and a source with a detail request per record
+ * would not finish 500 records in 5 minutes. So the prefill is a small snapshot: deltaMode "all" and a few records per source.
+ * The field defaults stay what a scheduled Task needs (onlyChanged, 500). Finding F-23.
+ */
+export const STORE_TEST_MAX_ITEMS = 10;
+
 function firstSentence(text: string): string {
     const cut = text.split(/(?<=\.)\s/u)[0] ?? text;
     return cut.length > SOURCE_TITLE_MAX ? `${cut.slice(0, SOURCE_TITLE_MAX - 1)}…` : cut;
@@ -79,6 +89,7 @@ export function buildInputSchema(engine: EngineDefinition): Record<string, unkno
             editor: 'select',
             items: { type: 'string', enum: active.map((c) => c.id), enumTitles: active.map((c) => firstSentence(c.description)) },
             default: [defaultSourceFor(engine)],
+            prefill: [defaultSourceFor(engine)],
             minItems: 1,
         },
         sourceOptions: {
@@ -97,6 +108,7 @@ export function buildInputSchema(engine: EngineDefinition): Record<string, unkno
             enum: [...DELTA_MODES],
             enumTitles: ['All records (snapshot)', 'New and changed records', 'New records only'],
             default: 'onlyChanged',
+            prefill: 'all',
         },
         stateNamespace: {
             title: 'Delta memory namespace',
@@ -105,7 +117,7 @@ export function buildInputSchema(engine: EngineDefinition): Record<string, unkno
                 'Keeps delta memory separate between Tasks (different watchlists, filters or delta modes would otherwise consume each other\'s "new" records). Leave empty to use one namespace per Task, or "default" for ad-hoc runs. 1-40 characters: a-z, 0-9, "-".',
             editor: 'textfield',
         },
-        maxItemsPerSource: { title: 'Max records per source', type: 'integer', description: 'Upper bound on records taken from each source in one run.', minimum: 1, maximum: 10000, default: 500 },
+        maxItemsPerSource: { title: 'Max records per source', type: 'integer', description: 'Upper bound on records taken from each source in one run.', minimum: 1, maximum: 10000, default: 500, prefill: STORE_TEST_MAX_ITEMS },
         watchlistNames: {
             title: 'Watchlist keywords',
             type: 'array',

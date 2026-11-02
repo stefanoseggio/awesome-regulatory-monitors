@@ -192,6 +192,18 @@ describe('delta modes and state', () => {
         expect(h.rows.map((r) => [r.record_id, r.delta_status, r.is_new])).toEqual([['1', 'unchanged', false]]);
     });
 
+    it('the same input run twice on the same delta memory is empty in onlyChanged and not in all (the Store daily test needs a snapshot, F-23)', async () => {
+        const engine = engineOf(stub('alpha', [rec('1', 'a'), rec('2', 'a')]));
+        const store = new InMemoryDeltaStore();
+        await runEngine(engine, { sources: ['alpha'] }, { sinks: harness({ store }).sinks, ctx, clock });
+        const again = harness({ store });
+        await runEngine(engine, { sources: ['alpha'] }, { sinks: again.sinks, ctx, clock });
+        expect(again.rows).toHaveLength(0);
+        const snapshot = harness({ store });
+        await runEngine(engine, { sources: ['alpha'], deltaMode: 'all', maxItemsPerSource: 10 }, { sinks: snapshot.sinks, ctx, clock });
+        expect(snapshot.rows.map((row) => row.delta_status)).toEqual(['unchanged', 'unchanged']);
+    });
+
     it('a skipped (unchanged / not-new) record is still remembered', async () => {
         const store = new InMemoryDeltaStore();
         await runEngine(engineOf(stub('alpha', [rec('1', 'a')])), { sources: ['alpha'] }, { sinks: harness({ store }).sinks, ctx, clock });

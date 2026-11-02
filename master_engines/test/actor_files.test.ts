@@ -7,7 +7,8 @@ import { regtechEngine } from '../global-regtech-compliance-feed/index.js';
 import { patentsEngine } from '../global-corporate-patent-intelligence/index.js';
 import { tendersEngine } from '../latam-global-tender-intelligence/index.js';
 import { ALL_PRICING, PATENTS_PRICING, REGTECH_PRICING, TENDERS_PRICING } from '../pricing/event_catalog.js';
-import { buildActorJson, buildDockerfile, buildInputSchema, ENGINE_META } from '../scripts/actor_files.js';
+import { EngineInputSchema, resolveSources } from '../lib/router_core.js';
+import { buildActorJson, buildDockerfile, buildInputSchema, ENGINE_META, STORE_TEST_MAX_ITEMS } from '../scripts/actor_files.js';
 
 const TARGETS = [
     { engine: regtechEngine, pricing: REGTECH_PRICING },
@@ -33,6 +34,23 @@ describe.each(TARGETS.map((t) => [t.engine.slug, t] as const))('%s actor files',
         expect(schema.properties.watchlistNames).toMatchObject({ type: 'array', default: [] });
         expect(schema.properties.maxWatchlistHitsPerRun).toMatchObject({ default: 200 });
         expect(schema.properties.maxWatchlistSpendUsd).toMatchObject({ default: 50 });
+    });
+
+    it('prefills the input of the Store daily test: the default source, a small snapshot, no credential (F-23)', () => {
+        const prefill = { sources: schema.properties.sources.prefill, deltaMode: schema.properties.deltaMode.prefill, maxItemsPerSource: schema.properties.maxItemsPerSource.prefill };
+        expect(prefill.sources).toEqual(schema.properties.sources.default);
+        expect(prefill.deltaMode).toBe('all');
+        expect(prefill.maxItemsPerSource).toBe(STORE_TEST_MAX_ITEMS);
+        expect(STORE_TEST_MAX_ITEMS).toBeLessThanOrEqual(25);
+        for (const [key, property] of Object.entries(schema.properties)) {
+            if (!['sources', 'deltaMode', 'maxItemsPerSource'].includes(key)) expect(property.prefill, `${key} must not be prefilled`).toBeUndefined();
+        }
+        // the prefilled input is a valid run input and resolves to exactly the default source, which needs no credential
+        const input = EngineInputSchema.parse(prefill);
+        expect(resolveSources(engine, input).map((r) => r.connector.id)).toEqual(prefill.sources);
+        // and the field defaults are still what a scheduled Task needs
+        expect(schema.properties.deltaMode.default).toBe('onlyChanged');
+        expect(schema.properties.maxItemsPerSource.default).toBe(500);
     });
 
     it('exposes every credential as a top-level isSecret string field', () => {

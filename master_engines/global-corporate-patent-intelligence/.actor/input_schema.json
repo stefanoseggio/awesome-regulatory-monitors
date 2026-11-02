@@ -29,6 +29,9 @@
             "default": [
                 "clinicaltrials_orange_book"
             ],
+            "prefill": [
+                "clinicaltrials_orange_book"
+            ],
             "minItems": 1
         },
         "sourceOptions": {
@@ -53,7 +56,8 @@
                 "New and changed records",
                 "New records only"
             ],
-            "default": "onlyChanged"
+            "default": "onlyChanged",
+            "prefill": "all"
         },
         "stateNamespace": {
             "title": "Delta memory namespace",
@@ -67,7 +71,8 @@
             "description": "Upper bound on records taken from each source in one run.",
             "minimum": 1,
             "maximum": 10000,
-            "default": 500
+            "default": 500,
+            "prefill": 10
         },
         "watchlistNames": {
             "title": "Watchlist keywords",
