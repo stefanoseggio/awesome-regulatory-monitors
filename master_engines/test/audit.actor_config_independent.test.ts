@@ -758,8 +758,8 @@ describe.each(CASES.map((c) => [c.slug, c] as const))('%s: staged build context 
         return out.sort();
     }
 
-    it('contains lib, pricing (without payloads) and this engine only, plus the package files and the Actor definition', async () => {
-        expect((await readdir(staged)).sort()).toEqual(['.actor', '.dockerignore', 'Dockerfile', 'lib', 'package-lock.json', 'package.json', 'pricing', slug, 'tsconfig.json'].sort());
+    it('contains lib, pricing (without payloads) and this engine only, plus the package files, the Actor definition and the Store README', async () => {
+        expect((await readdir(staged)).sort()).toEqual(['.actor', '.dockerignore', 'Dockerfile', 'README.md', 'lib', 'package-lock.json', 'package.json', 'pricing', slug, 'tsconfig.json'].sort());
         const files = await walk(staged);
         expect(files.filter((p) => p.startsWith('pricing/')).every((p) => /^pricing\/[a-z_]+\.ts$/u.test(p))).toBe(true);
         expect(files.some((p) => p.startsWith('pricing/payloads'))).toBe(false);

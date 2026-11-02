@@ -1,6 +1,6 @@
 /**
  * Stages one engine into a self-contained directory ready for `apify push` (the build context must contain
- * lib/, pricing/ and the engine, which live side by side in master_engines/).
+ * lib/, pricing/ and the engine, which live side by side in master_engines/) and carrying the Store README as README.md.
  *
  *   npx tsx scripts/stage_actor.ts <engine-slug> [--out=<dir>]      (default out: stage/<engine-slug>)
  */
@@ -35,6 +35,15 @@ for (const file of ['package.json', 'package-lock.json']) {
 // The Apify build copies .actor/ from the context root.
 await cp(join(root, slug, '.actor'), join(out, '.actor'), { recursive: true });
 await cp(join(out, '.actor', 'Dockerfile'), join(out, 'Dockerfile'));
+
+// The Store page shows the README of the pushed build. Without this copy the Actor is published with an empty README page
+// (finding F-20): the file is store_listings/<slug>.README.md, checked by test/store_readme.test.ts.
+try {
+    await cp(join(root, 'store_listings', `${slug}.README.md`), join(out, 'README.md'));
+} catch {
+    console.error(`Missing store_listings/${slug}.README.md: an Actor must not be pushed without its Store README.`);
+    process.exit(1);
+}
 
 const tsconfig = JSON.parse(await readFile(join(root, 'tsconfig.json'), 'utf8')) as { include: string[] };
 tsconfig.include = ['lib/**/*.ts', 'pricing/**/*.ts', `${slug}/**/*.ts`];
