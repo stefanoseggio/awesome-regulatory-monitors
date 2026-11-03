@@ -1,9 +1,9 @@
 import type { EngineDefinition } from '../lib/router_core.js';
 import { applyCatalogBilling } from '../pricing/apply_billing.js';
 import { PATENTS_PRICING } from '../pricing/event_catalog.js';
-import { aeRegistersConnector } from './connectors/aeRegisters.js';
 import { clinicaltrialsOrangeBookConnector } from './connectors/clinicaltrialsOrangeBook.js';
 import { epoOppositionConnector } from './connectors/epoOpposition.js';
+import { aeRegistersHeldConnector } from './connectors/heldUae.js';
 import { sgAcraConnector } from './connectors/sgAcra.js';
 import { usptoPtabConnector } from './connectors/usptoPtab.js';
 
@@ -19,7 +19,7 @@ export const patentsEngine: EngineDefinition = applyCatalogBilling(
             epoOpsConsumerSecret: { source: 'epo_opposition', option: 'epoOpsConsumerSecret' },
             fdaApiKey: { source: 'clinicaltrials_orange_book', option: 'fdaApiKey' },
         },
-        connectors: [usptoPtabConnector, epoOppositionConnector, clinicaltrialsOrangeBookConnector, sgAcraConnector, aeRegistersConnector],
+        connectors: [usptoPtabConnector, epoOppositionConnector, clinicaltrialsOrangeBookConnector, sgAcraConnector, aeRegistersHeldConnector],
     },
     PATENTS_PRICING,
 );

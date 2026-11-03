@@ -39,8 +39,8 @@ Memory 1024 MB (pinned) = 1 start event(s) per run.
 | Event | Price (USD) | Basis | Billed by |
 | --- | ---: | --- | --- |
 | `apify-actor-start` | 0.005000 | platform | every run, once per GB of memory |
-| `tender-detail` | 0.004000 | operator-stated | ar_santafe, ar_tucuman, ar_entrerios, cl_diario_oficial, us_florida (delivered row, by delta class) |
-| `tender-summary` | 0.001500 | operator-stated | ar_santafe, us_florida (record-level override: row delivered from the listing without a detail fetch) |
+| `tender-detail` | 0.004000 | operator-stated | ar_tucuman, ar_entrerios, cl_diario_oficial, us_florida (delivered row, by delta class) |
+| `tender-summary` | 0.001500 | operator-stated | us_florida (record-level override: row delivered from the listing without a detail fetch) |
 | `notice-record` | 0.001000 | legacy-readme | world_bank_notices (delivered row, by delta class) |
 | `notice-new` | 0.020000 | legacy-readme | eu_ted (delivered row, by delta class) |
 | `notice-updated` | 0.010000 | legacy-readme | eu_ted (delivered row, by delta class) |
@@ -69,8 +69,6 @@ Memory 1024 MB (pinned) = 1 start event(s) per run.
 | `apify-actor-start` | 0.005000 | platform | every run, once per GB of memory |
 | `patent-proceeding` | 0.002000 | legacy-readme | uspto_ptab, epo_opposition (delivered row, by delta class) |
 | `clinical-record` | 0.002000 | legacy-readme | clinicaltrials_orange_book (delivered row, by delta class) |
-| `uae-entity-new` | 0.020000 | legacy-readme | ae_registers (delivered row, by delta class) |
-| `uae-entity-updated` | 0.010000 | provisional | ae_registers (delivered row, by delta class) |
 | `sg-entity-new` | 0.030000 | legacy-readme | sg_acra (delivered row, by delta class) |
 | `sg-entity-updated` | 0.010000 | provisional | sg_acra (delivered row, by delta class) |
 | `watchlist-hit` | 0.150000 | operator-stated | any delivered row whose text matches a watchlist keyword (after the journal write) |
@@ -101,8 +99,8 @@ Memory 1024 MB (pinned) = 1 start event(s) per run.
 | --- | ---: | ---: | ---: |
 | global-regtech-compliance-feed | 8 | 1 | 1 |
 | latam-global-tender-intelligence | 4 | 1 | 3 |
-| global-corporate-patent-intelligence | 4 | 2 | 1 |
-| **all engines** | 16 | 4 | 5 |
+| global-corporate-patent-intelligence | 3 | 1 | 1 |
+| **all engines** | 15 | 3 | 5 |
 
 ## Notes
 

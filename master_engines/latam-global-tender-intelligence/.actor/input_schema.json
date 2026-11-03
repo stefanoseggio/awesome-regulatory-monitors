@@ -7,12 +7,11 @@
         "sources": {
             "title": "Sources to run",
             "type": "array",
-            "description": "Source ids to run in this execution. Held sources are not selectable: au_grantconnect, adb_procurement, idb_procurement, ar_cordoba, ar_salta, ar_mendoza, ar_pba.",
+            "description": "Source ids to run in this execution. Held sources are not selectable: au_grantconnect, adb_procurement, idb_procurement, ar_cordoba, ar_salta, ar_mendoza, ar_pba, ar_santafe.",
             "editor": "select",
             "items": {
                 "type": "string",
                 "enum": [
-                    "ar_santafe",
                     "ar_tucuman",
                     "ar_entrerios",
                     "cl_diario_oficial",
@@ -22,7 +21,6 @@
                     "it_lombardia_grants"
                 ],
                 "enumTitles": [
-                    "Province of Santa Fe (Argentina) Gestiones de Compra: public tenders / purchasing process…",
                     "Province of Tucumán (Argentina) public tenders (licitaciones públicas / privadas, concurs…",
                     "Province of Entre Ríos (Argentina) Unidad Central de Contrataciones: licitaciones, solici…",
                     "Chile Diario Oficial (electronic edition): laws, decrees, resolutions and notices publish…",
@@ -33,10 +31,10 @@
                 ]
             },
             "default": [
-                "ar_santafe"
+                "ar_tucuman"
             ],
             "prefill": [
-                "ar_santafe"
+                "ar_tucuman"
             ],
             "minItems": 1
         },

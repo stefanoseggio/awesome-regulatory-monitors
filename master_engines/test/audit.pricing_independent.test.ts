@@ -178,8 +178,8 @@ const CASES: Case[] = [
             },
             primary: 'tender-detail',
             basis: { legacy: 4, provisional: 1, operator: 3 },
-            active: 8,
-            held: 7,
+            active: 7,
+            held: 8,
             exposure: { emptyRun: 5_000n, dearestRow: 20_000n, oneRow: 170_000n, uncapped1000: 170_005_000n, capped1000: 50_005_000n, killWithJournal: 20_000n, killOldWindow: 4_250_000n },
         },
     },
@@ -193,16 +193,14 @@ const CASES: Case[] = [
                 [START]: 5_000n,
                 'patent-proceeding': 2_000n,
                 'clinical-record': 2_000n,
-                'uae-entity-new': 20_000n,
-                'uae-entity-updated': 10_000n,
                 'sg-entity-new': 30_000n,
                 'sg-entity-updated': 10_000n,
                 [HIT]: 150_000n,
             },
             primary: 'patent-proceeding',
-            basis: { legacy: 4, provisional: 2, operator: 1 },
-            active: 5,
-            held: 0,
+            basis: { legacy: 3, provisional: 1, operator: 1 },
+            active: 4,
+            held: 1,
             exposure: { emptyRun: 5_000n, dearestRow: 30_000n, oneRow: 180_000n, uncapped1000: 180_005_000n, capped1000: 60_005_000n, killWithJournal: 30_000n, killOldWindow: 4_500_000n },
         },
     },
@@ -501,20 +499,20 @@ describe.each(CASES.map((c) => [c.slug, c] as const))('%s: committed Pay-Per-Eve
 });
 
 describe('the three payloads together', () => {
-    it('price 25 events beyond the start event: 16 legacy-readme, 4 provisional, 5 operator-stated', () => {
+    it('price 23 events beyond the start event: 15 legacy-readme, 3 provisional, 5 operator-stated', () => {
         const all = ALL_PRICING.flatMap((p) => p.events);
-        expect(all).toHaveLength(25);
-        expect(all.filter((e) => e.basis === 'legacy-readme')).toHaveLength(16);
-        expect(all.filter((e) => e.basis === 'provisional').map((e) => e.name)).toEqual(['crawler-signal', 'grant-updated', 'uae-entity-updated', 'sg-entity-updated']);
+        expect(all).toHaveLength(23);
+        expect(all.filter((e) => e.basis === 'legacy-readme')).toHaveLength(15);
+        expect(all.filter((e) => e.basis === 'provisional').map((e) => e.name)).toEqual(['crawler-signal', 'grant-updated', 'sg-entity-updated']);
         expect(all.filter((e) => e.basis === 'operator-stated').map((e) => e.name)).toEqual([HIT, 'tender-detail', 'tender-summary', HIT, HIT]);
         const committed = CASES.reduce((sum, c) => sum + Object.keys(factsOf(c.slug).events).length - 1, 0);
-        expect(committed).toBe(25);
+        expect(committed).toBe(23);
     });
 
-    it('cover 19 active and 10 held connectors', () => {
+    it('cover 17 active and 12 held connectors', () => {
         const all = CASES.flatMap((c) => c.engine.connectors);
-        expect(all.filter((x) => x.status === 'active')).toHaveLength(19);
-        expect(all.filter((x) => x.status === 'held')).toHaveLength(10);
+        expect(all.filter((x) => x.status === 'active')).toHaveLength(17);
+        expect(all.filter((x) => x.status === 'held')).toHaveLength(12);
         expect(new Set(all.map((x) => x.id)).size).toBe(all.length);
     });
 
@@ -636,7 +634,7 @@ describe('pricing exposure figures', () => {
             for (const e of r.events.filter((x) => x.name !== START && x.name !== HIT)) expect(e.sources.length, `${c.slug}/${e.name} has no billing source`).toBeGreaterThan(0);
         }
         const tenderSummary = must(must(report.find((x) => x.slug === 'latam-global-tender-intelligence'), 'tenders').events.find((e) => e.name === 'tender-summary'), 'tender-summary');
-        expect(tenderSummary.sources).toEqual(['ar_santafe', 'us_florida']);
+        expect(tenderSummary.sources).toEqual(['us_florida']);
     });
 
     it('prints a deterministic Markdown report containing every audited figure, identical across two real runs and the in-process render', async () => {
@@ -668,7 +666,7 @@ describe('pricing exposure figures', () => {
             expect(first.stdout).toContain(`| \`${START}\` | ${usd6(must(c.golden.prices[START], 'start'))} | platform |`);
             for (const event of c.catalog.events) expect(first.stdout).toContain(`| \`${event.name}\` | ${usd6(must(c.golden.prices[event.name], event.name))} | ${event.basis} |`);
         }
-        expect(first.stdout).toContain('| **all engines** | 16 | 4 | 5 |');
+        expect(first.stdout).toContain('| **all engines** | 15 | 3 | 5 |');
         expect(first.stdout).not.toMatch(/\d{4}-\d{2}-\d{2}T/u);
     }, 120_000);
 });
@@ -819,11 +817,14 @@ describe('the exposure script on controlled inputs', () => {
     });
 
     it('lists only ACTIVE sources, also for record-level overrides found in connector source (a held source bills nothing)', async () => {
-        const held: EngineDefinition = { ...tenders.engine, connectors: tenders.engine.connectors.map((x) => (x.id === 'us_florida' ? ({ ...x, status: 'held', heldReason: 'audit probe' } as typeof x) : x)) };
+        // only us_florida bills tender-summary since ar_santafe is held (F-28): holding it leaves the event without an active source
+        const florida: EngineDefinition = { ...tenders.engine, connectors: tenders.engine.connectors.map((x) => (x.id === 'us_florida' ? ({ ...x, status: 'held', heldReason: 'audit probe' } as typeof x) : x)) };
+        await expect(collectEngineExposure(ROOT, florida)).rejects.toThrow(/event tender-summary is priced but no active source bills it/u);
+        const held: EngineDefinition = { ...tenders.engine, connectors: tenders.engine.connectors.map((x) => (x.id === 'ar_tucuman' ? ({ ...x, status: 'held', heldReason: 'audit probe' } as typeof x) : x)) };
         const r = await collectEngineExposure(ROOT, held);
         const sourcesOf = (name: string): string[] => must(r.events.find((e) => e.name === name), name).sources;
-        expect(sourcesOf('tender-summary')).toEqual(['ar_santafe']);
-        expect(sourcesOf('tender-detail')).toEqual(['ar_santafe', 'ar_tucuman', 'ar_entrerios', 'cl_diario_oficial']);
+        expect(sourcesOf('tender-summary')).toEqual(['us_florida']);
+        expect(sourcesOf('tender-detail')).toEqual(['ar_entrerios', 'cl_diario_oficial', 'us_florida']);
     });
 
     it('exits with status 1, a reason on stderr and nothing on stdout when the committed payload disagrees with the catalog', async () => {

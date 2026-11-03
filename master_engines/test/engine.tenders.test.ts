@@ -20,7 +20,7 @@ describe('latam-global-tender-intelligence registry', () => {
 
     it('every active connector preflights with empty options', () => {
         const active = tendersEngine.connectors.filter((c) => c.status === 'active').map((c) => c.id);
-        expect(active.length).toBe(8);
+        expect(active.length).toBe(7);
         for (const id of active) {
             const connector = tendersEngine.connectors.find((c) => c.id === id);
             if (connector?.requiredOptions?.length) continue;
@@ -74,8 +74,9 @@ describe('ar_cordoba is formally held', () => {
         expect(index).toContain('arCordobaHeldConnector');
     });
 
-    it('the tenders engine now offers exactly eight active sources', () => {
+    it('the tenders engine now offers exactly seven active sources, ar_santafe being held since it answers nothing from Apify\'s cloud (F-28)', () => {
         const active = tendersEngine.connectors.filter((c) => c.status === 'active').map((c) => c.id).sort();
-        expect(active).toEqual(['ar_entrerios', 'ar_santafe', 'ar_tucuman', 'cl_diario_oficial', 'eu_ted', 'it_lombardia_grants', 'us_florida', 'world_bank_notices']);
+        expect(active).toEqual(['ar_entrerios', 'ar_tucuman', 'cl_diario_oficial', 'eu_ted', 'it_lombardia_grants', 'us_florida', 'world_bank_notices']);
+        expect(tendersEngine.connectors.find((c) => c.id === 'ar_santafe')?.status).toBe('held');
     });
 });

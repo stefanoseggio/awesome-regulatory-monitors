@@ -646,10 +646,10 @@ describe('what the runbook states equals the committed artefacts', () => {
         expect(markdown).toContain('14 days');
         expect(markdown).toContain('cannot be cancelled or edited');
         for (const gate of ['G1', 'G2', 'G3', 'G4', 'G5']) expect(markdown).toContain(`| ${gate} |`);
-        for (const event of ['crawler-signal', 'grant-updated', 'uae-entity-updated', 'sg-entity-updated']) expect(markdown).toContain(event);
+        for (const event of ['crawler-signal', 'grant-updated', 'sg-entity-updated']) expect(markdown).toContain(event);
         // the provisional and operator-stated events named in the gates are the ones the notice files report
         const provisional = SLUGS.flatMap((slug) => readJson<{ provisionalEvents: string[] }>(join(ROOT, 'pricing', 'payloads', `${slug}.notice.json`)).provisionalEvents).sort();
-        expect(provisional).toEqual(['crawler-signal', 'grant-updated', 'sg-entity-updated', 'uae-entity-updated']);
+        expect(provisional).toEqual(['crawler-signal', 'grant-updated', 'sg-entity-updated']);
     });
 
     it('records the decisions G1 to G5 of 2026-11-02: the locked prices, the one robots.txt exception with its endpoints, and the review schedule instead of a sunset', () => {

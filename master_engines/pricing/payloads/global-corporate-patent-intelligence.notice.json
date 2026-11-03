@@ -11,22 +11,12 @@
     "memoryMbytes": 1024,
     "reasonForChange": "Consolidation of single-source Actors into global-corporate-patent-intelligence: each legacy source keeps its own per-record price as a separate event, and the start event is set to $0.005.",
     "provisionalEvents": [
-        "uae-entity-updated",
         "sg-entity-updated"
     ],
     "operatorStatedEvents": [
         "watchlist-hit"
     ],
     "ratifiedEvents": [
-        {
-            "name": "uae-entity-updated",
-            "gate": "G3",
-            "decidedOn": "2026-11-02",
-            "decidedPriceUsd": 0.01,
-            "priceMatchesDecision": true,
-            "rationale": "Rule R-LOW: the router cannot tell a status change from any other update, so the LOWER documented legacy rate is used and no caller pays more for an update than the legacy actor charged (status change $0.02, content change $0.01, uae-corporate-registry-monitor/README.md:174-175).",
-            "reviewWhen": "After 90 days of production deltas: if status changes are more than 25 percent of this source's updated rows, split the event in two (a new paid event needs the 14-day notice of Terms 9.4); otherwise keep it."
-        },
         {
             "name": "sg-entity-updated",
             "gate": "G3",

@@ -3,7 +3,7 @@
     "actorSpecification": 1,
     "name": "latam-global-tender-intelligence",
     "title": "LatAm & Global Tender Intelligence - Public Tenders Feed",
-    "description": "Public tenders, notices and grants from eight open sources: Santa Fe, Tucuman and Entre Rios (Argentina), Chile Diario Oficial, EU TED, Florida bids, World Bank notices and Regione Lombardia grants. Choose sources per run and receive only new or changed records.",
+    "description": "Public tenders, notices and grants from seven open sources: Tucuman and Entre Rios (Argentina), Chile Diario Oficial, EU TED, Florida bids, World Bank notices and Regione Lombardia grants. Choose sources per run and receive only new or changed records.",
     "version": "0.1",
     "buildTag": "latest",
     "minMemoryMbytes": 1024,

@@ -15,7 +15,7 @@ Typical users: compliance and sanctions-screening teams that want a scheduled de
 | `ai_crawler_signals` | For each domain you list: robots.txt permissions for 18 AI-crawler user agents, Cloudflare Content-Signal values, and presence plus SHA-256 of `/llms.txt` and `/llms-full.txt` | Requests only `/robots.txt`, `/llms.txt` and `/llms-full.txt` of the domains you supply (at most 200 per run). You can replace the default bot list. |
 | `fda_ema_recalls` | FDA drug enforcement (recall) records from openFDA, and EMA direct healthcare-professional communications | Choose `fda`, `ema` or both. An optional openFDA API key raises openFDA's request limits. |
 
-**Not available (held):** `paris_mou_thetis` (login wall), `tokyo_mou_apcis` (CAPTCHA), `imo_gisis` (robots.txt disallows the needed paths and no open bulk feed was found). Selecting one of them stops the run before any request is made and before anything is billed, and the error says why. This Actor does not log in to portals, solve CAPTCHAs or disguise its requests.
+**Not available (held):** `paris_mou_thetis` (login wall), `tokyo_mou_apcis` (CAPTCHA), `imo_gisis` (robots.txt disallows the needed paths and no open bulk feed was found). Selecting one of them stops the run before any request to a source is made and before any record is billed, and the error says why; the platform still charges the start event of a run that has started. This Actor does not log in to portals, solve CAPTCHAs or disguise its requests.
 
 ## How to use it
 

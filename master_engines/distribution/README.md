@@ -104,7 +104,7 @@ Schedule Trigger -> Build run input (Code) -> Start Apify run (HTTP POST) -> Wai
 | File | Actor | Default sources |
 |---|---|---|
 | `global-regtech-compliance-feed.workflow.json` | `global-regtech-compliance-feed` | `ofac`, `world_bank_debarred` |
-| `latam-global-tender-intelligence.workflow.json` | `latam-global-tender-intelligence` | `world_bank_notices`, `ar_santafe` |
+| `latam-global-tender-intelligence.workflow.json` | `latam-global-tender-intelligence` | `world_bank_notices`, `ar_tucuman` |
 | `global-corporate-patent-intelligence.workflow.json` | `global-corporate-patent-intelligence` | `clinicaltrials_orange_book`, `sg_acra` |
 
 Set up:

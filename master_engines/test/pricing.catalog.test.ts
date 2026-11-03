@@ -198,7 +198,7 @@ describe('buildPricingPutBody', () => {
 
     it('every non-documented price carries a complete decision: who, when, why and what reopens it', () => {
         const undocumented = ALL_PRICING.flatMap((p) => p.events.filter((e) => e.basis !== 'legacy-readme').map((e) => ({ engine: p.engine, event: e })));
-        expect(undocumented.map(({ event }) => event.name).sort()).toEqual(['crawler-signal', 'grant-updated', 'sg-entity-updated', 'tender-detail', 'tender-summary', 'uae-entity-updated', 'watchlist-hit', 'watchlist-hit', 'watchlist-hit']);
+        expect(undocumented.map(({ event }) => event.name).sort()).toEqual(['crawler-signal', 'grant-updated', 'sg-entity-updated', 'tender-detail', 'tender-summary', 'watchlist-hit', 'watchlist-hit', 'watchlist-hit']);
         for (const { engine, event } of undocumented) {
             const r = event.ratification;
             expect(r, `${engine}/${event.name} has no ratification`).toBeDefined();

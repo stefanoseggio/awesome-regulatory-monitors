@@ -48,7 +48,8 @@ describe.each(TARGETS.map((t) => [t.engine.slug, t] as const))('%s Store README'
 
     it('names every held source, and says that selecting one stops the run before any request or charge', () => {
         for (const held of engine.connectors.filter((c) => c.status === 'held')) expect(readme, held.id).toContain(`\`${held.id}\``);
-        if (engine.connectors.some((c) => c.status === 'held')) expect(readme).toMatch(/before any request is made and before anything is billed/u);
+        if (engine.connectors.some((c) => c.status === 'held')) expect(readme).toMatch(/before any request to a source is made and before any record is billed/u);
+        if (engine.connectors.some((c) => c.status === 'held')) expect(readme).toContain('the platform still charges the start event of a run that has started');
     });
 
     it('names every credential field of the engine, and no secret the engine does not have', () => {
@@ -102,7 +103,7 @@ describe.each(TARGETS.map((t) => [t.engine.slug, t] as const))('%s Store README'
             expect(readme).toMatch(/not the World Bank debarment register/iu);
             expect(readme).toMatch(/never means "not debarred"/u);
         }
-        if (slug === 'global-corporate-patent-intelligence') expect(readme).toMatch(/ADGM only/u);
+        if (slug === 'global-corporate-patent-intelligence') expect(readme).toContain('`ae_registers` (ADGM');
         if (slug === 'latam-global-tender-intelligence') expect(readme).toMatch(/normas generales/u);
     });
 });

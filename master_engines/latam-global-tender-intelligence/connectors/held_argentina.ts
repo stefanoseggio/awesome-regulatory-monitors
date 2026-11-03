@@ -69,6 +69,18 @@ export const PBA_HOLD_REASON =
 export const CORDOBA_HOLD_REASON =
     'webecommerce.cba.gov.ar blocks non-residential, non-Argentine traffic at the network level (legacy cordoba-compras-monitor AGENTS.md lines 86-88: the failure is at TCP level and the portal blocks non-Argentina/non-residential traffic, same as PBAC; SECURITY.md and README.md state the actor requires a paid Residential + Argentina Apify Proxy group, and that proxied path was never independently verified from the real container). The shared HTTP client has no proxy support and the compliance doctrine does not route around a network-level access block.';
 
+/** F-28 (2026-11-03): measured on the platform, not documented in a legacy repo. */
+export const SANTAFE_HOLD_REASON =
+    "www.santafe.gov.ar did not answer any request from Apify's cloud: five runs of this engine ended 'fetch failed' after about 53 seconds on 2026-11-03 (listing request, estado=AP), while the same portal answers in about 0.1 seconds from Argentina; the legacy santafe-compras-monitor ended TIMED-OUT in 28 of its last 57 runs. Treated as a network-level block: the shared HTTP client has no proxy support and the compliance doctrine does not route around network blocks. The connector stays in connectors/arSantaFe.ts as dormant, tested code; lift the hold when a platform run reaches the portal.";
+
+export const arSantaFeHeldConnector = createHeldConnector({
+    id: 'ar_santafe',
+    engine: 'latam-global-tender-intelligence',
+    legacyActor: 'santafe-compras-monitor',
+    description: 'Province of Santa Fe (Argentina) Gestiones de Compra, www.santafe.gov.ar. HELD: cannot be selected.',
+    reason: SANTAFE_HOLD_REASON,
+});
+
 export const arCordobaHeldConnector = createHeldConnector({
     id: 'ar_cordoba',
     engine: 'latam-global-tender-intelligence',

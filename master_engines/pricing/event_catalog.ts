@@ -127,7 +127,7 @@ const R_PARITY_SUMMARY: PriceRatification = {
     decidedBy: OWNER_DECIDED_BY,
     rationale:
         'Parity with the live price of the legacy `result-summary` event: $0.0015 on santafe- and cordoba-compras-monitor since 2026-11-01 (public Apify API, anonymous, read 2026-11-02). The instruction wrote $0.015; that is ten times the legacy price it asks to match and was read as a decimal slip. If $0.015 was meant, change this constant and this ratification and regenerate with --strict.',
-    reviewWhen: 'After 30 days: the summary event is billed for listing-only rows of ar_santafe and us_florida; compare its volume with the detail event.',
+    reviewWhen: 'After 30 days: the summary event is billed for listing-only rows of us_florida; compare its volume with the detail event.',
 };
 
 const R_FLIP: PriceRatification = {
@@ -192,7 +192,6 @@ export const TENDERS_PRICING: EnginePricing = {
         WATCHLIST_HIT('tender'),
     ],
     sourceBilling: {
-        ar_santafe: { newEvent: 'tender-detail' },
         ar_tucuman: { newEvent: 'tender-detail' },
         ar_entrerios: { newEvent: 'tender-detail' },
         cl_diario_oficial: { newEvent: 'tender-detail' },
@@ -210,8 +209,6 @@ export const PATENTS_PRICING: EnginePricing = {
     events: [
         { name: 'patent-proceeding', title: 'Patent enforcement proceeding', description: 'One USPTO PTAB trial or EPO opposition-related legal event delivered to the dataset.', priceUsd: 0.002, basis: 'legacy-readme', evidence: 'actor-21-patent-ip-enforcement-monitor/README.md:30', primary: true },
         { name: 'clinical-record', title: 'Clinical trial / Orange Book record', description: 'One new or changed ClinicalTrials.gov study or FDA Orange Book record delivered.', priceUsd: 0.002, basis: 'legacy-readme', evidence: 'actor-24-clinical-trials-delta-engine/README.md:59' },
-        { name: 'uae-entity-new', title: 'New UAE register entity', description: 'An ADGM registration never delivered before.', priceUsd: 0.02, basis: 'legacy-readme', evidence: 'uae-corporate-registry-monitor/README.md:173' },
-        { name: 'uae-entity-updated', title: 'Updated UAE register entity', description: 'A previously delivered ADGM entity whose status or content changed, or one re-sent unchanged by a full-snapshot run.', priceUsd: 0.01, basis: 'provisional', ratification: R_LOW('status change $0.02, content change $0.01, uae-corporate-registry-monitor/README.md:174-175', 0.01), evidence: 'uae-corporate-registry-monitor/README.md:174-175 prices a status change at $0.02 and a content change at $0.01; the router cannot tell them apart, so the lower rate is used to avoid over-billing.' },
         { name: 'sg-entity-new', title: 'New Singapore ACRA entity', description: 'An ACRA-registered entity never delivered before.', priceUsd: 0.03, basis: 'legacy-readme', evidence: 'singapore-acra-registry-monitor/README.md:83' },
         { name: 'sg-entity-updated', title: 'Updated Singapore ACRA entity', description: 'A previously delivered ACRA entity whose status or content changed, or one re-sent unchanged by a full-snapshot run.', priceUsd: 0.01, basis: 'provisional', ratification: R_LOW('status change $0.03, content change $0.01, singapore-acra-registry-monitor/README.md:84-85', 0.01), evidence: 'singapore-acra-registry-monitor/README.md:84-85 prices a status change at $0.03 and a content change at $0.01; the router cannot tell them apart, so the lower rate is used to avoid over-billing.' },
         WATCHLIST_HIT('corporate or patent'),
@@ -220,7 +217,6 @@ export const PATENTS_PRICING: EnginePricing = {
         uspto_ptab: { newEvent: 'patent-proceeding' },
         epo_opposition: { newEvent: 'patent-proceeding' },
         clinicaltrials_orange_book: { newEvent: 'clinical-record' },
-        ae_registers: { newEvent: 'uae-entity-new', updatedEvent: 'uae-entity-updated' },
         sg_acra: { newEvent: 'sg-entity-new', updatedEvent: 'sg-entity-updated' },
     },
 };

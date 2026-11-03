@@ -334,7 +334,7 @@
     "latam-global-tender-intelligence": {
       "slug": "latam-global-tender-intelligence",
       "title": "LatAm & Global Tender Intelligence - Public Tenders Feed",
-      "description": "Public tenders, notices and grants from eight open sources: Santa Fe, Tucuman and Entre Rios (Argentina), Chile Diario Oficial, EU TED, Florida bids, World Bank notices and Regione Lombardia grants. Choose sources per run and receive only new or changed records.",
+      "description": "Public tenders, notices and grants from seven open sources: Tucuman and Entre Rios (Argentina), Chile Diario Oficial, EU TED, Florida bids, World Bank notices and Regione Lombardia grants. Choose sources per run and receive only new or changed records.",
       "memoryMbytes": 1024,
       "startEvent": "apify-actor-start",
       "startPriceUsd": 0.005,
@@ -345,18 +345,6 @@
         }
       },
       "sources": [
-        {
-          "id": "ar_santafe",
-          "status": "active",
-          "description": "Province of Santa Fe (Argentina) Gestiones de Compra: public tenders / purchasing processes from the register's own JSON listing (AP open for bids, ET in progress, CO concluded) plus the public detail page (rubros, documents, deadlines, contact). Open data (CC BY-SA 2.5 AR), no credentials, no proxy.",
-          "heldReason": null,
-          "requiredOptions": [],
-          "billing": {
-            "first_seen": "tender-detail",
-            "updated": "tender-detail",
-            "unchanged": "tender-detail"
-          }
-        },
         {
           "id": "ar_tucuman",
           "status": "active",
@@ -496,6 +484,14 @@
           "heldReason": "pbac.cgp.gba.gov.ar blocks non-residential, non-Argentine traffic at the network level (legacy pba-tenders-monitor AGENTS.md \"CRITICAL: PBAC blocks non-residential-Argentina traffic\", verified 2026-09-04: every request from Apify's cloud with no proxy or a datacenter proxy timed out after 30 s across 4 retries, 0 successes in two cloud runs; only a paid Residential proxy with countryCode AR succeeded, which is how the legacy actor runs). The shared HTTP client has no proxy support and the compliance doctrine does not route around a network-level access block.",
           "requiredOptions": [],
           "billing": null
+        },
+        {
+          "id": "ar_santafe",
+          "status": "held",
+          "description": "Province of Santa Fe (Argentina) Gestiones de Compra, www.santafe.gov.ar. HELD: cannot be selected.",
+          "heldReason": "www.santafe.gov.ar did not answer any request from Apify's cloud: five runs of this engine ended 'fetch failed' after about 53 seconds on 2026-11-03 (listing request, estado=AP), while the same portal answers in about 0.1 seconds from Argentina; the legacy santafe-compras-monitor ended TIMED-OUT in 28 of its last 57 runs. Treated as a network-level block: the shared HTTP client has no proxy support and the compliance doctrine does not route around network blocks. The connector stays in connectors/arSantaFe.ts as dormant, tested code; lift the hold when a platform run reaches the portal.",
+          "requiredOptions": [],
+          "billing": null
         }
       ],
       "events": [
@@ -559,7 +555,7 @@
     "global-corporate-patent-intelligence": {
       "slug": "global-corporate-patent-intelligence",
       "title": "Corporate & Patent Intelligence - PTAB, EPO, Registers",
-      "description": "Patent disputes and company registers in one Actor: USPTO PTAB trials and EPO opposition watch (your own API keys), ClinicalTrials.gov and FDA Orange Book, Singapore ACRA and the UAE ADGM register. Receive only new or changed records.",
+      "description": "Patent disputes and company registers in one Actor: USPTO PTAB trials and EPO opposition watch (your own API keys), ClinicalTrials.gov and FDA Orange Book, and the Singapore ACRA register. Receive only new or changed records.",
       "memoryMbytes": 1024,
       "startEvent": "apify-actor-start",
       "startPriceUsd": 0.005,
@@ -637,15 +633,11 @@
         },
         {
           "id": "ae_registers",
-          "status": "active",
-          "description": "UAE corporate registers - the ADGM (Abu Dhabi Global Market) public entity register, anonymous, with bilingual-safe names and registration / licence status. The DIFC register is held by the robots.txt policy (its API path is disallowed) and Dubai Pulse mainland licences are held (unverified wire protocol).",
-          "heldReason": null,
+          "status": "held",
+          "description": "UAE corporate registers (ADGM, DIFC, Dubai mainland). HELD: cannot be selected.",
+          "heldReason": "ADGM's public register (newreg.adgm.com, Aura RPC) answers every search with a server-side error, System.NullPointerException 'null input to JSON parser' at Class.RASearchUtil.getSearchResponseForPR line 2889: recorded from 2026-09-17 (legacy outage playbook), on 2026-10-21 and again on 2026-11-03, both from Apify's cloud and from Argentina. No row has ever been obtained, so the row parser is unproven. The DIFC register is disallowed by robots.txt (decision G4) and Dubai mainland licences are held (unverified wire protocol, access approval). Lift the hold when a search returns rows.",
           "requiredOptions": [],
-          "billing": {
-            "first_seen": "uae-entity-new",
-            "updated": "uae-entity-updated",
-            "unchanged": "uae-entity-updated"
-          }
+          "billing": null
         }
       ],
       "events": [
@@ -660,18 +652,6 @@
           "title": "Clinical trial / Orange Book record",
           "priceUsd": 0.002,
           "basis": "legacy-readme"
-        },
-        {
-          "name": "uae-entity-new",
-          "title": "New UAE register entity",
-          "priceUsd": 0.02,
-          "basis": "legacy-readme"
-        },
-        {
-          "name": "uae-entity-updated",
-          "title": "Updated UAE register entity",
-          "priceUsd": 0.01,
-          "basis": "provisional"
         },
         {
           "name": "sg-entity-new",

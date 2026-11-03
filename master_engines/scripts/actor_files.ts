@@ -27,13 +27,13 @@ export const ENGINE_META: Record<string, EngineMeta> = {
     'latam-global-tender-intelligence': {
         title: 'LatAm & Global Tender Intelligence - Public Tenders Feed',
         description:
-            'Public tenders, notices and grants from eight open sources: Santa Fe, Tucuman and Entre Rios (Argentina), Chile Diario Oficial, EU TED, Florida bids, World Bank notices and Regione Lombardia grants. Choose sources per run and receive only new or changed records.',
+            'Public tenders, notices and grants from seven open sources: Tucuman and Entre Rios (Argentina), Chile Diario Oficial, EU TED, Florida bids, World Bank notices and Regione Lombardia grants. Choose sources per run and receive only new or changed records.',
         sourceOptionsExample: '{"us_florida": {"includeContactDetails": true}}',
     },
     'global-corporate-patent-intelligence': {
         title: 'Corporate & Patent Intelligence - PTAB, EPO, Registers',
         description:
-            'Patent disputes and company registers in one Actor: USPTO PTAB trials and EPO opposition watch (your own API keys), ClinicalTrials.gov and FDA Orange Book, Singapore ACRA and the UAE ADGM register. Receive only new or changed records.',
+            'Patent disputes and company registers in one Actor: USPTO PTAB trials and EPO opposition watch (your own API keys), ClinicalTrials.gov and FDA Orange Book, and the Singapore ACRA register. Receive only new or changed records.',
         sourceOptionsExample: '{"clinicaltrials_orange_book": {"sponsors": ["Pfizer"]}}',
     },
 };

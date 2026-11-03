@@ -1,6 +1,6 @@
 # Global Corporate & Patent Intelligence
 
-One Actor, five public sources for patent disputes, clinical-trial and drug-patent data, and company registers. Pick the sources for each run and receive only the records that are **new or changed since your last run**, as clean JSON in the dataset.
+One Actor, four public sources for patent disputes, clinical-trial and drug-patent data, and the Singapore company register. Pick the sources for each run and receive only the records that are **new or changed since your last run**, as clean JSON in the dataset.
 
 Typical users: IP and litigation teams watching patent disputes, pharma competitive-intelligence analysts, KYC and onboarding teams that need register changes, and market researchers.
 
@@ -12,7 +12,8 @@ Typical users: IP and litigation teams watching patent disputes, pharma competit
 | `epo_opposition` | EPO Open Patent Services legal-status lookup, reporting opposition-family legal events | **Watchlist-driven.** You supply the EP publication numbers to look up (`epWatchlist` in `sourceOptions`); the Actor does not search for all oppositions. An empty or invalid list fails preflight. **Bring your own keys:** `epoOpsConsumerKey` and `epoOpsConsumerSecret`. |
 | `clinicaltrials_orange_book` | ClinicalTrials.gov v2 studies (newest update first) and FDA Orange Book products with patent and exclusivity data (openFDA) | Choose `clinicaltrials`, `orange_book` or both through `subSources`. Optional filters include sponsors, keywords and condition. An optional openFDA API key raises openFDA's limits. |
 | `sg_acra` | Singapore ACRA register of corporate entities from data.gov.sg (monthly extract in 27 first-letter shards), newest registrations first | The default shard is `A` only; list the shards you need in `shardSelection`. Optional `ssicCodeFilter` and `entityStatusFilter`. Released under the Singapore Open Data Licence. |
-| `ae_registers` | The ADGM (Abu Dhabi Global Market) public entity register, with entity names and registration and licence status | **ADGM only.** The DIFC register is held (its API path is disallowed by the site's robots.txt) and Dubai mainland licences are held (access needs an approval and the interface was never verified). |
+
+**Not available (held):** `ae_registers` (ADGM's register service has answered every search with a server error, `System.NullPointerException` in `RASearchUtil.getSearchResponseForPR`, since at least 2026-09-17, from Apify's cloud and from elsewhere, and no row has ever been obtained; the DIFC register is disallowed by the site's robots.txt and Dubai mainland licences need an approval). Selecting one stops the run before any request to a source is made and before any record is billed, and the error says why; the platform still charges the start event of a run that has started.
 
 ## How to use it
 
@@ -63,7 +64,7 @@ A run ends `FAILED` when preflight finds a problem (an unknown or held source, a
 This Actor uses pay-per-event pricing. The **Pricing** tab shows the current price of every event; prices are deliberately not repeated on this page so that it cannot go out of date.
 
 * **Actor start**: charged per GB of memory the run is configured with. This Actor uses 1 GB, so each run starts one start event.
-* **One row event per delivered record**, named by source: Patent enforcement proceeding (`uspto_ptab` and `epo_opposition`); Clinical trial / Orange Book record (`clinicaltrials_orange_book`); New UAE register entity and Updated UAE register entity (`ae_registers`); New Singapore ACRA entity and Updated Singapore ACRA entity (`sg_acra`).
+* **One row event per delivered record**, named by source: Patent enforcement proceeding (`uspto_ptab` and `epo_opposition`); Clinical trial / Orange Book record (`clinicaltrials_orange_book`); New Singapore ACRA entity and Updated Singapore ACRA entity (`sg_acra`).
 * **Watchlist hit**: see above.
 
 With `deltaMode: "all"` every delivered record is billed, unchanged ones at the source's "Updated" event (or its only row event). Records that are not delivered are not billed a row event. Your own API keys are used against the publishers' services; any fees or limits on those keys are between you and the publisher.
@@ -86,11 +87,11 @@ Delivery is at-least-once: a progress checkpoint is written every 25 rows and a 
 | `epoOpsConsumerKey`, `epoOpsConsumerSecret` | `epo_opposition` |
 | `fdaApiKey` (optional) | `clinicaltrials_orange_book` |
 
-All are stored encrypted by Apify and never logged. A source whose required credential is missing fails preflight before any request or charge.
+All are stored encrypted by Apify and never logged. A source whose required credential is missing fails preflight before any request to a source and before any record is billed (the start event of the run is still charged).
 
 ## Data sources and licences
 
-Records are published by the USPTO, the European Patent Office, ClinicalTrials.gov (US National Library of Medicine), the US FDA (openFDA), the Singapore Government's data.gov.sg (Singapore Open Data Licence) and ADGM. Reuse terms are those of each publisher: check them for your use case.
+Records are published by the USPTO, the European Patent Office, ClinicalTrials.gov (US National Library of Medicine), the US FDA (openFDA) and the Singapore Government's data.gov.sg (Singapore Open Data Licence). Reuse terms are those of each publisher: check them for your use case.
 
 ## Disclaimer
 

@@ -396,8 +396,8 @@ describe.each(CASES.map((c) => [c.slug, c] as const))('%s: input_schema.json', (
         // The Store description (at most 300 characters, F-19) states how many sources are active. The held ones are named in the
         // input schema description (asserted in the test above) and in the Store README (test/store_readme.test.ts).
         if (slug === 'global-regtech-compliance-feed') expect(description).toMatch(/\bsix\b[^.]*\bsources\b/iu);
-        if (slug === 'latam-global-tender-intelligence') expect(description).toMatch(/\beight\b[^.]*\bsources\b/iu);
-        expect(active).toHaveLength(slug === 'global-regtech-compliance-feed' ? 6 : slug === 'latam-global-tender-intelligence' ? 8 : 5);
+        if (slug === 'latam-global-tender-intelligence') expect(description).toMatch(/\bseven\b[^.]*\bsources\b/iu);
+        expect(active).toHaveLength(slug === 'global-regtech-compliance-feed' ? 6 : slug === 'latam-global-tender-intelligence' ? 7 : 4);
     });
 
     it('declares deltaMode with exactly the three modes, aligned titles, and the zod default', () => {

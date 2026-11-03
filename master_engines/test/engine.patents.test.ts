@@ -20,8 +20,13 @@ describe('global-corporate-patent-intelligence registry', () => {
     });
 
     it('credential-free sources preflight with empty options', () => {
-        for (const id of ['clinicaltrials_orange_book', 'sg_acra', 'ae_registers']) {
+        for (const id of ['clinicaltrials_orange_book', 'sg_acra']) {
             expect(() => resolveSources(patentsEngine, { ...base, sources: [id] }), id).not.toThrow();
         }
+    });
+
+    it('ae_registers is held since the ADGM service answers every search with a server error (F-28)', () => {
+        expect(patentsEngine.connectors.find((c) => c.id === 'ae_registers')?.status).toBe('held');
+        expect(() => resolveSources(patentsEngine, { ...base, sources: ['ae_registers'] })).toThrow(/HELD.*NullPointerException/u);
     });
 });

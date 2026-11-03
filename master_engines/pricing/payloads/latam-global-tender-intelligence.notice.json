@@ -35,7 +35,7 @@
             "decidedPriceUsd": 0.0015,
             "priceMatchesDecision": true,
             "rationale": "Parity with the live price of the legacy `result-summary` event: $0.0015 on santafe- and cordoba-compras-monitor since 2026-11-01 (public Apify API, anonymous, read 2026-11-02). The instruction wrote $0.015; that is ten times the legacy price it asks to match and was read as a decimal slip. If $0.015 was meant, change this constant and this ratification and regenerate with --strict.",
-            "reviewWhen": "After 30 days: the summary event is billed for listing-only rows of ar_santafe and us_florida; compare its volume with the detail event."
+            "reviewWhen": "After 30 days: the summary event is billed for listing-only rows of us_florida; compare its volume with the detail event."
         },
         {
             "name": "grant-updated",

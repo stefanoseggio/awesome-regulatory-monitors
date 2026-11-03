@@ -7,7 +7,7 @@
         "sources": {
             "title": "Sources to run",
             "type": "array",
-            "description": "Source ids to run in this execution. Held sources are not selectable: none.",
+            "description": "Source ids to run in this execution. Held sources are not selectable: ae_registers.",
             "editor": "select",
             "items": {
                 "type": "string",
@@ -15,15 +15,13 @@
                     "uspto_ptab",
                     "epo_opposition",
                     "clinicaltrials_orange_book",
-                    "sg_acra",
-                    "ae_registers"
+                    "sg_acra"
                 ],
                 "enumTitles": [
                     "USPTO Patent Trial and Appeal Board trial proceedings (IPR / PGR / CBM / DER) from the US…",
                     "EPO Open Patent Services legal-status lookup for a watchlist of EP publication numbers, r…",
                     "ClinicalTrials.gov v2 studies (newest update first) and FDA Orange Book products with the…",
-                    "Singapore ACRA register of corporate entities from data.gov.sg (monthly extract, 27 first…",
-                    "UAE corporate registers - the ADGM (Abu Dhabi Global Market) public entity register, anon…"
+                    "Singapore ACRA register of corporate entities from data.gov.sg (monthly extract, 27 first…"
                 ]
             },
             "default": [

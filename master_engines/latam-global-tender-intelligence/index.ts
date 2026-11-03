@@ -2,12 +2,11 @@ import type { EngineDefinition } from '../lib/router_core.js';
 import { applyCatalogBilling } from '../pricing/apply_billing.js';
 import { TENDERS_PRICING } from '../pricing/event_catalog.js';
 import { arEntreRiosConnector } from './connectors/arEntreRios.js';
-import { arSantaFeConnector } from './connectors/arSantaFe.js';
 import { arTucumanConnector } from './connectors/arTucuman.js';
 import { auGrantconnectConnector } from './connectors/auGrantconnect.js';
 import { clDiarioOficialConnector } from './connectors/clDiarioOficial.js';
 import { euTedConnector } from './connectors/euTed.js';
-import { arCordobaHeldConnector, arMendozaConnector, arPbaConnector, arSaltaConnector } from './connectors/held_argentina.js';
+import { arCordobaHeldConnector, arMendozaConnector, arPbaConnector, arSaltaConnector, arSantaFeHeldConnector } from './connectors/held_argentina.js';
 import { adbProcurementConnector, idbProcurementConnector } from './connectors/heldMdb.js';
 import { itLombardiaGrantsConnector } from './connectors/itLombardiaGrants.js';
 import { usFloridaConnector } from './connectors/usFlorida.js';
@@ -25,7 +24,6 @@ export const tendersEngine: EngineDefinition = applyCatalogBilling(
         slug: 'latam-global-tender-intelligence',
         credentialFields: { socrataAppToken: { source: 'it_lombardia_grants', option: 'socrataAppToken' } },
         connectors: [
-            arSantaFeConnector,
             arTucumanConnector,
             arEntreRiosConnector,
             clDiarioOficialConnector,
@@ -40,6 +38,7 @@ export const tendersEngine: EngineDefinition = applyCatalogBilling(
             arSaltaConnector,
             arMendozaConnector,
             arPbaConnector,
+            arSantaFeHeldConnector,
         ],
     },
     TENDERS_PRICING,

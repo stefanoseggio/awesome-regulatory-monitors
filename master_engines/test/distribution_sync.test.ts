@@ -152,10 +152,10 @@ describe('distribution data files', () => {
                     held += 1;
                 }
             }
-            expect(held).toBe(10);
+            expect(held).toBe(12);
         });
 
-        it('has 19 active sources whose billing events exist in the engine catalog', () => {
+        it('has 17 active sources whose billing events exist in the engine catalog', () => {
             let active = 0;
             for (const pricing of ALL_PRICING) {
                 const entry = data.engines[pricing.engine];
@@ -167,7 +167,7 @@ describe('distribution data files', () => {
                 }
                 for (const event of entry?.recordLevelEvents ?? []) expect(names.has(event)).toBe(true);
             }
-            expect(active).toBe(19);
+            expect(active).toBe(17);
         });
 
         it('copies prices, memory and the start price from the pricing catalog', () => {

@@ -39,8 +39,8 @@ function thrown(fn: () => unknown): unknown {
 }
 
 describe('the held connectors themselves', () => {
-    it('exports exactly the four held connectors and their reasons, and nothing else', () => {
-        expect(Object.keys(held).sort()).toEqual(['CORDOBA_HOLD_REASON', 'PBA_HOLD_REASON', 'PORTFOLIO_HOLD_REASON', 'arCordobaHeldConnector', 'arMendozaConnector', 'arPbaConnector', 'arSaltaConnector']);
+    it('exports exactly the five held connectors and their reasons, and nothing else', () => {
+        expect(Object.keys(held).sort()).toEqual(['CORDOBA_HOLD_REASON', 'PBA_HOLD_REASON', 'PORTFOLIO_HOLD_REASON', 'SANTAFE_HOLD_REASON', 'arCordobaHeldConnector', 'arMendozaConnector', 'arPbaConnector', 'arSaltaConnector', 'arSantaFeHeldConnector']);
     });
 
     it.each(HELD)('%s is status "held", for the right engine and legacy actor, with its reason recorded', (id, connector, legacyActor, reason) => {
