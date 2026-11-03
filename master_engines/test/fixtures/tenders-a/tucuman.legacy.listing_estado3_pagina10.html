@@ -1,0 +1,2156 @@
+
+<!DOCTYPE HTML>
+<html>
+<head>
+<title>Compras P&uacute;blicas del Estado - Gobierno de Tucum&aacute;n</title>
+<meta name='viewport' content='width=device-width, initial-scale=1'>
+<meta http-equiv='Content-Type' content='text/html; charset=utf8' />
+<meta name='keywords' content='Compras Publicas - Contrataciones Publicas - Licitaciones p&uacute;blicas - Compras del Estado - Provincia de Tucum&acute;n' />
+<script type='application/x-javascript'> addEventListener('load', function() { setTimeout(hideURLbar, 0); }, false); function hideURLbar(){ window.scrollTo(0,1); } </script>
+	<!-- bootstrap-css -->
+<link href='css/bootstrap.css' rel='stylesheet' type='text/css' />
+<!-- //bootstrap-css -->
+<!-- css -->
+<link href='css/style.css' rel='stylesheet' type='text/css' />
+<!--<link href='css/style9.css' rel='stylesheet' type='text/css' />-->
+<!-- //css -->
+<script src='js/jquery-1.11.1.min.js'> </script>	
+<script src='js/bootstrap.js'></script>
+<script type='text/javascript'>
+	jQuery(document).ready(function($) {
+		$('.scroll').click(function(event){		
+			event.preventDefault();
+			$('html,body').animate({scrollTop:$(this.hash).offset().top},1000);
+		});
+	});
+</script>		
+</head>
+<body>
+<form enctype='multipart/form-data' action='' name='form1' method='post' >
+	<!-- banner -->
+	<div class='banner banner-bg'>
+		<!-- header -->
+		<div class='header'>
+			<!-- container -->
+			<div class='container'>
+				<div class='logo'>
+					<h1><a href='#'><img src='imagenes/logo-gobierno-Tucuman.png' border='0' style='width:190px;' /> </a></h1>
+				</div>
+				<div class='top-nav'>
+					<nav class='navbar navbar-default'>
+						<div class='container'>
+							<button type='button' class='navbar-toggle collapsed' data-toggle='collapse' data-target='#bs-example-navbar-collapse-1'>Menu						
+							</button>
+						</div>
+						<!-- Collect the nav links, forms, and other content for toggling -->
+						<div class='collapse navbar-collapse' id='bs-example-navbar-collapse-1'>
+							<ul class='nav navbar-nav'>
+							
+                            
+                            
+                            
+                            	<li><a href='inicio.php' class='active'>INICIO</a></li>
+
+ 									
+								<li class='dropdown-submenu'>
+											<a href='#' class='dropdown-toggle' data-toggle='dropdown-submenu' role='button' aria-haspopup='true' aria-expanded='false'>CONVOCATORIAS<span class='caret'></span></a>
+											<ul class='dropdown-menu'>
+											  <li><a tabindex='-1' href='ver_llamados_compras_avanzado.php?estado_compra=1'>Compras con apertura pr&oacute;xima</a></li>
+												<li><a href='ver_llamados_compras_avanzado.php?estado_compra=2'>En proceso de adjudicaci&oacute;n</a></li>
+											  <li><a href='ver_llamados_compras_avanzado.php?estado_compra=3'>Compras adjudicadas</a></li>
+											</ul>
+								</li>
+                                
+                                
+                                
+                                
+                                
+                                <li class='dropdown-submenu'>
+											<a href='#' class='dropdown-toggle' data-toggle='dropdown-submenu' role='button' aria-haspopup='true' aria-expanded='false'>C&Oacute;MO PARTICIPAR<span class='caret'></span></a>
+											<ul class='dropdown-menu'>
+											  <li><a tabindex='-1' href='pliego_unico.php'>Pliego &Uacute;nico</a></li>
+												<li><a href='guia.php'>Gu&iacute;a para contratar</a></li>
+											  <li><a href='normativa.php'>Orientaci&oacute;n Normativa</a></li>
+                                              <li><a href='preguntas.php'>Preguntas frecuentes</a></li>
+											</ul>
+								</li>
+                                
+                                
+                                <li class='dropdown-submenu'>
+											<a href='#' class='dropdown-toggle' data-toggle='dropdown-submenu' role='button' aria-haspopup='true' aria-expanded='false'>PROVEEDORES<span class='caret'></span></a>
+											<ul class='dropdown-menu'>
+											  <li><a tabindex='-1' href='alt_proveedor.php'>Registre su empresa</a></li>
+												<li><a href='logueo_prov.php'>Acceso proveedores</a></li><li><a href='registro_de_sancionados.php'>Registro de sancionados</a></li>
+											</ul>
+								</li>
+                                
+                                
+								
+							</ul>	
+							<div class='clearfix'> </div>
+						</div>	
+					</nav>		
+				</div>
+			</div>
+			<!-- //container -->
+		</div>
+		<!-- //header -->
+	</div>
+	<!-- banner -->
+	<!-- blog -->
+	<div class='blog'>
+		<!-- container -->
+		<div class='container'>
+			<div class='blog-text'>
+				<h2>Compras y Contrataciones </h2>
+			</div>
+            
+            <div class='contenido-principal'>
+
+<script language='javascript' type='text/javascript'>
+	
+function agregar_pliego(id_compra,valor) {
+	if (valor == 1)
+		{
+		window.open('descargar_pliego.php?es_doc=1&id_compra=' + id_compra  , '', 'width=1, height=1,scrollbars=no,left=400,top=300');
+		}
+	if (valor == 2)
+		{
+		window.open('descargar_pliego.php?es_doc=2&id_compra=' + id_compra  , '', 'width=1, height=1,scrollbars=no,left=400,top=300');
+		}
+	
+		
+}
+
+</script>
+
+<div class="table">
+  <div class="row">
+    <div>
+	<!--<h1>B&uacute;squeda avanzada</h1> -->
+	
+	<h1>Compras adjudicadas</h1>	
+	
+    <br>
+	
+    <div class='table' style="background-color:#EEE" >
+	    <div class='row'>
+    	    <div class='column'>Que contiene las palabras: </div>
+			<div class='column busqueda_simple'><input name="busqueda_simple" type="text"  value="" size="60" > </div>
+            <div class='column'> (palabras clave) </div>
+        </div>
+				<div class='row'>
+    	    <div class='column'>Estado de compra:</div>
+			<div class='column etiqueta_select'>
+                <select name="estado_compra">
+                      <option value="1" >Compras en convocatoria</option>
+                      <option value="2" >Compras en proceso de adjudicaci&oacute;n </option>
+                      <option value="3"  selected >Compras adjudicadas </option>
+                </select>
+			</div>
+		</div>
+		        <div class='row'>
+    	    <div class='column'>Sistema de contrataci&oacute;n:</div>
+			<div class='column etiqueta_select'>
+                 <select name="tipo_compra" >
+                  <option value="0">&lt;Tipo de compra&gt;</option>
+        
+                                              
+                  <option  
+                  value="1">LICITACION PUBLICA</option>                         
+                  <option  
+                  value="2">LICITACION PRIVADA</option>                         
+                  <option  
+                  value="3">CONTRATACION DIRECTA</option>                         
+                  <option  
+                  value="4">COTEJO DE PRECIOS</option>                         
+                  <option  
+                  value="5">CONCURSO DE PRECIOS</option>                         
+                  <option  
+                  value="6">REMATE PUBLICO</option>                         
+                  <option  
+                  value="7">SUBASTA PUBLICA</option>                         
+                  <option  
+                  value="8">CONCURSO PUBLICO</option>                 </select>
+            </div>
+        </div>
+        
+
+	  <div class='row'>
+    	    <div class='column'>Rubro: </div>
+        	<div class='column etiqueta_select'><select name="id_rubro">
+		  <option value="0">&lt;TODOS&gt;</option>
+
+              		  <option  
+		  value="85">AGUA POTABLE</option> 		  <option  
+		  value="80">ALQUILER DE BA&Ntilde;OS QUIMICOS</option> 		  <option  
+		  value="78">ALQUILER DE CARPAS</option> 		  <option  
+		  value="30">ALQUILER DE EQUIPOS DE COMPUTACION</option> 		  <option  
+		  value="29">ALQUILER DE FOTOCOPIADORAS </option> 		  <option  
+		  value="27">ALQUILER DE MAQUINARIA Y EQUIPOS</option> 		  <option  
+		  value="71">ALQUILER DE VEHICULOS</option> 		  <option  
+		  value="26">ALQUILERES DE INMUEBLES</option> 		  <option  
+		  value="72">ARTICULOS DE ILUMINACION</option> 		  <option  
+		  value="67">ARTICULOS DEL HOGAR</option> 		  <option  
+		  value="11">ARTICULOS ELECTRICOS Y ELECTRONICOS</option> 		  <option  
+		  value="10">CERRAJERIA</option> 		  <option  
+		  value="58">COMBUSTIBLES Y LUBRICANTES</option> 		  <option  
+		  value="86">CONCESION DE INMUEBLE</option> 		  <option  
+		  value="82">CUSTODIA DE ARCHIVOS</option> 		  <option  
+		  value="9">DECORACION</option> 		  <option  
+		  value="20">ELEMENTOS DE LIMPIEZA</option> 		  <option  
+		  value="60">ELEMENTOS DEPORTIVOS</option> 		  <option  
+		  value="68">EQUIPAMIENTO DE SONIDO Y DE PERCUSION</option> 		  <option  
+		  value="48">EQUIPOS DE COMUNICACION Y SE&Ntilde;ALAMIENTO</option> 		  <option  
+		  value="52">EQUIPOS DE ENERGIA</option> 		  <option  
+		  value="51">EQUIPOS DE REFRIGERACION</option> 		  <option  
+		  value="50">EQUIPOS DE SEGURIDAD</option> 		  <option  
+		  value="46">EQUIPOS DE TRANSPORTE, TRACCION Y ELEVACION</option> 		  <option  
+		  value="49">EQUIPOS EDUCACIONALES Y RECREATIVOS</option> 		  <option  
+		  value="47">EQUPOS SANITARIOS Y DE LABORATORIOS</option> 		  <option  
+		  value="66">FORRAJE, CESPED Y AFINES</option> 		  <option  
+		  value="57">HERRAMIENTAS DE FERRETERIA</option> 		  <option  
+		  value="42">IMPRENTA  PUBLICACIONES Y REPRODUCCIONES</option> 		  <option  
+		  value="2">INFORMATICA Y COMPUTACION</option> 		  <option  
+		  value="69">INSTALACION ELECTRICA, TELEFONIA Y DATOS</option> 		  <option  
+		  value="59">INSUMOS INFORMATICOS</option> 		  <option  
+		  value="70">INVERNACULOS-SOMBRACULOS Y EQUIPO DE RIEGO</option> 		  <option  
+		  value="8">LIBRERIA</option> 		  <option  
+		  value="35">LIMPIEZA ASEO Y FUMIGACION</option> 		  <option  
+		  value="55">MADERAS</option> 		  <option  
+		  value="76">MANTENIMIENTO DE ASCENSOR</option> 		  <option  
+		  value="36">MANTENIMIENTO DE SISTEMAS INFORMATICOS</option> 		  <option  
+		  value="31">MANTENIMIENTO Y REPARACION DE EDIFICIOS</option> 		  <option  
+		  value="32">MANTENIMIENTO Y REPARACION DE VEHICULOS</option> 		  <option  
+		  value="34">MANTENIMIENTO Y REPARACION EN COMUNICACIONES</option> 		  <option  
+		  value="84">MANTENIMIENTO Y SERVICIO DE LIMPIEZA</option> 		  <option  
+		  value="6">MAQUINARIAS AGRICOLAS O INDUSTRIALES</option> 		  <option  
+		  value="54">MATERIALES PARA LA CONSTRUCCION</option> 		  <option  
+		  value="25">MATERIALES PARA PROTESIS Y ORTESIS</option> 		  <option  
+		  value="3">MEDICAMENTOS</option> 		  <option  
+		  value="7">MOBILIARIO Y EQUIPAMIENTO DE OFICINA</option> 		  <option  
+		  value="62">NEUMATICOS</option> 		  <option  
+		  value="14">PRODUCTOS AGROFORESTALES Y PECUARIOS</option> 		  <option  
+		  value="13">PRODUCTOS ALIMENTICIOS</option> 		  <option  
+		  value="17">PRODUCTOS DE CUERO Y CAUCHO</option> 		  <option  
+		  value="16">PRODUCTOS DE PAPEL, CARTON E IMPRESOS</option> 		  <option  
+		  value="18">PRODUCTOS METALICOS</option> 		  <option  
+		  value="19">PRODUCTOS MINERALES</option> 		  <option  
+		  value="15">PRODUCTOS TEXTILES Y VESTUARIOS</option> 		  <option  
+		  value="74">PRODUCTOS VETERINARIOS</option> 		  <option  
+		  value="33">REPARACION Y MANTENIMIENTO DE EQUIPOS</option> 		  <option  
+		  value="24">REPUESTOS Y ACCESORIOS</option> 		  <option  
+		  value="12">ROPA E INDUMENTARIA</option> 		  <option  
+		  value="43">SEGUROS</option> 		  <option  
+		  value="83">SERVICIO DE MONITOREO DE MEDIOS</option> 		  <option  
+		  value="64">SERVICIO DE SISTEMA  DE COMUNICACIONES</option> 		  <option  
+		  value="40">SERVICIO DE TRANSPORTE</option> 		  <option  
+		  value="77">SERVICIO DE VIGILANCIA</option> 		  <option  
+		  value="75">SERVICIO GUARDERIAS DE AUTO</option> 		  <option  
+		  value="88">SERVICIO PERIODISTICO</option> 		  <option  
+		  value="38">SERVICIOS DE CAPACITACION</option> 		  <option  
+		  value="56">SERVICIOS DE CORREO</option> 		  <option  
+		  value="44">SERVICIOS DE INTERNET</option> 		  <option  
+		  value="53">SERVICIOS DE PERFORACION</option> 		  <option  
+		  value="79">SERVICIOS DE SONIDO, ILUMINACION Y ENERGIA</option> 		  <option  
+		  value="87">SERVICIOS DE TELEFONIA</option> 		  <option  
+		  value="39">SERVICIOS DE TURISMO</option> 		  <option  
+		  value="45">SERVICIOS GASTRONOMICOS</option> 		  <option  
+		  value="37">SERVICIOS PROFESIONALES</option> 		  <option  
+		  value="90">SERVICIOS SOBRE VEHICULOS</option> 		  <option  
+		  value="41">SERVICIO TRASLADO, DEPOSITO Y ALMACENAMIENTO</option> 		  <option  
+		  value="5">TANQUES</option> 		  <option  
+		  value="81">TUBERIAS  Y CA&Ntilde;ERIAS</option> 		  <option  
+		  value="22">UTENSILLOS DE COCINA Y COMEDOR</option> 		  <option  
+		  value="21">UTILES DE ESCRITORIO, OFICINA Y ENSENANZA</option> 		  <option  
+		  value="61">UTILES DE OFICINA</option> 		  <option  
+		  value="23">UTILES MEDICOS QUIRURGICOS Y DE LABORATORIO</option> 		  <option  
+		  value="4">VEHICULOS</option> 		  <option  
+		  value="65">VENTA DE INMUEBLES</option>         </select>
+        	</div>
+		</div>
+	  
+	  
+	  	<div class='row'>
+    	    <div class='column'>&nbsp;Entidad solicitante:</div>
+         	<div class='column etiqueta_select_reparticion'>
+                    <select   name="id_reparticion">
+            
+                                <option value='0'>&lt;TODAS LAS REPARTICIONES&gt;</option>
+                                  <option rows="2"   
+                      value="107">
+                      ARCHIVO GENERAL DE LA PROVINCIA</option>                       <option rows="2"   
+                      value="82">
+                      COMUNA DE ACHERAL</option>                       <option rows="2"   
+                      value="89">
+                      COMUNA DE ALPACHIRI - EL MOLINO</option>                       <option rows="2"   
+                      value="54">
+                      COMUNA DE LEON ROUGES Y SANTA ROSA</option>                       <option rows="2"   
+                      value="58">
+                      COMUNA DE VILLA QUINTEROS</option>                       <option rows="2"   
+                      value="81">
+                      COMUNA RURAL DE EL CERCADO</option>                       <option rows="2"   
+                      value="108">
+                      CONSEJO ASESOR DE LA MAGISTRATURA</option>                       <option rows="2"   
+                      value="77">
+                      DEFENSORIA DEL PUEBLO</option>                       <option rows="2"   
+                      value="48">
+                      ...te;N GENERAL DE RECURSOS HUMANOS</option>                       <option rows="2"   
+                      value="76">
+                      ...te;N PROVINCIAL DE AERON&Aacute;UTICA</option>                       <option rows="2"   
+                      value="1">
+                      DIRECCION ARQUITECTURA Y URBANISMO</option>                       <option rows="2"   
+                      value="67">
+                      ... ARCHIVO HISTORICO DE LA PROVINCIA</option>                       <option rows="2"   
+                      value="102">
+                      DIRECCION DE COMERCIO INTERIOR</option>                       <option rows="2"   
+                      value="125">
+                      DIRECCION DE ESCUELA DE GOBIERNO</option>                       <option rows="2"   
+                      value="127">
+                      ... ESTADISTICA DE LA PROVINCIA</option>                       <option rows="2"   
+                      value="32">
+                      DIRECCION DE GESTION DE TI</option>                       <option rows="2"   
+                      value="93">
+                      ...RIALES Y CONSTRUCCIONES ESCOLARES</option>                       <option rows="2"   
+                      value="96">
+                      DIRECCION GENERAL DE TRANSPORTE</option>                       <option rows="2"   
+                      value="3">
+                      DIRECCION GRAL. CATASTRO</option>                       <option rows="2"   
+                      value="2">
+                      DIRECCION GRAL. RENTAS</option>                       <option rows="2"   
+                      value="122">
+                      DIRECCION PROVINCIAL DE DEFENSA CIVIL</option>                       <option rows="2"   
+                      value="4">
+                      DIRECCION PROVINCIAL DEL AGUA</option>                       <option rows="2"   
+                      value="24">
+                      DIRECCION PROVINCIAL DE VIALIDAD</option>                       <option rows="2"   
+                      value="99">
+                      ENTE AUTARQUICO TEATRO MERCEDES SOSA</option>                       <option rows="2"   
+                      value="69">
+                      ENTE CULTURAL DE TUCUMAN</option>                       <option rows="2"   
+                      value="33">
+                      ENTE DE INFRAESTRUCTURA COMUNITARIA</option>                       <option rows="2"   
+                      value="45">
+                      ENTE TUCUMAN TURISMO</option>                       <option rows="2"   
+                      value="112">
+                      ...ULACION DE SERVICIOS PUBLICOS DE TUCUMAN</option>                       <option rows="2"   
+                      value="44">
+                      E.R.S.A.C.T.</option>                       <option rows="2"   
+                      value="53">
+                      ...NTAL AGRO INDUSTRIAL OBISPO COLOMBRES</option>                       <option rows="2"   
+                      value="55">
+                      FISCALIA DE ESTADO</option>                       <option rows="2"   
+                      value="66">
+                      ...SENTACION OFICIAL EN CAPITAL FEDERAL</option>                       <option rows="2"   
+                      value="115">
+                      HONORABLE JUNTA ELECTORAL PROVINCIAL</option>                       <option rows="2"   
+                      value="86">
+                      HONORABLE LEGISLATURA DE TUCUMAN</option>                       <option rows="2"   
+                      value="109">
+                      ... DESARROLLO PRODUCTIVO - IDEP</option>                       <option rows="2"   
+                      value="59">
+                      ...GURIDAD SOCIAL DE TUCUMAN - IPSST</option>                       <option rows="2"   
+                      value="92">
+                      ...OCION DEL AZUCAR Y EL ALCOHOL DE TUCUMAN</option>                       <option rows="2"   
+                      value="25">
+                      ...IAL DE LUCHA CONTRA EL ALCOHOLISMO</option>                       <option rows="2"   
+                      value="56">
+                      ...IAL DE VIVIENDA Y DESARROLLO URBANO</option>                       <option rows="2"   
+                      value="5">
+                      ...AL DE ACCION COOPERATIVA Y MUTUAL</option>                       <option rows="2"   
+                      value="78">
+                      MINISTERIO DE CORRDINACION</option>                       <option rows="2"   
+                      value="80">
+                      ...N GRAL. DE COMPRAS Y CONTRATACIONES</option>                       <option rows="2"   
+                      value="79">
+                      ...- SECRETARIA DE ESTADO LEGAL Y TECNICA</option>                       <option rows="2"   
+                      value="28">
+                      MINISTERIO DE DESARROLLO PRODUCTIVO</option>                       <option rows="2"   
+                      value="36">
+                      ... SECRETARIA DE DESARROLLO PRODUCTIVO</option>                       <option rows="2"   
+                      value="57">
+                      ... SECRETARIA DE ESTADO DE MIP Y EMPLEO</option>                       <option rows="2"   
+                      value="38">
+                      ...ARIA DE ASUNTOS AGRARIOS Y ALIMENTOS</option>                       <option rows="2"   
+                      value="8">
+                      MINISTERIO DE DESARROLLO SOCIAL</option>                       <option rows="2"   
+                      value="51">
+                      ... NI&Ntilde;ES, ADOLESCENCIA Y FAMILIA</option>                       <option rows="2"   
+                      value="75">
+                      MINISTERIO DE ECONOM&iacute;A SUEP</option>                       <option rows="2"   
+                      value="34">
+                      ...NOMIA - DIRECCION GENERAL DE SISTEMAS</option>                       <option rows="2"   
+                      value="6">
+                      MINISTERIO DE EDUCACION</option>                       <option rows="2"   
+                      value="97">
+                      MINISTERIO DE EDUCACION - CIIDEPT</option>                       <option rows="2"   
+                      value="83">
+                      ...CACION - INET-Ley 26058- UEJ Tucuman</option>                       <option rows="2"   
+                      value="23">
+                      ...N DE RECURSOS EXTRAPRESUPUESTARIOS</option>                       <option rows="2"   
+                      value="72">
+                      MINISTERIO DE GOBIERNO Y JUSTICIA</option>                       <option rows="2"   
+                      value="7">
+                      MINISTERIO DEL INTERIOR</option>                       <option rows="2"   
+                      value="117">
+                      ...AS, INFRAESTRUCTURA Y TRANSPORTE PUBLICO</option>                       <option rows="2"   
+                      value="118">
+                      ...E OBRAS Y SERVICIOS PUBLICOS</option>                       <option rows="2"   
+                      value="60">
+                      MINISTERIO DE SALUD P&Uacute;BLICA</option>                       <option rows="2"   
+                      value="95">
+                      MINISTERIO DE SEGURIDAD</option>                       <option rows="2"   
+                      value="16">
+                      MINISTERIO DE SEGURIDAD CIUDADANA</option>                       <option rows="2"   
+                      value="40">
+                      ...ute;N PROVINCIAL DE DEFENSA CIVIL</option>                       <option rows="2"   
+                      value="88">
+                      ...DADANA - DIRECCION DE COMERCIO INTERIOR</option>                       <option rows="2"   
+                      value="52">
+                      ...IRECCION GENERAL DE INSTITUTOS PENALES</option>                       <option rows="2"   
+                      value="43">
+                      ...DADANA - DIRECCION GENERAL DE TRANSPORTE</option>                       <option rows="2"   
+                      value="63">
+                      ...URIDAD - DEPARTAMENTO GENERAL DE POLICIA</option>                       <option rows="2"   
+                      value="114">
+                      ...URIDAD - DIRECCION GENERAL DE TRANSPORTE</option>                       <option rows="2"   
+                      value="100">
+                      ...IRECCION PROVINCIAL DE DEFENSA CIVIL</option>                       <option rows="2"   
+                      value="10">
+                      MINISTERIO ECONOMIA</option>                       <option rows="2"   
+                      value="12">
+                      MINISTERIO ECONOMIA - SECR. HACIENDA</option>                       <option rows="2"   
+                      value="14">
+                      ...ION - DIR. COMP. Y CONTRATACIONES</option>                       <option rows="2"   
+                      value="110">
+                      MINISTERIO PUBLICO FISCAL</option>                       <option rows="2"   
+                      value="129">
+                      MINISTERIO PUPILAR Y DE LA DEFENSA</option>                       <option rows="2"   
+                      value="84">
+                      ...O DE COORDINACION Y GESTION PUBLICA</option>                       <option rows="2"   
+                      value="128">
+                      MUNICIPALIDAD DE GRANEROS</option>                       <option rows="2"   
+                      value="65">
+                      PATRONATO DE INTERNOS Y LIBERADOS</option>                       <option rows="2"   
+                      value="39">
+                      PODER JUDICIAL DE TUCUMAN</option>                       <option rows="2"   
+                      value="113">
+                      ...CUMAN - CENTRO JUDICIAL CONCEPCION</option>                       <option rows="2"   
+                      value="71">
+                      ...O CIVIL Y CAPACIDAD DE LAS PERSONAS</option>                       <option rows="2"   
+                      value="17">
+                      ...OFICIAL PROV. EN CAPITAL FEDERAL</option>                       <option rows="2"   
+                      value="47">
+                      ... - MINISTERIO DE DESARROLLO SOCIAL</option>                       <option rows="2"   
+                      value="126">
+                      ...E DERECHOS HUMANOS Y JUSTICA</option>                       <option rows="2"   
+                      value="31">
+                      ...E ESTADO DE COMUNICACION PUBLICA</option>                       <option rows="2"   
+                      value="70">
+                      ...RDINACION CON MUNICIPIOS Y COMUNAS RURALES</option>                       <option rows="2"   
+                      value="46">
+                      SECRETARIA DE ESTADO DE DEPORTES</option>                       <option rows="2"   
+                      value="61">
+                      ...E ESTADO DE DERECHOS HUMANOS</option>                       <option rows="2"   
+                      value="101">
+                      ...ADO DE FISCALIZACION Y CONTROL DE GESTION</option>                       <option rows="2"   
+                      value="85">
+                      ...ADO DE GESTION PUBLICA Y PLANEAMIENTO</option>                       <option rows="2"   
+                      value="64">
+                      ...E ESTADO DE GOBIERNO Y JUSTICIA</option>                       <option rows="2"   
+                      value="103">
+                      SECRETARIA DE ESTADO DE GRANDES COMUNAS</option>                       <option rows="2"   
+                      value="18">
+                      SECRETARIA DE ESTADO DE MEDIO AMBIENTE</option>                       <option rows="2"   
+                      value="87">
+                      SECRETARIA DE ESTADO DE OBRAS PUBLICAS</option>                       <option rows="2"   
+                      value="121">
+                      ...E ESTADO DE PARTICIPACION CIUDADANA</option>                       <option rows="2"   
+                      value="104">
+                      ... Y RELACIONES INTERINSTITUCIONALES</option>                       <option rows="2"   
+                      value="111">
+                      ...ADO DE RELACIONES INTERNACIONALES</option>                       <option rows="2"   
+                      value="123">
+                      SECRETARIA DE ESTADO DE SEGURIDAD</option>                       <option rows="2"   
+                      value="106">
+                      ...E ESTADO DE SEGURIDAD CIUDADANA</option>                       <option rows="2"   
+                      value="22">
+                      SECRETARIA DE ESTADO DE TRABAJO</option>                       <option rows="2"   
+                      value="74">
+                      SECRETARIA DE ESTADO DE TRABAJO</option>                       <option rows="2"   
+                      value="49">
+                      ...ADO DE TRANSPORTE Y SEGURIDAD VIAL</option>                       <option rows="2"   
+                      value="91">
+                      ... DE GESTION - MINISTERIO DE INTERIOR</option>                       <option rows="2"   
+                      value="124">
+                      ...IERNO Y RELACIONES INSTITUCIONALES</option>                       <option rows="2"   
+                      value="120">
+                      ...E LUCHA CONTRA EL NARCOTRAFICO</option>                       <option rows="2"   
+                      value="35">
+                      ...VENCION Y ASISTENCIA A LAS ADICCIONES</option>                       <option rows="2"   
+                      value="94">
+                      SECRETARIA DE SEGURIDAD CIUDADANA</option>                       <option rows="2"   
+                      value="62">
+                      SECRETARIA GENERAL DE LA GOBERNACION</option>                       <option rows="2"   
+                      value="19">
+                      ...GOBERNACION - DIR. COMPRAS Y CONTRATAC.</option>                       <option rows="2"   
+                      value="20">
+                      ...EDIO AMBIENTE - DIR. REC. HIDRICOS</option>                       <option rows="2"   
+                      value="21">
+                      ...CCIONES - DIR.COMPR. Y CONTRATACIONES</option>                       <option rows="2"   
+                      value="27">
+                      ... POTABLE Y SANEAMIENTO - SE.PA.P.YS.</option>                       <option rows="2"   
+                      value="30">
+                      SUBSECRETARIA DE TIC</option>                       <option rows="2"   
+                      value="41">
+                      TRIBUNAL DE CUENTAS</option>                       <option rows="2"   
+                      value="105">
+                      TRIBUNAL FISCAL DE APELACION</option>                       <option rows="2"   
+                      value="98">
+                      ...TORA PARA EL DESARROLLO PRODUCTIVO</option>                       <option rows="2"   
+                      value="119">
+                      ...PROVINCIAL - MINISTERIO DE ECONOM&iacute;A</option>                     </select></div>
+         </div>
+	  
+	  
+	  
+	 <div class='row'>
+    	    <div class='column'>&nbsp;N&uacute;mero de compra: </div>
+        	<div class='column'><input name='num_compra' type='text'    value="" ></div>
+      </div>
+	  
+
+	  <div class='row'>
+    	    <div class='column'>&nbsp;N&uacute;mero de expediente: </div>
+	        <div class='column'><input name='num_expediente' type='text'  maxlength="40"   value="" > </div>
+      </div>
+
+
+
+
+	<div class='row'>
+    	    <div class='column'>&nbsp;Fecha de apertura: </div>
+	        <div class='column etiqueta_select'>Desde: <input name='fecha_apertura_desde' type='text' size='12' maxlength="10"   value=""  > 
+        y hasta: 
+		<input name='fecha_apertura_hasta' type='text' size='10' maxlength="10"   value=""  >
+        </div>
+        <div class='column'>
+        &nbsp;(dd/mm/aaaa)&nbsp;&nbsp;
+
+		  </div>
+    </div>
+
+	  <br clear="all" />
+	  
+	  <div class='row' style="text-align:center">
+    	    <div class='column'>&nbsp;</div>
+            <div class='column botones'>
+				<input type="submit" name="Buscar" value="Buscar">
+			</div>
+	  		<div class="column">
+				<a href="ver_llamados_compras_avanzado.php">Nueva b&uacute;squeda </a>&nbsp;
+			</div>
+      </div>
+      
+     
+	</div>
+	
+
+
+      
+<!--	<p>Descargar el Pliego &uacute;nico de Bases y Condiciones Generales: </p><br><br>
+	<div align="center">
+	<a href="normativa_archivos/Anexo DA-22-1-23042009.doc" target="_blank"><img border="0" width="25px" src="imagenes/foto_doc.gif"></a>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+	<a href="normativa_archivos/Anexo DA-22-1-23042009.pdf" target="_blank"><img border="0" width="25px" src="imagenes/foto_pdf.gif"></a>
+	</div>-->
+	
+	<!--     -->
+
+			<br><br>
+			<div class="table">
+												
+									
+
+										 <div class='row'>
+                                                    <div class='column'>
+																				
+										
+												<div class='table' >
+                                                    <div class='row'>
+                                                        <div class='column' id='fondo_gris'>Repartici&oacute;n:<br></div>
+                                                        <div class='column logo-reparticion' style="background-image:url(../aplicacion/logos_reparticiones/logo_rep_27.jpg) ; "><b>SERVICIO PROVINCIAL DE AGUA POTABLE Y SANEAMIENTO - SE.PA.P.YS.</b></div>
+                                                    </div>
+                                                    <div class='row'>
+                                                        <div class='column' id='fondo_gris'>Tipo de compra:</div>
+                                                        <div class='column'><b>LICITACION PUBLICA</b></div>
+                                                    </div>
+                                                    <!--<div>
+                                                        <div>Presupuesto oficial:</div>
+                                                        <div><b></b></div>
+                                                    </div>-->
+                                                    <div class='row'>
+                                                        <div class='column' id='fondo_gris'>Valor del pliego:</div>
+                                                        <div class='column'><b>150,00</b></div>
+                                                    </div>
+                                                    <div class='row'>
+                                                        <div class='column' id='fondo_gris'>N&ordm; de expediente:</div>
+                                                        <div class='column'><b>0958-R</b></div>
+                                                    </div>
+                                                    <div class='row'>
+                                                    														<div class='column' id='fondo_gris'>Rubro(s):</div>
+														<div class='column'><b>  ROPA E INDUMENTARIA</b><br></div>
+                                                    </div>
+
+                                                    <div class='row'>
+                                                        <div class='column' id='fondo_gris'>Rengl&oacute;n N&ordm; 1:</div>
+                                                        <div class='column'><b>Camisa de Trabajo</b></div>
+                                                    </div>
+                                                    <div class='row'>
+                                                        <div class='column' id='fondo_gris'>
+                                                        <b style='color:#FF0000'>
+                                                        <b style='color:#FF0000'>Se abri&oacute; sobres el dia</b>                                                        </b></div>
+                                                        <div class='column'>
+                                                        <b style='color:#FF0000'>02/09/2014, 10:00:00														
+														</b>
+														</div>
+                                                    </div>	
+                                                    <div class='row'>
+                                                    <div class='column' id='fondo_gris'><b>Fecha de adjudicaci&oacute;n:</b></div>
+                                                    
+														<div class='column'><b>11/09/2014</b></div>
+																		
+                                                    </div>	<!-- -->
+                                        </div>
+                                        
+                                        </div>
+                                        
+                                        </div>
+										
+										<!-- &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; -->
+										
+										
+										&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+										<!-- &nbsp;&nbsp;&nbsp;Rubro(s):<b> -->
+										<!--</b>-->
+										
+
+										<!--<p align="left" class="objeto">
+										Objeto(s):<b>-->											<!-- </b>
+										</p>
+										
+										
+										</p>-->
+										
+																	     
+										  
+								
+										
+															
+									<div class='row'>
+                                                        <div class='column'>
+									
+																		
+										<a style="color:#990033 " href="#" onClick="window.open('../aplicacion/detalle_adjudicados.php?id_compra=1547',  '', 'width=570, height=650,scrollbars=yes')" >
+										<!-- http://172.16.0.33/obras_publicas/ ó  http://rig.tucuman.gov.ar/obras_publicas/aplicacion/-->
+										Ver datos de adjudicaci&oacute;n</a>
+												
+                                    
+																		
+									
+                                         
+										   											&nbsp;&nbsp;&nbsp;
+											 											&nbsp;&nbsp;&nbsp;
+										   										&nbsp;&nbsp;&nbsp;
+										<!--http://rig.tucuman.gov.ar/obras_publicas/aplicacion/ o  http://172.16.0.33/obras_publicas/-->
+										
+                                                       
+                                        <!--<a style="color:#990033 " href="#" onClick="window.open('http://rig.tucuman.gov.ar/obras_publicas/aplicacion/detalle_llamado.php?id_compra=1547',  '', 'width=570, height=650,scrollbars=yes')" >-->
+
+                                        <!-- http://172.16.0.33/obras_publicas/ ó http://rig.tucuman.gov.ar/obras_publicas/aplicacion/ o http://localhost/gonzalezn/compras_publicas/ -->
+										
+										<!--Detalle</a>
+										&nbsp;&nbsp;&nbsp;-->
+
+										<div class="detalle-align"><!-- class="container -->
+											 
+											  <!-- Trigger the modal with a button -->
+											  <!--<button type="button" class="btn btn-info btn-lg" data-toggle="modal" data-target="#myModal">Open Modal</button>-->
+											  											  <a type="button" href="#"  data-toggle="modal" data-target="#myModal1547">Detalle</a>&nbsp;&nbsp;&nbsp;
+
+											   <style type="text/css" media="print">
+
+.noVer {
+	visibility:hidden;
+}
+</style>
+<script language='javascript' type='text/javascript'>
+	
+function agregar_pliego(id_compra,valor) {
+	if (valor == 1)
+		{
+		window.open('../compras_2009/descargar_pliego.php?es_doc=1&id_compra=' + id_compra  , '', 'width=1, height=1,scrollbars=no');
+		}
+	if (valor == 2)
+		{
+		window.open('../compras_2009/descargar_pliego.php?es_doc=2&id_compra=' + id_compra  , '', 'width=1, height=1,scrollbars=no');
+		}
+	if (valor == 3)
+		{
+		window.open('../compras_2009/descargar_pliego.php?es_doc=3&id_compra=' + id_compra  , '', 'width=1, height=1,scrollbars=no');
+		}
+		
+}
+
+</script>
+
+ <!-- Modal -->
+											  <div class="modal fade" id="myModal1547" role="dialog">
+											    <div class="modal-dialog">
+											    
+											      <!-- Modal content-->
+											      <div class="modal-content modal-detalle">
+											        
+
+
+	<div align="center">
+		
+	
+		<p style="text-align: center;" align="center"><b>SERVICIO PROVINCIAL DE AGUA POTABLE Y SANEAMIENTO - SE.PA.P.YS.</b></p>
+		
+		
+		<p style="background-color:#CCCCCC; width:70%; text-align: center; ">
+		LICITACION PUBLICA N&ordm; 01/14/M</p>
+		
+				
+		<b>		</b><br>
+		
+		<b>Objeto: Contrataci&oacute;n de lo que se detalla a continuaci&oacute;n:<BR>
+		
+		</b>
+
+	
+	<!--Rubro:<b>-->
+		</b><br><br>
+	<table border="1">
+		<tr>
+			<td><b>RENGLON</b></td>
+			<td><b>DESCRIPCION</b></td>
+		</tr>
+			<tr>
+			<td>1</td>
+			<td>152 unidades de Camisa de Trabajo  <br> <b>-Rubro: ROPA E INDUMENTARIA </td>
+		</tr>
+
+	 		<tr>
+			<td>2</td>
+			<td>152 unidades de Pantal&oacute;n de Trabajo  <br> <b>-Rubro: ROPA E INDUMENTARIA </td>
+		</tr>
+
+	 		<tr>
+			<td>3</td>
+			<td>78 unidades de Bot&iacute;n de Cuero  <br> <b>-Rubro: ROPA E INDUMENTARIA </td>
+		</tr>
+
+	 	</table>
+	<B style='color:#FF0000; font-size:18px;'>COMPRA ADJUDICADA</B>	<br>
+
+	</p> 
+	<table width="400" border="0" style="text-align:left; font-family:Verdana, Arial, Helvetica, sans-serif; font-size:10px ">
+		<!--<tr>
+			<td width="159" bgcolor="#EEEEEE"><p align="left" class="reparticion_licitante">
+			Repartici&oacute;n:<br></td>
+			<td width="295"><p style="font-size:12px "><b></b></p></td>
+		</tr>
+		<tr>
+			<td width="131" bgcolor="#EEEEEE">Rubro:</td>
+			<td width="323"><b>Obras publicas</b></td>
+		</tr>-->
+
+		<tr>
+			<td bgcolor="#CCCCCC" align="center"  colspan="2">Autorizado</td>
+		</tr>
+		<tr>
+			<td bgcolor="#EEEEEE">Por:</td>
+			<td><b></b></td>
+		</tr>		
+				<tr>
+			<td bgcolor="#EEEEEE">N&uacute;mero de expediente:</td>
+			<td><b>0958-R&nbsp;</b></td>
+		</tr>		
+						<tr>
+			<td bgcolor="#CCCCCC" align="center" colspan="2">Montos</td>
+		</tr>
+		<!--<tr>
+			<td bgcolor="#EEEEEE">Sistema de contrataci&oacute;n :</td>
+			<td><b></b></td>
+		</tr>-->
+				<tr>
+			<td bgcolor="#EEEEEE">Valor del pliego:</td>
+			<td><b>150,00</b></td>
+		</tr>
+		<tr>
+			<td bgcolor="#CCCCCC" align="center" colspan="2">Apertura de sobres</td>
+		</tr>
+		<tr>
+			<td bgcolor="#EEEEEE">Lugar:<br></td>
+			<td><b>Av. Sarmiento N&ordm; 999-Capital - Oficina Divisi&oacute;n Abastecimiento</b></td>
+		</tr>		
+		<tr>
+			<td bgcolor="#EEEEEE">Fecha y hora<br></td>
+			<td><b>02/09/2014, 10:00:00</b></td>
+		</tr>
+		<tr>
+			<td bgcolor="#CCCCCC" align="center" colspan="2">Informes</td>
+		</tr>
+		<tr>
+			<td bgcolor="#EEEEEE">Adquisici&oacute;n de pliegos:<br></td>
+			<td><b>Hasta el 29/08/20014, Hs : 12:00 - Av. Sarmiento N&ordm; 999 - Capital - Oficina Divisi&oacute;n Abastecimiento</b></td>
+		</tr>					
+
+  </table>
+	<br>
+	<p align="justify" style="font-size:11px; text-indent:10px; width:80% ">
+		</p>
+	<br><br>
+	
+		<a style="color:#990033 " href="#" onClick="window.open('http://rig.tucuman.gov.ar/obras_publicas/aplicacion/detalle_llamado.php?id_compra=1547',  '', 'width=570, height=650,scrollbars=yes')" ><!-- http://172.16.0.33/obras_publicas/ Ã³ http://rig.tucuman.gov.ar/obras_publicas/aplicacion/ o http://localhost/gonzalezn/compras_publicas/ -->
+										Imprimir</a>
+	
+
+	
+		<div align="right">
+			 		
+                 
+					 
+		</div>
+	
+
+
+<br />
+Compra de Bienes y Servicios		
+</p>
+</div>
+
+
+											        
+											      </div>
+											      
+											    </div>
+											  </div>
+
+											 
+											  
+										</div>
+
+										<!--&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+										</div>
+										 ------------</div> -------------- -->
+														
+                                    </div>
+                                    </div>		    
+									
+                                    <div class='row'>
+                                                        <div class='column'>
+                                                        <hr width="90%" style="margin:0 30 0 30 px; ">
+                                                        <hr>
+                                                        <br />
+                                                        </div>
+                                   </div>
+
+
+										
+
+										 <div class='row'>
+                                                    <div class='column'>
+																				
+										
+												<div class='table' >
+                                                    <div class='row'>
+                                                        <div class='column' id='fondo_gris'>Repartici&oacute;n:<br></div>
+                                                        <div class='column logo-reparticion' style="background-image:url(../aplicacion/logos_reparticiones/logo_rep_1.jpg) ; "><b>DIRECCION ARQUITECTURA Y URBANISMO</b></div>
+                                                    </div>
+                                                    <div class='row'>
+                                                        <div class='column' id='fondo_gris'>Tipo de compra:</div>
+                                                        <div class='column'><b>LICITACION PUBLICA</b></div>
+                                                    </div>
+                                                    <!--<div>
+                                                        <div>Presupuesto oficial:</div>
+                                                        <div><b></b></div>
+                                                    </div>-->
+                                                    <div class='row'>
+                                                        <div class='column' id='fondo_gris'>Valor del pliego:</div>
+                                                        <div class='column'><b>$ 0,00.-</b></div>
+                                                    </div>
+                                                    <div class='row'>
+                                                        <div class='column' id='fondo_gris'>N&ordm; de expediente:</div>
+                                                        <div class='column'><b>1669/321-DAF-2014</b></div>
+                                                    </div>
+                                                    <div class='row'>
+                                                    														<div class='column' id='fondo_gris'>Rubro(s):</div>
+														<div class='column'><b>  ALQUILER DE VEHICULOS</b><br></div>
+                                                    </div>
+
+                                                    <div class='row'>
+                                                        <div class='column' id='fondo_gris'>Rengl&oacute;n N&ordm; 1:</div>
+                                                        <div class='column'><b>VEHICULO UTILITARIO POR EL TERMINO DE 6 MESES CON OPCION DE PRORROGA PARA TRASLA...</b></div>
+                                                    </div>
+                                                    <div class='row'>
+                                                        <div class='column' id='fondo_gris'>
+                                                        <b style='color:#FF0000'>
+                                                        <b style='color:#FF0000'>Se abri&oacute; sobres el dia</b>                                                        </b></div>
+                                                        <div class='column'>
+                                                        <b style='color:#FF0000'>02/09/2014, 10:00:00														
+														</b>
+														</div>
+                                                    </div>	
+                                                    <div class='row'>
+                                                    <div class='column' id='fondo_gris'><b>Fecha de adjudicaci&oacute;n:</b></div>
+                                                    
+														<div class='column'><b>20/02/2015</b></div>
+																		
+                                                    </div>	<!-- -->
+                                        </div>
+                                        
+                                        </div>
+                                        
+                                        </div>
+										
+										<!-- &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; -->
+										
+										
+										&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+										<!-- &nbsp;&nbsp;&nbsp;Rubro(s):<b> -->
+										<!--</b>-->
+										
+
+										<!--<p align="left" class="objeto">
+										Objeto(s):<b>-->											<!-- </b>
+										</p>
+										
+										
+										</p>-->
+										
+																	     
+										  
+								
+										
+															
+									<div class='row'>
+                                                        <div class='column'>
+									
+																		
+										<a style="color:#990033 " href="#" onClick="window.open('../aplicacion/detalle_adjudicados.php?id_compra=1554',  '', 'width=570, height=650,scrollbars=yes')" >
+										<!-- http://172.16.0.33/obras_publicas/ ó  http://rig.tucuman.gov.ar/obras_publicas/aplicacion/-->
+										Ver datos de adjudicaci&oacute;n</a>
+												
+                                    
+																		
+									
+                                         
+										   											&nbsp;&nbsp;&nbsp;
+											 											&nbsp;&nbsp;&nbsp;
+										   										&nbsp;&nbsp;&nbsp;
+										<!--http://rig.tucuman.gov.ar/obras_publicas/aplicacion/ o  http://172.16.0.33/obras_publicas/-->
+										
+                                                       
+                                        <!--<a style="color:#990033 " href="#" onClick="window.open('http://rig.tucuman.gov.ar/obras_publicas/aplicacion/detalle_llamado.php?id_compra=1554',  '', 'width=570, height=650,scrollbars=yes')" >-->
+
+                                        <!-- http://172.16.0.33/obras_publicas/ ó http://rig.tucuman.gov.ar/obras_publicas/aplicacion/ o http://localhost/gonzalezn/compras_publicas/ -->
+										
+										<!--Detalle</a>
+										&nbsp;&nbsp;&nbsp;-->
+
+										<div class="detalle-align"><!-- class="container -->
+											 
+											  <!-- Trigger the modal with a button -->
+											  <!--<button type="button" class="btn btn-info btn-lg" data-toggle="modal" data-target="#myModal">Open Modal</button>-->
+											  											  <a type="button" href="#"  data-toggle="modal" data-target="#myModal1554">Detalle</a>&nbsp;&nbsp;&nbsp;
+
+											   <style type="text/css" media="print">
+
+.noVer {
+	visibility:hidden;
+}
+</style>
+<script language='javascript' type='text/javascript'>
+	
+function agregar_pliego(id_compra,valor) {
+	if (valor == 1)
+		{
+		window.open('../compras_2009/descargar_pliego.php?es_doc=1&id_compra=' + id_compra  , '', 'width=1, height=1,scrollbars=no');
+		}
+	if (valor == 2)
+		{
+		window.open('../compras_2009/descargar_pliego.php?es_doc=2&id_compra=' + id_compra  , '', 'width=1, height=1,scrollbars=no');
+		}
+	if (valor == 3)
+		{
+		window.open('../compras_2009/descargar_pliego.php?es_doc=3&id_compra=' + id_compra  , '', 'width=1, height=1,scrollbars=no');
+		}
+		
+}
+
+</script>
+
+ <!-- Modal -->
+											  <div class="modal fade" id="myModal1554" role="dialog">
+											    <div class="modal-dialog">
+											    
+											      <!-- Modal content-->
+											      <div class="modal-content modal-detalle">
+											        
+
+
+	<div align="center">
+		
+	
+		<p style="text-align: center;" align="center"><b>DIRECCION ARQUITECTURA Y URBANISMO</b></p>
+		
+		
+		<p style="background-color:#CCCCCC; width:70%; text-align: center; ">
+		LICITACION PUBLICA N&ordm; 012/14</p>
+		
+				
+		<b>		</b><br>
+		
+		<b>Objeto: Contrataci&oacute;n de lo que se detalla a continuaci&oacute;n:<BR>
+		
+		</b>
+
+	
+	<!--Rubro:<b>-->
+		</b><br><br>
+	<table border="1">
+		<tr>
+			<td><b>RENGLON</b></td>
+			<td><b>DESCRIPCION</b></td>
+		</tr>
+			<tr>
+			<td>1</td>
+			<td>1 unidad de VEHICULO UTILITARIO POR EL TERMINO DE 6 MESES CON OPCION DE PRORROGA PARA TRASLADO DE PERSONAL DEL DPTO. SERV. ADMIN. FINANCIERO DE LA REPARTICION  <br> <b>-Rubro: ALQUILER DE VEHICULOS </td>
+		</tr>
+
+	 	</table>
+	<B style='color:#FF0000; font-size:18px;'>COMPRA ADJUDICADA</B>	<br>
+
+	</p> 
+	<table width="400" border="0" style="text-align:left; font-family:Verdana, Arial, Helvetica, sans-serif; font-size:10px ">
+		<!--<tr>
+			<td width="159" bgcolor="#EEEEEE"><p align="left" class="reparticion_licitante">
+			Repartici&oacute;n:<br></td>
+			<td width="295"><p style="font-size:12px "><b></b></p></td>
+		</tr>
+		<tr>
+			<td width="131" bgcolor="#EEEEEE">Rubro:</td>
+			<td width="323"><b>Obras publicas</b></td>
+		</tr>-->
+
+		<tr>
+			<td bgcolor="#CCCCCC" align="center"  colspan="2">Autorizado</td>
+		</tr>
+		<tr>
+			<td bgcolor="#EEEEEE">Por:</td>
+			<td><b>Resoluci&oacute;n N&ordm; 786/ME emanada del Ministerio de Econom&iacute;a en fecha 24/07/2014</b></td>
+		</tr>		
+				<tr>
+			<td bgcolor="#EEEEEE">N&uacute;mero de expediente:</td>
+			<td><b>1669/321-DAF-2014&nbsp;</b></td>
+		</tr>		
+						<tr>
+			<td bgcolor="#CCCCCC" align="center" colspan="2">Emplazamiento</td>
+		</tr>
+
+		<tr>
+			<td bgcolor="#EEEEEE">Lugar:</td>
+			<td><b>CAPITAL</b></td>
+		</tr>
+				<tr>
+			<td bgcolor="#CCCCCC" align="center" colspan="2">Montos</td>
+		</tr>
+		<!--<tr>
+			<td bgcolor="#EEEEEE">Sistema de contrataci&oacute;n :</td>
+			<td><b></b></td>
+		</tr>-->
+				<tr>
+			<td bgcolor="#EEEEEE">Presupuesto oficial:</td>
+			<td><b>$ 60.000,00.-</b></td>
+		</tr>
+				<tr>
+			<td bgcolor="#EEEEEE">Valor del pliego:</td>
+			<td><b>$ 0,00.-</b></td>
+		</tr>
+		<tr>
+			<td bgcolor="#CCCCCC" align="center" colspan="2">Apertura de sobres</td>
+		</tr>
+		<tr>
+			<td bgcolor="#EEEEEE">Lugar:<br></td>
+			<td><b>Direcci&oacute;n de Arquitectura y Urbanismo - Bolivar 981</b></td>
+		</tr>		
+		<tr>
+			<td bgcolor="#EEEEEE">Fecha y hora<br></td>
+			<td><b>02/09/2014, 10:00:00</b></td>
+		</tr>
+		<tr>
+			<td bgcolor="#CCCCCC" align="center" colspan="2">Informes</td>
+		</tr>
+		<tr>
+			<td bgcolor="#EEEEEE">Adquisici&oacute;n de pliegos:<br></td>
+			<td><b>Oficina de Compras - D.A.U. - Horario de 8:00 a 13:00 hs</b></td>
+		</tr>					
+
+  </table>
+	<br>
+	<p align="justify" style="font-size:11px; text-indent:10px; width:80% ">
+		</p>
+	<br><br>
+	
+		<a style="color:#990033 " href="#" onClick="window.open('http://rig.tucuman.gov.ar/obras_publicas/aplicacion/detalle_llamado.php?id_compra=1554',  '', 'width=570, height=650,scrollbars=yes')" ><!-- http://172.16.0.33/obras_publicas/ Ã³ http://rig.tucuman.gov.ar/obras_publicas/aplicacion/ o http://localhost/gonzalezn/compras_publicas/ -->
+										Imprimir</a>
+	
+
+	
+		<div align="right">
+			 		
+                 
+					 
+		</div>
+	
+
+
+<br />
+Compra de Bienes y Servicios		
+</p>
+</div>
+
+
+											        
+											      </div>
+											      
+											    </div>
+											  </div>
+
+											 
+											  
+										</div>
+
+										<!--&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+										</div>
+										 ------------</div> -------------- -->
+														
+                                    </div>
+                                    </div>		    
+									
+                                    <div class='row'>
+                                                        <div class='column'>
+                                                        <hr width="90%" style="margin:0 30 0 30 px; ">
+                                                        <hr>
+                                                        <br />
+                                                        </div>
+                                   </div>
+
+
+										
+
+										 <div class='row'>
+                                                    <div class='column'>
+																				
+										
+												<div class='table' >
+                                                    <div class='row'>
+                                                        <div class='column' id='fondo_gris'>Repartici&oacute;n:<br></div>
+                                                        <div class='column logo-reparticion' style="background-image:url(../aplicacion/logos_reparticiones/logo_rep_85.jpg) ; "><b>SECRETARIA DE ESTADO DE GESTION PUBLICA Y PLANEAMIENTO</b></div>
+                                                    </div>
+                                                    <div class='row'>
+                                                        <div class='column' id='fondo_gris'>Tipo de compra:</div>
+                                                        <div class='column'><b>LICITACION PUBLICA</b></div>
+                                                    </div>
+                                                    <!--<div>
+                                                        <div>Presupuesto oficial:</div>
+                                                        <div><b></b></div>
+                                                    </div>-->
+                                                    <div class='row'>
+                                                        <div class='column' id='fondo_gris'>Valor del pliego:</div>
+                                                        <div class='column'><b>$ 0,00</b></div>
+                                                    </div>
+                                                    <div class='row'>
+                                                        <div class='column' id='fondo_gris'>N&ordm; de expediente:</div>
+                                                        <div class='column'><b>1268/130/R/2014</b></div>
+                                                    </div>
+                                                    <div class='row'>
+                                                    														<div class='column' id='fondo_gris'>Rubro(s):</div>
+														<div class='column'><b>  INFORMATICA Y COMPUTACION</b><br></div>
+                                                    </div>
+
+                                                    <div class='row'>
+                                                        <div class='column' id='fondo_gris'>Rengl&oacute;n N&ordm; 1:</div>
+                                                        <div class='column'><b>Monitor : LED 19&quot;</b></div>
+                                                    </div>
+                                                    <div class='row'>
+                                                        <div class='column' id='fondo_gris'>
+                                                        <b style='color:#FF0000'>
+                                                        <b style='color:#FF0000'>Se abri&oacute; sobres el dia</b>                                                        </b></div>
+                                                        <div class='column'>
+                                                        <b style='color:#FF0000'>01/09/2014, 10:30:00														
+														</b>
+														</div>
+                                                    </div>	
+                                                    <div class='row'>
+                                                    <div class='column' id='fondo_gris'><b>Fecha de adjudicaci&oacute;n:</b></div>
+                                                    
+														<div class='column'><b>20/10/2014</b></div>
+																		
+                                                    </div>	<!-- -->
+                                        </div>
+                                        
+                                        </div>
+                                        
+                                        </div>
+										
+										<!-- &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; -->
+										
+										
+										&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+										<!-- &nbsp;&nbsp;&nbsp;Rubro(s):<b> -->
+										<!--</b>-->
+										
+
+										<!--<p align="left" class="objeto">
+										Objeto(s):<b>-->											<!-- </b>
+										</p>
+										
+										
+										</p>-->
+										
+																	     
+										  
+								
+										
+															
+									<div class='row'>
+                                                        <div class='column'>
+									
+																		
+										<a style="color:#990033 " href="#" onClick="window.open('../aplicacion/detalle_adjudicados.php?id_compra=1545',  '', 'width=570, height=650,scrollbars=yes')" >
+										<!-- http://172.16.0.33/obras_publicas/ ó  http://rig.tucuman.gov.ar/obras_publicas/aplicacion/-->
+										Ver datos de adjudicaci&oacute;n</a>
+												
+                                    
+																		
+									
+                                         
+										   												  <!--  172.16.0.33/obras_publicas/   aplicacion/  -->
+										    <a style="color:#990033 " href="../aplicacion/a_doc/Licitacion1545.doc"  target="_blank" >   
+									      <!-- Le quito el 02/06/2023, esto era para contar la descargas de un pliego: onClick="agregar_pliego(1545,1)" -->
+										   <img src="images/word_0.png" border="0" alt="pliego en formato WORD"  title="pliego en formato WORD" /></a>											&nbsp;&nbsp;&nbsp;
+											 											&nbsp;&nbsp;&nbsp;
+										   										&nbsp;&nbsp;&nbsp;
+										<!--http://rig.tucuman.gov.ar/obras_publicas/aplicacion/ o  http://172.16.0.33/obras_publicas/-->
+										
+                                                       
+                                        <!--<a style="color:#990033 " href="#" onClick="window.open('http://rig.tucuman.gov.ar/obras_publicas/aplicacion/detalle_llamado.php?id_compra=1545',  '', 'width=570, height=650,scrollbars=yes')" >-->
+
+                                        <!-- http://172.16.0.33/obras_publicas/ ó http://rig.tucuman.gov.ar/obras_publicas/aplicacion/ o http://localhost/gonzalezn/compras_publicas/ -->
+										
+										<!--Detalle</a>
+										&nbsp;&nbsp;&nbsp;-->
+
+										<div class="detalle-align"><!-- class="container -->
+											 
+											  <!-- Trigger the modal with a button -->
+											  <!--<button type="button" class="btn btn-info btn-lg" data-toggle="modal" data-target="#myModal">Open Modal</button>-->
+											  											  <a type="button" href="#"  data-toggle="modal" data-target="#myModal1545">Detalle</a>&nbsp;&nbsp;&nbsp;
+
+											   <style type="text/css" media="print">
+
+.noVer {
+	visibility:hidden;
+}
+</style>
+<script language='javascript' type='text/javascript'>
+	
+function agregar_pliego(id_compra,valor) {
+	if (valor == 1)
+		{
+		window.open('../compras_2009/descargar_pliego.php?es_doc=1&id_compra=' + id_compra  , '', 'width=1, height=1,scrollbars=no');
+		}
+	if (valor == 2)
+		{
+		window.open('../compras_2009/descargar_pliego.php?es_doc=2&id_compra=' + id_compra  , '', 'width=1, height=1,scrollbars=no');
+		}
+	if (valor == 3)
+		{
+		window.open('../compras_2009/descargar_pliego.php?es_doc=3&id_compra=' + id_compra  , '', 'width=1, height=1,scrollbars=no');
+		}
+		
+}
+
+</script>
+
+ <!-- Modal -->
+											  <div class="modal fade" id="myModal1545" role="dialog">
+											    <div class="modal-dialog">
+											    
+											      <!-- Modal content-->
+											      <div class="modal-content modal-detalle">
+											        
+
+
+	<div align="center">
+		
+	
+		<p style="text-align: center;" align="center"><b>SECRETARIA DE ESTADO DE GESTION PUBLICA Y PLANEAMIENTO</b></p>
+		
+		
+		<p style="background-color:#CCCCCC; width:70%; text-align: center; ">
+		LICITACION PUBLICA N&ordm; 03/2014</p>
+		
+				
+		<b>		</b><br>
+		
+		<b>Objeto: Contrataci&oacute;n de lo que se detalla a continuaci&oacute;n:<BR>
+		
+		</b>
+
+	
+	<!--Rubro:<b>-->
+		</b><br><br>
+	<table border="1">
+		<tr>
+			<td><b>RENGLON</b></td>
+			<td><b>DESCRIPCION</b></td>
+		</tr>
+			<tr>
+			<td>1</td>
+			<td>4 unidades de Monitor : LED 19&quot;  <br> <b>-Rubro: INFORMATICA Y COMPUTACION </td>
+		</tr>
+
+	 		<tr>
+			<td>2</td>
+			<td>4 unidades de CPU Descriptas en Pliego de Especificaciones Particulares, Tecnicas y Complementarias  <br> <b>-Rubro: INFORMATICA Y COMPUTACION </td>
+		</tr>
+
+	 	</table>
+	<B style='color:#FF0000; font-size:18px;'>COMPRA ADJUDICADA</B>	<br>
+
+	</p> 
+	<table width="400" border="0" style="text-align:left; font-family:Verdana, Arial, Helvetica, sans-serif; font-size:10px ">
+		<!--<tr>
+			<td width="159" bgcolor="#EEEEEE"><p align="left" class="reparticion_licitante">
+			Repartici&oacute;n:<br></td>
+			<td width="295"><p style="font-size:12px "><b></b></p></td>
+		</tr>
+		<tr>
+			<td width="131" bgcolor="#EEEEEE">Rubro:</td>
+			<td width="323"><b>Obras publicas</b></td>
+		</tr>-->
+
+		<tr>
+			<td bgcolor="#CCCCCC" align="center"  colspan="2">Autorizado</td>
+		</tr>
+		<tr>
+			<td bgcolor="#EEEEEE">Por:</td>
+			<td><b>Secretaria de Estado de Gestion Publica y Planeamiento</b></td>
+		</tr>		
+				<tr>
+			<td bgcolor="#EEEEEE">N&uacute;mero de expediente:</td>
+			<td><b>1268/130/R/2014&nbsp;</b></td>
+		</tr>		
+						<tr>
+			<td bgcolor="#CCCCCC" align="center" colspan="2">Montos</td>
+		</tr>
+		<!--<tr>
+			<td bgcolor="#EEEEEE">Sistema de contrataci&oacute;n :</td>
+			<td><b></b></td>
+		</tr>-->
+				<tr>
+			<td bgcolor="#EEEEEE">Presupuesto oficial:</td>
+			<td><b>$ 50.000,00</b></td>
+		</tr>
+				<tr>
+			<td bgcolor="#EEEEEE">Valor del pliego:</td>
+			<td><b>$ 0,00</b></td>
+		</tr>
+		<tr>
+			<td bgcolor="#CCCCCC" align="center" colspan="2">Apertura de sobres</td>
+		</tr>
+		<tr>
+			<td bgcolor="#EEEEEE">Lugar:<br></td>
+			<td><b>Direccion de Administracion y Despacho (SEGPYP)</b></td>
+		</tr>		
+		<tr>
+			<td bgcolor="#EEEEEE">Fecha y hora<br></td>
+			<td><b>01/09/2014, 10:30:00</b></td>
+		</tr>
+		<tr>
+			<td bgcolor="#CCCCCC" align="center" colspan="2">Informes</td>
+		</tr>
+		<tr>
+			<td bgcolor="#EEEEEE">Adquisici&oacute;n de pliegos:<br></td>
+			<td><b>Direccion de Administracion y Despacho (SEGPYP)</b></td>
+		</tr>					
+
+  </table>
+	<br>
+	<p align="justify" style="font-size:11px; text-indent:10px; width:80% ">
+		</p>
+	<br><br>
+	
+		<a style="color:#990033 " href="#" onClick="window.open('http://rig.tucuman.gov.ar/obras_publicas/aplicacion/detalle_llamado.php?id_compra=1545',  '', 'width=570, height=650,scrollbars=yes')" ><!-- http://172.16.0.33/obras_publicas/ Ã³ http://rig.tucuman.gov.ar/obras_publicas/aplicacion/ o http://localhost/gonzalezn/compras_publicas/ -->
+										Imprimir</a>
+	
+
+	
+		<div align="right">
+			 												  <!--  172.16.0.33/obras_publicas/-->
+										   <a style="color:#990033 " href="../aplicacion/a_doc/Licitacion1545.doc"  onClick="agregar_pliego(1545,1)"  target="_blank" >
+									       <img src="images/word_0.png" border="0" alt="pliego en formato WORD"  title="pliego en formato WORD" /></a>		
+                 
+					 
+		</div>
+	
+
+
+<br />
+Compra de Bienes y Servicios		
+</p>
+</div>
+
+
+											        
+											      </div>
+											      
+											    </div>
+											  </div>
+
+											 
+											  
+										</div>
+
+										<!--&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+										</div>
+										 ------------</div> -------------- -->
+														
+                                    </div>
+                                    </div>		    
+									
+                                    <div class='row'>
+                                                        <div class='column'>
+                                                        <hr width="90%" style="margin:0 30 0 30 px; ">
+                                                        <hr>
+                                                        <br />
+                                                        </div>
+                                   </div>
+
+
+										
+
+										 <div class='row'>
+                                                    <div class='column'>
+																				
+										
+												<div class='table' >
+                                                    <div class='row'>
+                                                        <div class='column' id='fondo_gris'>Repartici&oacute;n:<br></div>
+                                                        <div class='column logo-reparticion' style="background-image:url(../aplicacion/logos_reparticiones/logo_rep_85.jpg) ; "><b>SECRETARIA DE ESTADO DE GESTION PUBLICA Y PLANEAMIENTO</b></div>
+                                                    </div>
+                                                    <div class='row'>
+                                                        <div class='column' id='fondo_gris'>Tipo de compra:</div>
+                                                        <div class='column'><b>LICITACION PUBLICA</b></div>
+                                                    </div>
+                                                    <!--<div>
+                                                        <div>Presupuesto oficial:</div>
+                                                        <div><b></b></div>
+                                                    </div>-->
+                                                    <div class='row'>
+                                                        <div class='column' id='fondo_gris'>Valor del pliego:</div>
+                                                        <div class='column'><b>$0.00</b></div>
+                                                    </div>
+                                                    <div class='row'>
+                                                        <div class='column' id='fondo_gris'>N&ordm; de expediente:</div>
+                                                        <div class='column'><b>0069/109/S/2014</b></div>
+                                                    </div>
+                                                    <div class='row'>
+                                                    														<div class='column' id='fondo_gris'>Rubro(s):</div>
+														<div class='column'><b>  INFORMATICA Y COMPUTACION</b><br></div>
+                                                    </div>
+
+                                                    <div class='row'>
+                                                        <div class='column' id='fondo_gris'>Rengl&oacute;n N&ordm; 1:</div>
+                                                        <div class='column'><b>UPS APC SMART 1000VA 230V USB&amp;SERIAL</b></div>
+                                                    </div>
+                                                    <div class='row'>
+                                                        <div class='column' id='fondo_gris'>
+                                                        <b style='color:#FF0000'>
+                                                        <b style='color:#FF0000'>Se abri&oacute; sobres el dia</b>                                                        </b></div>
+                                                        <div class='column'>
+                                                        <b style='color:#FF0000'>29/08/2014, 11:00:00														
+														</b>
+														</div>
+                                                    </div>	
+                                                    <div class='row'>
+                                                    <div class='column' id='fondo_gris'><b>Fecha de adjudicaci&oacute;n:</b></div>
+                                                    
+														<div class='column'><b>20/10/2014</b></div>
+																		
+                                                    </div>	<!-- -->
+                                        </div>
+                                        
+                                        </div>
+                                        
+                                        </div>
+										
+										<!-- &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; -->
+										
+										
+										&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+										<!-- &nbsp;&nbsp;&nbsp;Rubro(s):<b> -->
+										<!--</b>-->
+										
+
+										<!--<p align="left" class="objeto">
+										Objeto(s):<b>-->											<!-- </b>
+										</p>
+										
+										
+										</p>-->
+										
+																	     
+										  
+								
+										
+															
+									<div class='row'>
+                                                        <div class='column'>
+									
+																		
+										<a style="color:#990033 " href="#" onClick="window.open('../aplicacion/detalle_adjudicados.php?id_compra=1539',  '', 'width=570, height=650,scrollbars=yes')" >
+										<!-- http://172.16.0.33/obras_publicas/ ó  http://rig.tucuman.gov.ar/obras_publicas/aplicacion/-->
+										Ver datos de adjudicaci&oacute;n</a>
+												
+                                    
+																		
+									
+                                         
+										   												  <!--  172.16.0.33/obras_publicas/   aplicacion/  -->
+										    <a style="color:#990033 " href="../aplicacion/a_doc/Licitacion1539.doc"  target="_blank" >   
+									      <!-- Le quito el 02/06/2023, esto era para contar la descargas de un pliego: onClick="agregar_pliego(1539,1)" -->
+										   <img src="images/word_0.png" border="0" alt="pliego en formato WORD"  title="pliego en formato WORD" /></a>											&nbsp;&nbsp;&nbsp;
+											 											&nbsp;&nbsp;&nbsp;
+										   										&nbsp;&nbsp;&nbsp;
+										<!--http://rig.tucuman.gov.ar/obras_publicas/aplicacion/ o  http://172.16.0.33/obras_publicas/-->
+										
+                                                       
+                                        <!--<a style="color:#990033 " href="#" onClick="window.open('http://rig.tucuman.gov.ar/obras_publicas/aplicacion/detalle_llamado.php?id_compra=1539',  '', 'width=570, height=650,scrollbars=yes')" >-->
+
+                                        <!-- http://172.16.0.33/obras_publicas/ ó http://rig.tucuman.gov.ar/obras_publicas/aplicacion/ o http://localhost/gonzalezn/compras_publicas/ -->
+										
+										<!--Detalle</a>
+										&nbsp;&nbsp;&nbsp;-->
+
+										<div class="detalle-align"><!-- class="container -->
+											 
+											  <!-- Trigger the modal with a button -->
+											  <!--<button type="button" class="btn btn-info btn-lg" data-toggle="modal" data-target="#myModal">Open Modal</button>-->
+											  											  <a type="button" href="#"  data-toggle="modal" data-target="#myModal1539">Detalle</a>&nbsp;&nbsp;&nbsp;
+
+											   <style type="text/css" media="print">
+
+.noVer {
+	visibility:hidden;
+}
+</style>
+<script language='javascript' type='text/javascript'>
+	
+function agregar_pliego(id_compra,valor) {
+	if (valor == 1)
+		{
+		window.open('../compras_2009/descargar_pliego.php?es_doc=1&id_compra=' + id_compra  , '', 'width=1, height=1,scrollbars=no');
+		}
+	if (valor == 2)
+		{
+		window.open('../compras_2009/descargar_pliego.php?es_doc=2&id_compra=' + id_compra  , '', 'width=1, height=1,scrollbars=no');
+		}
+	if (valor == 3)
+		{
+		window.open('../compras_2009/descargar_pliego.php?es_doc=3&id_compra=' + id_compra  , '', 'width=1, height=1,scrollbars=no');
+		}
+		
+}
+
+</script>
+
+ <!-- Modal -->
+											  <div class="modal fade" id="myModal1539" role="dialog">
+											    <div class="modal-dialog">
+											    
+											      <!-- Modal content-->
+											      <div class="modal-content modal-detalle">
+											        
+
+
+	<div align="center">
+		
+	
+		<p style="text-align: center;" align="center"><b>SECRETARIA DE ESTADO DE GESTION PUBLICA Y PLANEAMIENTO</b></p>
+		
+		
+		<p style="background-color:#CCCCCC; width:70%; text-align: center; ">
+		LICITACION PUBLICA</p>
+		
+				
+		<b>		</b><br>
+		
+		<b>Objeto: Contrataci&oacute;n de lo que se detalla a continuaci&oacute;n:<BR>
+		
+		</b>
+
+	
+	<!--Rubro:<b>-->
+		</b><br><br>
+	<table border="1">
+		<tr>
+			<td><b>RENGLON</b></td>
+			<td><b>DESCRIPCION</b></td>
+		</tr>
+			<tr>
+			<td>1</td>
+			<td>1 unidad de UPS APC SMART 1000VA 230V USB&amp;SERIAL  <br> <b>-Rubro: INFORMATICA Y COMPUTACION </td>
+		</tr>
+
+	 		<tr>
+			<td>2</td>
+			<td>1 unidad de SERVIDOR IBM XSERIES M4 QC E5-2609 SAS  <br> <b>-Rubro: INFORMATICA Y COMPUTACION </td>
+		</tr>
+
+	 		<tr>
+			<td>3</td>
+			<td>2 unidades de DISCO RIGIDO IBM 500GB 2.5IN SFF SLIM-HS SAS  <br> <b>-Rubro: INFORMATICA Y COMPUTACION </td>
+		</tr>
+
+	 		<tr>
+			<td>4</td>
+			<td>5 unidades de CPU DESCRIPTAS EN PLIEGO DE ESPECIFICACIONES PARTICULARES, TECNICAS Y COMPLEMENTARIAS  <br> <b>-Rubro: INFORMATICA Y COMPUTACION </td>
+		</tr>
+
+	 	</table>
+	<B style='color:#FF0000; font-size:18px;'>COMPRA ADJUDICADA</B>	<br>
+
+	</p> 
+	<table width="400" border="0" style="text-align:left; font-family:Verdana, Arial, Helvetica, sans-serif; font-size:10px ">
+		<!--<tr>
+			<td width="159" bgcolor="#EEEEEE"><p align="left" class="reparticion_licitante">
+			Repartici&oacute;n:<br></td>
+			<td width="295"><p style="font-size:12px "><b></b></p></td>
+		</tr>
+		<tr>
+			<td width="131" bgcolor="#EEEEEE">Rubro:</td>
+			<td width="323"><b>Obras publicas</b></td>
+		</tr>-->
+
+		<tr>
+			<td bgcolor="#CCCCCC" align="center"  colspan="2">Autorizado</td>
+		</tr>
+		<tr>
+			<td bgcolor="#EEEEEE">Por:</td>
+			<td><b></b></td>
+		</tr>		
+				<tr>
+			<td bgcolor="#EEEEEE">N&uacute;mero de expediente:</td>
+			<td><b>0069/109/S/2014&nbsp;</b></td>
+		</tr>		
+						<tr>
+			<td bgcolor="#CCCCCC" align="center" colspan="2">Montos</td>
+		</tr>
+		<!--<tr>
+			<td bgcolor="#EEEEEE">Sistema de contrataci&oacute;n :</td>
+			<td><b></b></td>
+		</tr>-->
+				<tr>
+			<td bgcolor="#EEEEEE">Presupuesto oficial:</td>
+			<td><b>$80.000,00</b></td>
+		</tr>
+				<tr>
+			<td bgcolor="#EEEEEE">Valor del pliego:</td>
+			<td><b>$0.00</b></td>
+		</tr>
+		<tr>
+			<td bgcolor="#CCCCCC" align="center" colspan="2">Apertura de sobres</td>
+		</tr>
+		<tr>
+			<td bgcolor="#EEEEEE">Lugar:<br></td>
+			<td><b>Direccion de Administracion y despacho de la (SEGPYP) </b></td>
+		</tr>		
+		<tr>
+			<td bgcolor="#EEEEEE">Fecha y hora<br></td>
+			<td><b>29/08/2014, 11:00:00</b></td>
+		</tr>
+		<tr>
+			<td bgcolor="#CCCCCC" align="center" colspan="2">Informes</td>
+		</tr>
+		<tr>
+			<td bgcolor="#EEEEEE">Adquisici&oacute;n de pliegos:<br></td>
+			<td><b>Direccion de Administracion y despacho de la (SEGPYP)</b></td>
+		</tr>					
+
+  </table>
+	<br>
+	<p align="justify" style="font-size:11px; text-indent:10px; width:80% ">
+		</p>
+	<br><br>
+	
+		<a style="color:#990033 " href="#" onClick="window.open('http://rig.tucuman.gov.ar/obras_publicas/aplicacion/detalle_llamado.php?id_compra=1539',  '', 'width=570, height=650,scrollbars=yes')" ><!-- http://172.16.0.33/obras_publicas/ Ã³ http://rig.tucuman.gov.ar/obras_publicas/aplicacion/ o http://localhost/gonzalezn/compras_publicas/ -->
+										Imprimir</a>
+	
+
+	
+		<div align="right">
+			 												  <!--  172.16.0.33/obras_publicas/-->
+										   <a style="color:#990033 " href="../aplicacion/a_doc/Licitacion1539.doc"  onClick="agregar_pliego(1539,1)"  target="_blank" >
+									       <img src="images/word_0.png" border="0" alt="pliego en formato WORD"  title="pliego en formato WORD" /></a>		
+                 
+					 
+		</div>
+	
+
+
+<br />
+Compra de Bienes y Servicios		
+</p>
+</div>
+
+
+											        
+											      </div>
+											      
+											    </div>
+											  </div>
+
+											 
+											  
+										</div>
+
+										<!--&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+										</div>
+										 ------------</div> -------------- -->
+														
+                                    </div>
+                                    </div>		    
+									
+                                    <div class='row'>
+                                                        <div class='column'>
+                                                        <hr width="90%" style="margin:0 30 0 30 px; ">
+                                                        <hr>
+                                                        <br />
+                                                        </div>
+                                   </div>
+
+
+										
+
+										 <div class='row'>
+                                                    <div class='column'>
+																				
+										
+												<div class='table' >
+                                                    <div class='row'>
+                                                        <div class='column' id='fondo_gris'>Repartici&oacute;n:<br></div>
+                                                        <div class='column logo-reparticion' style="background-image:url(../aplicacion/logos_reparticiones/logo_rep_2.jpg) ; "><b>DIRECCION GRAL. RENTAS</b></div>
+                                                    </div>
+                                                    <div class='row'>
+                                                        <div class='column' id='fondo_gris'>Tipo de compra:</div>
+                                                        <div class='column'><b>LICITACION PUBLICA</b></div>
+                                                    </div>
+                                                    <!--<div>
+                                                        <div>Presupuesto oficial:</div>
+                                                        <div><b></b></div>
+                                                    </div>-->
+                                                    <div class='row'>
+                                                        <div class='column' id='fondo_gris'>Valor del pliego:</div>
+                                                        <div class='column'><b>gratuito</b></div>
+                                                    </div>
+                                                    <div class='row'>
+                                                        <div class='column' id='fondo_gris'>N&ordm; de expediente:</div>
+                                                        <div class='column'><b>28730/376-D-2014</b></div>
+                                                    </div>
+                                                    <div class='row'>
+                                                    														<div class='column' id='fondo_gris'>Rubro(s):</div>
+														<div class='column'><b>  LIBRERIA</b><br></div>
+                                                    </div>
+
+                                                    <div class='row'>
+                                                        <div class='column' id='fondo_gris'>Rengl&oacute;n N&ordm; 1:</div>
+                                                        <div class='column'><b>ADQUISICION DE UTILES DE OFICINA</b></div>
+                                                    </div>
+                                                    <div class='row'>
+                                                        <div class='column' id='fondo_gris'>
+                                                        <b style='color:#FF0000'>
+                                                        <b style='color:#FF0000'>Se abri&oacute; sobres el dia</b>                                                        </b></div>
+                                                        <div class='column'>
+                                                        <b style='color:#FF0000'>28/08/2014, 10:00:00														
+														</b>
+														</div>
+                                                    </div>	
+                                                    <div class='row'>
+                                                    <div class='column' id='fondo_gris'><b>Fecha de adjudicaci&oacute;n:</b></div>
+                                                    
+														<div class='column'><b>05/12/2014</b></div>
+																		
+                                                    </div>	<!-- -->
+                                        </div>
+                                        
+                                        </div>
+                                        
+                                        </div>
+										
+										<!-- &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; -->
+										
+										
+										&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+										<!-- &nbsp;&nbsp;&nbsp;Rubro(s):<b> -->
+										<!--</b>-->
+										
+
+										<!--<p align="left" class="objeto">
+										Objeto(s):<b>-->											<!-- </b>
+										</p>
+										
+										
+										</p>-->
+										
+																	     
+										  
+								
+										
+															
+									<div class='row'>
+                                                        <div class='column'>
+									
+																		
+										<a style="color:#990033 " href="#" onClick="window.open('../aplicacion/detalle_adjudicados.php?id_compra=1530',  '', 'width=570, height=650,scrollbars=yes')" >
+										<!-- http://172.16.0.33/obras_publicas/ ó  http://rig.tucuman.gov.ar/obras_publicas/aplicacion/-->
+										Ver datos de adjudicaci&oacute;n</a>
+												
+                                    
+																		
+									
+                                         
+										   												  <!--  172.16.0.33/obras_publicas/   aplicacion/  -->
+										    <a style="color:#990033 " href="../aplicacion/a_doc/Licitacion1530.doc"  target="_blank" >   
+									      <!-- Le quito el 02/06/2023, esto era para contar la descargas de un pliego: onClick="agregar_pliego(1530,1)" -->
+										   <img src="images/word_0.png" border="0" alt="pliego en formato WORD"  title="pliego en formato WORD" /></a>											&nbsp;&nbsp;&nbsp;
+											 											&nbsp;&nbsp;&nbsp;
+										   										&nbsp;&nbsp;&nbsp;
+										<!--http://rig.tucuman.gov.ar/obras_publicas/aplicacion/ o  http://172.16.0.33/obras_publicas/-->
+										
+                                                       
+                                        <!--<a style="color:#990033 " href="#" onClick="window.open('http://rig.tucuman.gov.ar/obras_publicas/aplicacion/detalle_llamado.php?id_compra=1530',  '', 'width=570, height=650,scrollbars=yes')" >-->
+
+                                        <!-- http://172.16.0.33/obras_publicas/ ó http://rig.tucuman.gov.ar/obras_publicas/aplicacion/ o http://localhost/gonzalezn/compras_publicas/ -->
+										
+										<!--Detalle</a>
+										&nbsp;&nbsp;&nbsp;-->
+
+										<div class="detalle-align"><!-- class="container -->
+											 
+											  <!-- Trigger the modal with a button -->
+											  <!--<button type="button" class="btn btn-info btn-lg" data-toggle="modal" data-target="#myModal">Open Modal</button>-->
+											  											  <a type="button" href="#"  data-toggle="modal" data-target="#myModal1530">Detalle</a>&nbsp;&nbsp;&nbsp;
+
+											   <style type="text/css" media="print">
+
+.noVer {
+	visibility:hidden;
+}
+</style>
+<script language='javascript' type='text/javascript'>
+	
+function agregar_pliego(id_compra,valor) {
+	if (valor == 1)
+		{
+		window.open('../compras_2009/descargar_pliego.php?es_doc=1&id_compra=' + id_compra  , '', 'width=1, height=1,scrollbars=no');
+		}
+	if (valor == 2)
+		{
+		window.open('../compras_2009/descargar_pliego.php?es_doc=2&id_compra=' + id_compra  , '', 'width=1, height=1,scrollbars=no');
+		}
+	if (valor == 3)
+		{
+		window.open('../compras_2009/descargar_pliego.php?es_doc=3&id_compra=' + id_compra  , '', 'width=1, height=1,scrollbars=no');
+		}
+		
+}
+
+</script>
+
+ <!-- Modal -->
+											  <div class="modal fade" id="myModal1530" role="dialog">
+											    <div class="modal-dialog">
+											    
+											      <!-- Modal content-->
+											      <div class="modal-content modal-detalle">
+											        
+
+
+	<div align="center">
+		
+	
+		<p style="text-align: center;" align="center"><b>DIRECCION GRAL. RENTAS</b></p>
+		
+		
+		<p style="background-color:#CCCCCC; width:70%; text-align: center; ">
+		LICITACION PUBLICA N&ordm; 10/14</p>
+		
+				
+		<b>		</b><br>
+		
+		<b>Objeto: Contrataci&oacute;n de lo que se detalla a continuaci&oacute;n:<BR>
+		
+		</b>
+
+	
+	<!--Rubro:<b>-->
+		</b><br><br>
+	<table border="1">
+		<tr>
+			<td><b>RENGLON</b></td>
+			<td><b>DESCRIPCION</b></td>
+		</tr>
+			<tr>
+			<td>1</td>
+			<td>ADQUISICION DE UTILES DE OFICINA <br>  <br> <b>-Rubro: LIBRERIA </td>
+		</tr>
+
+	 	</table>
+	<B style='color:#FF0000; font-size:18px;'>COMPRA ADJUDICADA</B>	<br>
+
+	</p> 
+	<table width="400" border="0" style="text-align:left; font-family:Verdana, Arial, Helvetica, sans-serif; font-size:10px ">
+		<!--<tr>
+			<td width="159" bgcolor="#EEEEEE"><p align="left" class="reparticion_licitante">
+			Repartici&oacute;n:<br></td>
+			<td width="295"><p style="font-size:12px "><b></b></p></td>
+		</tr>
+		<tr>
+			<td width="131" bgcolor="#EEEEEE">Rubro:</td>
+			<td width="323"><b>Obras publicas</b></td>
+		</tr>-->
+
+		<tr>
+			<td bgcolor="#CCCCCC" align="center"  colspan="2">Autorizado</td>
+		</tr>
+		<tr>
+			<td bgcolor="#EEEEEE">Por:</td>
+			<td><b>RESOLUCION N&ordm; 779/ME DE FECHA 24/07/2014</b></td>
+		</tr>		
+				<tr>
+			<td bgcolor="#EEEEEE">N&uacute;mero de expediente:</td>
+			<td><b>28730/376-D-2014&nbsp;</b></td>
+		</tr>		
+						<tr>
+			<td bgcolor="#CCCCCC" align="center" colspan="2">Montos</td>
+		</tr>
+		<!--<tr>
+			<td bgcolor="#EEEEEE">Sistema de contrataci&oacute;n :</td>
+			<td><b></b></td>
+		</tr>-->
+				<tr>
+			<td bgcolor="#EEEEEE">Presupuesto oficial:</td>
+			<td><b>$254.761</b></td>
+		</tr>
+				<tr>
+			<td bgcolor="#EEEEEE">Valor del pliego:</td>
+			<td><b>gratuito</b></td>
+		</tr>
+		<tr>
+			<td bgcolor="#CCCCCC" align="center" colspan="2">Apertura de sobres</td>
+		</tr>
+		<tr>
+			<td bgcolor="#EEEEEE">Lugar:<br></td>
+			<td><b>Divisi&oacute;n Compras y Suministros - Direcci&oacute;n General de Rentas de la Provincia  - 24 de Septiembre 960/970 -</b></td>
+		</tr>		
+		<tr>
+			<td bgcolor="#EEEEEE">Fecha y hora<br></td>
+			<td><b>28/08/2014, 10:00:00</b></td>
+		</tr>
+		<tr>
+			<td bgcolor="#CCCCCC" align="center" colspan="2">Informes</td>
+		</tr>
+		<tr>
+			<td bgcolor="#EEEEEE">Adquisici&oacute;n de pliegos:<br></td>
+			<td><b>Divisi&oacute;n Compras y Suministros - Direcci&oacute;n General de Rentas de la Provincia  - 24 de Septiembre 960/970 - SMT</b></td>
+		</tr>					
+
+  </table>
+	<br>
+	<p align="justify" style="font-size:11px; text-indent:10px; width:80% ">
+		</p>
+	<br><br>
+	
+		<a style="color:#990033 " href="#" onClick="window.open('http://rig.tucuman.gov.ar/obras_publicas/aplicacion/detalle_llamado.php?id_compra=1530',  '', 'width=570, height=650,scrollbars=yes')" ><!-- http://172.16.0.33/obras_publicas/ Ã³ http://rig.tucuman.gov.ar/obras_publicas/aplicacion/ o http://localhost/gonzalezn/compras_publicas/ -->
+										Imprimir</a>
+	
+
+	
+		<div align="right">
+			 												  <!--  172.16.0.33/obras_publicas/-->
+										   <a style="color:#990033 " href="../aplicacion/a_doc/Licitacion1530.doc"  onClick="agregar_pliego(1530,1)"  target="_blank" >
+									       <img src="images/word_0.png" border="0" alt="pliego en formato WORD"  title="pliego en formato WORD" /></a>		
+                 
+					 
+		</div>
+	
+
+
+<br />
+Compra de Bienes y Servicios		
+</p>
+</div>
+
+
+											        
+											      </div>
+											      
+											    </div>
+											  </div>
+
+											 
+											  
+										</div>
+
+										<!--&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+										</div>
+										 ------------</div> -------------- -->
+														
+                                    </div>
+                                    </div>		    
+									
+                                    <div class='row'>
+                                                        <div class='column'>
+                                                        <hr width="90%" style="margin:0 30 0 30 px; ">
+                                                        <hr>
+                                                        <br />
+                                                        </div>
+                                   </div>
+
+
+																				
+											
+	 </div>
+
+
+	<!--     -->
+
+
+
+</div>
+</div>
+</div>
+
+
+  <input name="var" type="hidden" value=45>
+<input name="num_total" type="hidden" value=313>								
+<input name="buscar" type="hidden" value=>
+<input name="vigente2" type="hidden" value=>
+<input name="valor_anterior_buscar" type="hidden" value="">
+
+
+
+<!--<div class="table">
+  <div class="row" >
+    <div class="column left3">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</div>
+    <div class="column left3"><input style="background-color:#000066; color:#FFFFFF" type="submit" name="sub" value="Primero" ></div>
+    <div class="column left3"><input style="background-color:#000066; color:#FFFFFF" type="submit" name="sub" value="Anterior" ></div>
+     <div class="column left3"><p>P&aacute;gina 10 de 63</p></div>
+	<div class="column left3"><input style="background-color:#000066; color:#FFFFFF" type="submit" name="sub" value="Siguiente" ></div>
+    <div class="column left3"><input style="background-color:#000066; color:#FFFFFF" type="submit" name="sub" value="Ultimo" ></div>
+    <div class="column left3">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</div>
+  </div>
+</div>-->
+
+<div class="table">
+  <div class="row botones">
+    <div class="column left3">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</div>
+    <div class="column left3"><input  type="submit" name="sub" value="Primero" ></div>
+    <div class="column left3"><input class="botones_paginado" type="submit" name="sub" value="Anterior" ></div>
+     <div class="column left3"><p>P&aacute;gina 10 de 63</p></div>
+	<div class="column left3"><input class="botones_paginado" type="submit" name="sub" value="Siguiente" ></div>
+    <div class="column left3"><input class="botones_paginado" type="submit" name="sub" value="Ultimo" ></div>
+    <div class="column left3">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</div>
+  </div>
+</div>
+
+
+  
+  <div align="center">
+  <!--&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-->
+  Ir a la pagina:
+
+  		<a href="ver_llamados_compras_avanzado.php?n=1&pagina_actual=3&estado_compra=3" target="_self">3</a>&nbsp;-
+				<a href="ver_llamados_compras_avanzado.php?n=1&pagina_actual=4&estado_compra=3" target="_self">4</a>&nbsp;-
+				<a href="ver_llamados_compras_avanzado.php?n=1&pagina_actual=5&estado_compra=3" target="_self">5</a>&nbsp;-
+				<a href="ver_llamados_compras_avanzado.php?n=1&pagina_actual=6&estado_compra=3" target="_self">6</a>&nbsp;-
+				<a href="ver_llamados_compras_avanzado.php?n=1&pagina_actual=7&estado_compra=3" target="_self">7</a>&nbsp;-
+				<a href="ver_llamados_compras_avanzado.php?n=1&pagina_actual=8&estado_compra=3" target="_self">8</a>&nbsp;-
+				<a href="ver_llamados_compras_avanzado.php?n=1&pagina_actual=9&estado_compra=3" target="_self">9</a>&nbsp;-
+		<b>10&nbsp;</b>-		<a href="ver_llamados_compras_avanzado.php?n=1&pagina_actual=11&estado_compra=3" target="_self">11</a>&nbsp;-
+				<a href="ver_llamados_compras_avanzado.php?n=1&pagina_actual=12&estado_compra=3" target="_self">12</a>&nbsp;-
+				<a href="ver_llamados_compras_avanzado.php?n=1&pagina_actual=13&estado_compra=3" target="_self">13</a>&nbsp;-
+				<a href="ver_llamados_compras_avanzado.php?n=1&pagina_actual=14&estado_compra=3" target="_self">14</a>&nbsp;-
+				<a href="ver_llamados_compras_avanzado.php?n=1&pagina_actual=15&estado_compra=3" target="_self">15</a>&nbsp;-
+				<a href="ver_llamados_compras_avanzado.php?n=1&pagina_actual=16&estado_compra=3" target="_self">16</a>&nbsp;-
+				<a href="ver_llamados_compras_avanzado.php?n=1&pagina_actual=17&estado_compra=3" target="_self">17</a>&nbsp;-
+			  </div>
+  </div>
+  </div>
+
+             </div>
+		</div>
+		<!-- //container -->
+	</div>
+	<!-- //blog -->
+	<!-- footer -->
+	<div class='footer'>
+		<!-- container -->
+		<div class='container'>
+			
+				<div class='footer-chico'>
+                <h3>COMPRAS Y CONTRATACIONES</h3>
+                <p>Gobierno de Tucum&aacute;n</p>
+                </div>
+               
+			
+		</div>
+		<!-- container -->
+	</div>
+	<!-- //footer -->
+	<!-- footer-bottom -->
+	<div class='footer-bottom'>
+		<!-- container -->
+		<div class='container'>
+			<!--<p>Compras del Estado provincial de Tucum&aacute;n</a></p>-->
+		</div>
+		<!-- //container -->
+	</div>
+	<!-- footer-bottom -->
+	<script type='text/javascript'>
+									$(document).ready(function() {
+										/*
+										var defaults = {
+								  			containerID: 'toTop', // fading element id
+											containerHoverID: 'toTopHover', // fading element hover id
+											scrollSpeed: 1200,
+											easingType: 'linear' 
+								 		};
+										*/
+										
+										$().UItoTop({ easingType: 'easeOutQuart' });
+										
+									});
+								</script>
+									<a href='#' id='toTop' style='display: block;'> <span id='toTopHover' style='opacity: 1;'> </span></a>
+	<!-- content-Get-in-touch -->
+	<script type='text/javascript' src='js/move-top.js'></script>
+	<script type='text/javascript' src='js/easing.js'></script>
+</form>
+</body>
+</html>

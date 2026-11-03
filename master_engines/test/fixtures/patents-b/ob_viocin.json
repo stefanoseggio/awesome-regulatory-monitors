@@ -1,0 +1,63 @@
+{
+  "meta": {
+    "disclaimer": "Do not rely on openFDA to make decisions regarding medical care. While we make every effort to ensure that data is accurate, you should assume all results are unvalidated. We may limit or otherwise restrict your access to the API in line with our Terms of Service.",
+    "terms": "https://open.fda.gov/terms/",
+    "license": "https://open.fda.gov/license/",
+    "last_updated": "2026-10-20",
+    "results": {
+      "skip": 0,
+      "limit": 10,
+      "total": 2
+    }
+  },
+  "results": [
+    {
+      "approved_prior_to_1982": true,
+      "product_number": "002",
+      "products": [
+        {
+          "active_ingredients": [
+            {
+              "name": "VIOMYCIN SULFATE",
+              "strength": "EQ 5GM BASE/VIAL"
+            }
+          ],
+          "brand_name": "VIOCIN SULFATE",
+          "application_name": "PFIZER",
+          "application_type": "A",
+          "application_number": "061086",
+          "reference_listed_drug": false,
+          "reference_standard": false,
+          "marketing_status": "DISCONTINUED",
+          "application_full_name": "PFIZER LABORATORIES DIV PFIZER INC",
+          "dosage_form": "INJECTABLE",
+          "route": "INJECTION"
+        }
+      ]
+    },
+    {
+      "approved_prior_to_1982": true,
+      "product_number": "001",
+      "products": [
+        {
+          "active_ingredients": [
+            {
+              "name": "VIOMYCIN SULFATE",
+              "strength": "EQ 1GM BASE/VIAL"
+            }
+          ],
+          "brand_name": "VIOCIN SULFATE",
+          "application_name": "PFIZER",
+          "application_type": "A",
+          "application_number": "061086",
+          "reference_listed_drug": false,
+          "reference_standard": false,
+          "marketing_status": "DISCONTINUED",
+          "application_full_name": "PFIZER LABORATORIES DIV PFIZER INC",
+          "dosage_form": "INJECTABLE",
+          "route": "INJECTION"
+        }
+      ]
+    }
+  ]
+}

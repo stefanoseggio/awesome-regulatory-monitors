@@ -1,0 +1,114 @@
+<!--
+TRIMMED REAL CAPTURE. Derived from the legacy repo cordoba-compras-monitor test/fixtures/page2.html (a real capture of
+https://webecommerce.cba.gov.ar/VistaPublica/ConsultaPublicaCotizacion.aspx?TIPO_CONSULTA_PUBLICA=LI taken 2026-09-04).
+What was changed: the __VIEWSTATE and __EVENTVALIDATION values were replaced by short tokens, the page chrome/scripts/popups
+were dropped, line endings were normalised to LF, and only the first 2 rows of the #gv grid were kept. The hidden inputs, the grid rows, the pager (<span id="pag">)
+and lblTotal are verbatim.
+-->
+<html><head><title>Compras Publicas (trimmed fixture)</title></head><body>
+<form method="post" action="./ConsultaPublicaCotizacion.aspx?TIPO_CONSULTA_PUBLICA=LI" id="form1">
+<input type="hidden" name="__VIEWSTATE" id="__VIEWSTATE" value="TRIMMED_VIEWSTATE_TOKEN" />
+<input type="hidden" name="__VIEWSTATEGENERATOR" id="__VIEWSTATEGENERATOR" value="C9F7B97E" />
+<input type="hidden" name="__VIEWSTATEENCRYPTED" id="__VIEWSTATEENCRYPTED" value="" />
+<input type="hidden" name="__EVENTVALIDATION" id="__EVENTVALIDATION" value="TRIMMED_EVENTVALIDATION_TOKEN" />
+<input type="hidden" name="txtFecha_Desde_Limite_hidDia" id="txtFecha_Desde_Limite_hidDia" value="4" />
+<input type="hidden" name="txtFecha_Desde_Limite_hidMes" id="txtFecha_Desde_Limite_hidMes" value="9" />
+<input type="hidden" name="txtFecha_Desde_Limite_hidAno" id="txtFecha_Desde_Limite_hidAno" value="2026" />
+<input type="hidden" name="txtFecha_Hasta_Limite_hidDia" id="txtFecha_Hasta_Limite_hidDia" value="4" />
+<input type="hidden" name="txtFecha_Hasta_Limite_hidMes" id="txtFecha_Hasta_Limite_hidMes" value="9" />
+<input type="hidden" name="txtFecha_Hasta_Limite_hidAno" id="txtFecha_Hasta_Limite_hidAno" value="2026" />
+<input name="ddljurisdiccion" type="text" value="--Seleccionar--" maxlength="32000" id="ddljurisdiccion" onmousedown="AbrirCerrarControlddljurisdiccion()" onkeydown="return false;" style="vertical-align:Middle;" />
+<input id="ddljurisdiccion_CheckBoxLista_0" type="checkbox" name="ddljurisdiccion_CheckBoxLista$0" onclick="checkAllddljurisdiccion(this); CargarValoresTododdljurisdiccion();" value="" />
+<select name="ddlID_VIGENCIA" id="ddlID_VIGENCIA" class="DropDownListDeDatos">
+		<option selected="selected" value="172">2014</option>
+		<option value="173">2015</option>
+		<option value="176">2016</option>
+		<option value="181">2017</option>
+		<option value="186">2018</option>
+		<option value="187">2019</option>
+		<option value="191">2020</option>
+		<option value="196">2021</option>
+		<option value="201">2022</option>
+		<option value="206">2023</option>
+		<option value="207">2024</option>
+		<option value="208">2025</option>
+		<option value="211">2026</option>
+		<option value="212">2027</option>
+		<option value="213">2028</option>
+		<option value="214">2029</option>
+		<option value="216">2030</option>
+		<option value="217">2031</option>
+
+	</select>
+<div>
+<table class="Grilla" cellspacing="0" rules="all" border="1" id="gv" width="100%">
+		<tr class="Encabezado">
+			<th scope="col">Nro Cotizacion</th><th scope="col">Tipo Contrataci&#243;n</th><th scope="col">Servicio Administrativo</th><th scope="col">Jurisdicci&#243;n</th><th scope="col">Fecha Inicio</th><th scope="col">Fecha Finalizaci&#243;n</th><th scope="col">Estado</th><th scope="col">Prorroga</th><th scope="col">Acciones</th>
+		</tr><tr class="Renglon">
+			<td>2026/000077</td><td>Licitaci&#243;n - Soporte Digital</td><td>Agencia C&#243;rdoba De Inversi&#243;n Y Financiamiento</td><td nowrap="nowrap">Agencia C&#243;rdoba De Inversi&#243;n Y Financiamiento </td><td align="center" nowrap="nowrap">28/08/2026 08:52:37</td><td align="center" nowrap="nowrap">15/09/2026 12:00:00</td><td align="center" nowrap="nowrap">EN PROCESO</td><td align="center" nowrap="nowrap">NO</td><td nowrap="nowrap">
+                                    <input type="image" name="gv$ctl02$btnVerDetalles" id="gv_btnVerDetalles_0" title="Ver resumen de la cotización" src="../Imagenes/Botones/view_detail.png" onclick="javascript:WebForm_DoPostBackWithOptions(new WebForm_PostBackOptions(&quot;gv$ctl02$btnVerDetalles&quot;, &quot;&quot;, true, &quot;&quot;, &quot;&quot;, false, false))" />
+                                    
+                                    
+                                    
+                                    <input type="image" name="gv$ctl02$btnPliego" id="gv_btnPliego_0" title="Ver Pliegos" src="../Imagenes/Botones/Pliego.PNG" />
+                                    
+                                    <input type="image" name="gv$ctl02$btnPreguntas" id="gv_btnPreguntas_0" title="Preguntas y respuestas" src="../Imagenes/Botones/Pregunta.png" onclick="javascript:WebForm_DoPostBackWithOptions(new WebForm_PostBackOptions(&quot;gv$ctl02$btnPreguntas&quot;, &quot;&quot;, true, &quot;&quot;, &quot;&quot;, false, false))" />
+                                    
+                                    <img id="gv_btnItems_0" class="PopUpGrilla" onmouseover="AbrirCerrarControlIzqgv_btnItems_0(); document.body.style.cursor=&#39;hand&#39;" src="../Imagenes/Botones/attributes.png" /><div id="gv_gv_btnItems_0_div_0" style="box-shadow:8px 8px 0 0 rgba(0,0,0,0.2), 0 6px 20px 0 rgba(0,0,0,0.19);;position:absolute;;display:none;"><table cellpadding="0" cellspacing="0">
+				<tr>
+					<td colspan="3"><div id="gv_gv_btnItems_0_PanelGeneral_0">
+						<div>
+							<table class="Grid" cellspacing="0" rules="all" border="1" id="gv_btnItems_0_gv">
+								<tr>
+									<th scope="col">Rengl&#243;n</th><th scope="col">Cantidad</th><th scope="col">Precio de Referencia</th><th scope="col">Presupuesto Oficial</th>
+								</tr><tr>
+									<td>OBRAS MAYORES EN ESTABLECIMIENTOS EDUCATIVOS DE LA CIUDAD DE C&#211;RDOBA CAPITAL - GRUPO 1:  I.P.E.M. N&#186; 208 MARINA WAISMAN, J.DE INF. JUANA MANSO, ESCUELA JUAN BAUTISTA ALBERDI, ESCUELA VICENTE FIDEL LOP</td><td align="right">1</td><td align="right">$ 844.430.850,<small>0000<small/></td><td align="right">$ 844.430.850,<small>0000<small/></td>
+								</tr>
+							</table>
+						</div>
+					</div></td>
+				</tr>
+			</table>
+			</div>
+                                    <img id="gv_btnTelContacto_0" title="3517660269" class="ImagenGrilla" src="../Imagenes/Botones/phone.png" />
+                                </td>
+		</tr><tr class="RenglonAlternativo">
+			<td>2026/000076</td><td>Licitaci&#243;n - Soporte Digital</td><td>Agencia C&#243;rdoba De Inversi&#243;n Y Financiamiento</td><td nowrap="nowrap">Agencia C&#243;rdoba De Inversi&#243;n Y Financiamiento </td><td align="center" nowrap="nowrap">28/08/2026 08:50:37</td><td align="center" nowrap="nowrap">14/09/2026 12:00:00</td><td align="center" nowrap="nowrap">EN PROCESO</td><td align="center" nowrap="nowrap">NO</td><td nowrap="nowrap">
+                                    <input type="image" name="gv$ctl03$btnVerDetalles" id="gv_btnVerDetalles_1" title="Ver resumen de la cotización" src="../Imagenes/Botones/view_detail.png" onclick="javascript:WebForm_DoPostBackWithOptions(new WebForm_PostBackOptions(&quot;gv$ctl03$btnVerDetalles&quot;, &quot;&quot;, true, &quot;&quot;, &quot;&quot;, false, false))" />
+                                    
+                                    
+                                    
+                                    <input type="image" name="gv$ctl03$btnPliego" id="gv_btnPliego_1" title="Ver Pliegos" src="../Imagenes/Botones/Pliego.PNG" />
+                                    
+                                    <input type="image" name="gv$ctl03$btnPreguntas" id="gv_btnPreguntas_1" title="Preguntas y respuestas" src="../Imagenes/Botones/Pregunta.png" onclick="javascript:WebForm_DoPostBackWithOptions(new WebForm_PostBackOptions(&quot;gv$ctl03$btnPreguntas&quot;, &quot;&quot;, true, &quot;&quot;, &quot;&quot;, false, false))" />
+                                    
+                                    <img id="gv_btnItems_1" class="PopUpGrilla" onmouseover="AbrirCerrarControlIzqgv_btnItems_1(); document.body.style.cursor=&#39;hand&#39;" src="../Imagenes/Botones/attributes.png" /><div id="gv_gv_btnItems_1_div_1" style="box-shadow:8px 8px 0 0 rgba(0,0,0,0.2), 0 6px 20px 0 rgba(0,0,0,0.19);;position:absolute;;display:none;"><table cellpadding="0" cellspacing="0">
+				<tr>
+					<td colspan="3"><div id="gv_gv_btnItems_1_PanelGeneral_1">
+						<div>
+							<table class="Grid" cellspacing="0" rules="all" border="1" id="gv_btnItems_1_gv">
+								<tr>
+									<th scope="col">Rengl&#243;n</th><th scope="col">Cantidad</th><th scope="col">Precio de Referencia</th><th scope="col">Presupuesto Oficial</th>
+								</tr><tr>
+									<td>RED DE DISTRIBUCION DE AGUA POTABLE LOCALIDAD DE SERRANO &#191; DPTO. PRESIDENTE ROQUE SAENZ PE&#209;A &#191; ETAPA II &#191; SECTOR CENTRO-</td><td align="right">1</td><td align="right">$ 2.114.469.923,<small>0000<small/></td><td align="right">$ 2.114.469.923,<small>0000<small/></td>
+								</tr>
+							</table>
+						</div>
+					</div></td>
+				</tr>
+			</table>
+			</div>
+                                    <img id="gv_btnTelContacto_1" title="3517660269" class="ImagenGrilla" src="../Imagenes/Botones/phone.png" />
+                                </td>
+		</tr>
+	</table>
+</div>
+<span id="pag"><table>
+	<tr>
+		<td><a id="paglbA" href="javascript:__doPostBack(&#39;paglbA&#39;,&#39;&#39;)"><<</a><a> </a><a id="paglb1" href="javascript:__doPostBack(&#39;paglb1&#39;,&#39;&#39;)">1</a><a> </a><span id="paglbl2" class="PaginadorSeleccion">2</span><a> </a><a id="paglb3" href="javascript:__doPostBack(&#39;paglb3&#39;,&#39;&#39;)">3</a><a> </a><a id="paglb4" href="javascript:__doPostBack(&#39;paglb4&#39;,&#39;&#39;)">4</a><a> </a><a id="paglb5" href="javascript:__doPostBack(&#39;paglb5&#39;,&#39;&#39;)">5</a><a> </a><a id="paglb6" href="javascript:__doPostBack(&#39;paglb6&#39;,&#39;&#39;)">6</a><a> </a><a id="paglb7" href="javascript:__doPostBack(&#39;paglb7&#39;,&#39;&#39;)">7</a><a> </a><a id="paglb8" href="javascript:__doPostBack(&#39;paglb8&#39;,&#39;&#39;)">8</a><a> </a><a id="paglb9" href="javascript:__doPostBack(&#39;paglb9&#39;,&#39;&#39;)">9</a><a> </a><a id="paglb10" href="javascript:__doPostBack(&#39;paglb10&#39;,&#39;&#39;)">10</a><a> </a><a id="paglb11" href="javascript:__doPostBack(&#39;paglb11&#39;,&#39;&#39;)">11</a><a> </a><a id="paglbS" href="javascript:__doPostBack(&#39;paglbS&#39;,&#39;&#39;)">>></a><span> de 65 </span><input name="pagtxtIrA" type="text" maxlength="2" id="pagtxtIrA" onkeydown="if (event.keyCode == 13) pagbtnIrA.focus();" /><input type="submit" name="pagbtnIrA" value="Ir a" id="pagbtnIrA" /></td>
+	</tr>
+</table>
+</span>
+                    
+<span id="lblTotal" class="LabelDeDatos">646 registros encontrados.</span>
+</form></body></html>

@@ -1,0 +1,257 @@
+{
+  "meta": {
+    "disclaimer": "Do not rely on openFDA to make decisions regarding medical care. While we make every effort to ensure that data is accurate, you should assume all results are unvalidated. We may limit or otherwise restrict your access to the API in line with our Terms of Service.",
+    "terms": "https://open.fda.gov/terms/",
+    "license": "https://open.fda.gov/license/",
+    "last_updated": "2026-10-20",
+    "results": {
+      "skip": 0,
+      "limit": 3,
+      "total": 54
+    }
+  },
+  "results": [
+    {
+      "approval_date": "20260827",
+      "exclusivity": [
+        {
+          "exclusivity_code": "NCE",
+          "exclusivity_expiration_date": "20271222"
+        },
+        {
+          "exclusivity_code": "NP",
+          "exclusivity_expiration_date": "20290827"
+        }
+      ],
+      "patents": [
+        {
+          "patent_number": "10071985",
+          "expiration_date": "20370817",
+          "drug_substance_flag": true,
+          "drug_product_flag": true,
+          "patent_submission_date": "20260922"
+        },
+        {
+          "patent_number": "10385067",
+          "expiration_date": "20350619",
+          "patent_use_code": "U-4602",
+          "patent_submission_date": "20260922"
+        },
+        {
+          "patent_number": "10654827",
+          "expiration_date": "20370817",
+          "patent_use_code": "U-4602",
+          "patent_submission_date": "20260922"
+        },
+        {
+          "patent_number": "11267799",
+          "expiration_date": "20380816",
+          "drug_substance_flag": true,
+          "patent_submission_date": "20260922"
+        },
+        {
+          "patent_number": "9216996",
+          "expiration_date": "20331219",
+          "drug_substance_flag": true,
+          "drug_product_flag": true,
+          "patent_submission_date": "20260922"
+        },
+        {
+          "patent_number": "9708342",
+          "expiration_date": "20350619",
+          "drug_substance_flag": true,
+          "drug_product_flag": true,
+          "patent_submission_date": "20260922"
+        },
+        {
+          "patent_number": "9732092",
+          "expiration_date": "20331219",
+          "drug_substance_flag": true,
+          "drug_product_flag": true,
+          "patent_submission_date": "20260922"
+        },
+        {
+          "patent_number": "9951043",
+          "expiration_date": "20340228",
+          "drug_substance_flag": true,
+          "drug_product_flag": true,
+          "patent_use_code": "U-4602",
+          "patent_submission_date": "20260922"
+        }
+      ],
+      "product_number": "001",
+      "products": [
+        {
+          "active_ingredients": [
+            {
+              "name": "BICTEGRAVIR SODIUM",
+              "strength": "EQ 75MG BASE"
+            },
+            {
+              "name": "LENACAPAVIR SODIUM",
+              "strength": "EQ 50MG BASE"
+            }
+          ],
+          "brand_name": "BIXLENVO",
+          "application_name": "GILEAD SCIENCES INC",
+          "application_type": "N",
+          "application_number": "221104",
+          "reference_listed_drug": true,
+          "reference_standard": true,
+          "marketing_status": "HUMAN PRESCRIPTION DRUG",
+          "application_full_name": "GILEAD SCIENCES INC",
+          "dosage_form": "TABLET",
+          "route": "ORAL"
+        }
+      ]
+    },
+    {
+      "approval_date": "20260827",
+      "exclusivity": [
+        {
+          "exclusivity_code": "NCE",
+          "exclusivity_expiration_date": "20271222"
+        },
+        {
+          "exclusivity_code": "NP",
+          "exclusivity_expiration_date": "20290827"
+        }
+      ],
+      "patents": [
+        {
+          "patent_number": "10071985",
+          "expiration_date": "20370817",
+          "drug_substance_flag": true,
+          "drug_product_flag": true,
+          "patent_submission_date": "20260922"
+        },
+        {
+          "patent_number": "10385067",
+          "expiration_date": "20350619",
+          "patent_use_code": "U-4602",
+          "patent_submission_date": "20260922"
+        },
+        {
+          "patent_number": "10654827",
+          "expiration_date": "20370817",
+          "patent_use_code": "U-4602",
+          "patent_submission_date": "20260922"
+        },
+        {
+          "patent_number": "11267799",
+          "expiration_date": "20380816",
+          "drug_substance_flag": true,
+          "patent_submission_date": "20260922"
+        },
+        {
+          "patent_number": "9216996",
+          "expiration_date": "20331219",
+          "drug_substance_flag": true,
+          "drug_product_flag": true,
+          "patent_submission_date": "20260922"
+        },
+        {
+          "patent_number": "9708342",
+          "expiration_date": "20350619",
+          "drug_substance_flag": true,
+          "drug_product_flag": true,
+          "patent_submission_date": "20260922"
+        },
+        {
+          "patent_number": "9732092",
+          "expiration_date": "20331219",
+          "drug_substance_flag": true,
+          "drug_product_flag": true,
+          "patent_submission_date": "20260922"
+        },
+        {
+          "patent_number": "9951043",
+          "expiration_date": "20340228",
+          "drug_substance_flag": true,
+          "drug_product_flag": true,
+          "patent_use_code": "U-4602",
+          "patent_submission_date": "20260922"
+        }
+      ],
+      "product_number": "001",
+      "products": [
+        {
+          "active_ingredients": [
+            {
+              "name": "BICTEGRAVIR SODIUM, LENACAPAVIR SODIUM",
+              "strength": "EQ 75MG BASE, EQ 50MG BASE"
+            },
+            {
+              "name": "LENACAPAVIR SODIUM",
+              "strength": "EQ 300MG BASE"
+            }
+          ],
+          "brand_name": "BIXLENVO SUNLENCA STARTER PACK (COPACKAGED)",
+          "application_name": "GILEAD SCIENCES INC",
+          "application_type": "N",
+          "application_number": "221443",
+          "reference_listed_drug": true,
+          "reference_standard": true,
+          "marketing_status": "HUMAN PRESCRIPTION DRUG",
+          "application_full_name": "GILEAD SCIENCES INC",
+          "dosage_form": "TABLET",
+          "route": "ORAL"
+        }
+      ]
+    },
+    {
+      "approval_date": "20250620",
+      "exclusivity": [
+        {
+          "exclusivity_code": "NS",
+          "exclusivity_expiration_date": "20280620"
+        }
+      ],
+      "patents": [
+        {
+          "patent_number": "10039718",
+          "expiration_date": "20321006",
+          "drug_product_flag": true,
+          "patent_submission_date": "20250715"
+        },
+        {
+          "patent_number": "10039718*PED",
+          "expiration_date": "20330406"
+        },
+        {
+          "patent_number": "8148374",
+          "expiration_date": "20290903",
+          "drug_substance_flag": true,
+          "drug_product_flag": true,
+          "patent_use_code": "U-1279",
+          "patent_submission_date": "20250715"
+        },
+        {
+          "patent_number": "8148374*PED",
+          "expiration_date": "20300303"
+        }
+      ],
+      "product_number": "002",
+      "products": [
+        {
+          "active_ingredients": [
+            {
+              "name": "COBICISTAT",
+              "strength": "90MG"
+            }
+          ],
+          "brand_name": "TYBOST",
+          "application_name": "GILEAD SCIENCES INC",
+          "application_type": "N",
+          "application_number": "203094",
+          "reference_listed_drug": true,
+          "reference_standard": false,
+          "marketing_status": "DISCONTINUED",
+          "application_full_name": "GILEAD SCIENCES INC",
+          "dosage_form": "TABLET",
+          "route": "ORAL"
+        }
+      ]
+    }
+  ]
+}

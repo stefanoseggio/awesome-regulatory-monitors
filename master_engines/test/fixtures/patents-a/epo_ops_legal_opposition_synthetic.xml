@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SYNTHETIC FIXTURE, NOT A REAL UPSTREAM RESPONSE. The envelope, the `ops:legal` element with its `code` / `desc` / `infl` /
+  `dateMigr` attributes, the `ops:pre` lines and the numbered `ops:L0xxEP` fields follow the structure the public EPO "OPS RESTful
+  Web Services Reference Guide v 1.3.20" documents for the Legal service (see epo_ops_legal_guide_example.xml for the guide's own
+  example). The event CODES, DESCRIPTIONS, DATES and names below are INVENTED to exercise the opposition heuristic, the field mapping
+  and the record-id collision rules; they are not claims about EPO's code tables, and "Example Opponent GmbH" etc. are not real parties.
+  Publication under test: EP3000000.
+-->
+<ops:world-patent-data xmlns:ops="http://ops.epo.org" xmlns="http://www.epo.org/exchange">
+  <ops:patent-family legal="true">
+    <ops:publication-reference>
+      <document-id document-id-type="docdb">
+        <country>EP</country>
+        <doc-number>3000000</doc-number>
+        <kind>B1</kind>
+      </document-id>
+    </ops:publication-reference>
+    <ops:family-member family-id="55555555">
+      <!-- 1: opposition filed; free-format text names an opponent -->
+      <ops:legal code="OPPO   " desc="OPPOSITION FILED" infl="+" dateMigr="00010101">
+        <ops:pre line="00001">EP     15150000B 2021-03-12OPPO   +OPPOSITION FILED Opponent: Example Opponent GmbH</ops:pre>
+        <ops:L001EP desc="Country Code">EP</ops:L001EP>
+        <ops:L002EP desc="Filing / Published Document">P</ops:L002EP>
+        <ops:L003EP desc="Document Number">    15150000</ops:L003EP>
+        <ops:L004EP desc="Kind Code">B</ops:L004EP>
+        <ops:L007EP desc="Gazette DATE">2021-03-12</ops:L007EP>
+        <ops:L008EP desc="Legal Event Code 1">OPPO</ops:L008EP>
+        <ops:L018EP desc="DATE last exchanged">2021-03-20</ops:L018EP>
+        <ops:L019EP desc="DATE first created">2021-03-19</ops:L019EP>
+        <ops:L500EP>
+          <ops:L510EP desc="Free Format Text">Opponent: Example Opponent GmbH</ops:L510EP>
+        </ops:L500EP>
+      </ops:legal>
+      <!-- 2: same code, date and country as event 1 but different text (second opponent) -->
+      <ops:legal code="OPPO   " desc="OPPOSITION FILED" infl="+" dateMigr="00010101">
+        <ops:pre line="00001">EP     15150000B 2021-03-12OPPO   +OPPOSITION FILED Opponent: Second Example Party Ltd</ops:pre>
+        <ops:L001EP desc="Country Code">EP</ops:L001EP>
+        <ops:L007EP desc="Gazette DATE">2021-03-12</ops:L007EP>
+        <ops:L008EP desc="Legal Event Code 1">OPPO</ops:L008EP>
+        <ops:L500EP>
+          <ops:L510EP desc="Free Format Text">Opponent: Second Example Party Ltd</ops:L510EP>
+        </ops:L500EP>
+      </ops:legal>
+      <!-- 3: exact duplicate of event 1 (must be dropped) -->
+      <ops:legal code="OPPO   " desc="OPPOSITION FILED" infl="+" dateMigr="00010101">
+        <ops:pre line="00001">EP     15150000B 2021-03-12OPPO   +OPPOSITION FILED Opponent: Example Opponent GmbH</ops:pre>
+        <ops:L001EP desc="Country Code">EP</ops:L001EP>
+        <ops:L002EP desc="Filing / Published Document">P</ops:L002EP>
+        <ops:L003EP desc="Document Number">    15150000</ops:L003EP>
+        <ops:L004EP desc="Kind Code">B</ops:L004EP>
+        <ops:L007EP desc="Gazette DATE">2021-03-12</ops:L007EP>
+        <ops:L008EP desc="Legal Event Code 1">OPPO</ops:L008EP>
+        <ops:L018EP desc="DATE last exchanged">2021-03-20</ops:L018EP>
+        <ops:L019EP desc="DATE first created">2021-03-19</ops:L019EP>
+        <ops:L500EP>
+          <ops:L510EP desc="Free Format Text">Opponent: Example Opponent GmbH</ops:L510EP>
+        </ops:L500EP>
+      </ops:legal>
+      <!-- 4: an event of a national family member (country AT) with the same code and date as event 1 -->
+      <ops:legal code="OPPO   " desc="OPPOSITION FILED" infl="+" dateMigr="00010101">
+        <ops:pre line="00001">AT     15150000B 2021-03-12OPPO   +OPPOSITION FILED</ops:pre>
+        <ops:L001EP desc="Country Code">AT</ops:L001EP>
+        <ops:L007EP desc="Gazette DATE">2021-03-12</ops:L007EP>
+        <ops:L008EP desc="Legal Event Code 1">OPPO</ops:L008EP>
+        <ops:L500EP/>
+      </ops:legal>
+      <!-- 5: "no opposition" wording: opposition-family by the (legacy) heuristic -->
+      <ops:legal code="NOPP   " desc="NO OPPOSITION FILED WITHIN TIME LIMIT" infl="+" dateMigr="00010101">
+        <ops:pre line="00001">EP     15150000B 2022-01-05NOPP   +NO OPPOSITION FILED WITHIN TIME LIMIT</ops:pre>
+        <ops:L001EP desc="Country Code">EP</ops:L001EP>
+        <ops:L007EP desc="Gazette DATE">2022-01-05</ops:L007EP>
+        <ops:L008EP desc="Legal Event Code 1">NOPP</ops:L008EP>
+        <ops:L500EP/>
+      </ops:legal>
+      <!-- 6: not an opposition event (must be ignored) -->
+      <ops:legal code="PG25  " desc="LAPSED IN A CONTRACTING STATE" infl="-" dateMigr="00010101">
+        <ops:pre line="00001">AT     15150000B 2022-05-01PG25   -LAPSED IN A CONTRACTING STATE</ops:pre>
+        <ops:L001EP desc="Country Code">AT</ops:L001EP>
+        <ops:L007EP desc="Gazette DATE">2022-05-01</ops:L007EP>
+        <ops:L008EP desc="Legal Event Code 1">PG25</ops:L008EP>
+        <ops:L500EP/>
+      </ops:legal>
+      <!-- 7: padded code, multi-line description, no gazette date: the "DATE first created" field in compact form is the fallback -->
+      <ops:legal code="APPO   " desc="APPEAL FILED BY THE OPPONENT
+                    AGAINST THE DECISION" infl="+" dateMigr="00010101">
+        <ops:pre line="00001">EP     15150000B 2023-01-10APPO   +APPEAL FILED BY THE OPPONENT AGAINST THE DECISION</ops:pre>
+        <ops:L001EP desc="Country Code">EP</ops:L001EP>
+        <ops:L008EP desc="Legal Event Code 1">APPO</ops:L008EP>
+        <ops:L019EP desc="DATE first created">20230110</ops:L019EP>
+        <ops:L500EP/>
+      </ops:legal>
+    </ops:family-member>
+  </ops:patent-family>
+</ops:world-patent-data>

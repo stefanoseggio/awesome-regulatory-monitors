@@ -1,0 +1,221 @@
+
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>Diario Oficial – República de Chile</title>
+        <link rel="stylesheet" href="css/do.css">
+        <link rel="stylesheet" type="text/css" href="/assets/css/jquery.fancybox.css" />
+        <script src="js/jquery-3.1.0.min.js"></script>
+
+        <!-- jquery ui -->
+        <link rel="stylesheet" href="plugins/jqueryui/jquery-ui.min.css">
+        <script src="plugins/jqueryui/jquery-ui.min.js"></script>
+        <script src="plugins/jqueryui/datepicker-es.js"></script>
+        <script type="text/javascript" src="/assets/js/jquery.fancybox.pack.js"></script>
+        <script src="js/do.js"></script>
+        <script>
+            $(document).ready(function (e) {
+
+                $('#audio').fancybox({
+                    fitToView: false,
+                    width: '680',
+                    height: '72',
+                    autoSize: true,
+                    closeClick: true
+                });
+
+                $("#latest").fancybox({
+                    maxWidth: 9999,
+                    maxHeight: 9999,
+                    fitToView: true,
+                    width: '100%',
+                    height: '100%',
+                    autoSize: false,
+                    closeClick: false
+                });
+
+                $(".audio").fancybox({
+                    fitToView: false,
+                    width: '670',
+                    height: '72',
+                    autoSize: true,
+                    closeClick: true
+                });
+
+            });
+        </script>
+    </head>
+    <body>
+
+        <div class="wrap">
+            <header>
+                <nav class="main" style="text-align: center;">
+                    <!--<a href="/" title=""><img src="/assets/images/inicio.png" style="float:left; margin-top: -1px"/> ¿Cómo publicar?</a>-->
+                    <a href="/quienes-somos/" title="">¿Quiénes somos?</a>
+                    <a href="/versiones-anteriores/" title="Ver ediciones desde 01/03/1877 al 16/08/2016" >Edición impresa</a>
+                    <a href="javascript:void(0)" title="Ver ediciones desde 17/08/2016" class="active">Edición electrónica</a>
+                    <a href="/verificacion/" title="">Verificar Publicación<br>con su CVE</a>
+                    <a href="https://www.boletinoficialdemineria.cl/"  >Boletín Oficial<br/> de Minería</a>
+                    <a href="https://pagos.diarioficial.cl/BuscarBoleta/" target="_blank">Boleta<br/> Electrónica</a>
+                    <a href="/contacto/" title="">Contacto</a>
+                </nav>
+
+                <a class="logo_gob" href="javascript:void(0)" title="">
+                    <img src="css/bitmaps/logo_gob.jpg" alt="">
+                </a>
+
+                <a class="logo_do" href="https://www.diariooficial.interior.gob.cl" title="">
+                    <img src="css/bitmaps/logo_do.jpg" alt="">
+                </a>
+
+                <div class="zoomletter">
+                    <ul class="zoom">
+                        <li><a class="decreaseFont" href="javascript:void(0)" title="">-a</a></li>
+                        <li><a class="resetFont" href="javascript:void(0)" title="">a</a></li>
+                        <li><a class="increaseFont" href="javascript:void(0)" title="">+a</a></li>
+                        <li><a class="blackWhite" href="javascript:void(0)" title="">a</a></li>
+                    </ul>
+
+                    <a id="datep" class="btn" href="javascript:void(0)" title="">
+                        <i class="icon-calendar"></i>
+                        Ediciones Anteriores
+                    </a>
+
+                    <!-- 				<a id="datep" class="othereditions" href="javascript:void(0)" title="">
+                                                            Ediciones Anteriores
+                                                    </a> -->
+                    <input type="hidden" id="dp" />
+                    <div></div>
+                </div>
+
+                <div class="containerdate">
+                    <ul>
+                        <li class="alignleft">
+                                                        </li>
+                            <li class="date">
+                                <strong>Miércoles 21 de Octubre de 2026</strong>
+                                <!-- 						<a class="othereditions" href="javascript:void(0)" title="">
+                                                                                        Otras ediciones
+                                                                                </a> -->
+                            </li>
+                            <li class="alignright">
+                                                                    <a class="summary" target="_blank" href="/publicaciones/2026/10/21/sumarios/.pdf" title="">
+                                        Sumario de la Edición
+                                    </a>
+                                                            </li>
+                        </ul>
+                    </div>
+
+
+                                            <nav class="menu">
+                            <a class="active" href="index.php?" title="">Normas<br/>Generales</a>
+                            <a  href="normas_particulares.php?" title="">Normas<br/>Particulares</a>
+                            <a  href="publicaciones_judiciales.php?" title="">Publicaciones<br/>Judiciales</a>
+                            <a  href="avisos_destacados.php?" title="">Avisos<br/>Destacados</a>
+                            <a  href="empresas_cooperativas.php?" title="">Empresas y<br/>Cooperativas</a>
+                            <a  href="marcas_patentes.php?" title="">Marcas y<br/>Patentes</a>
+                            <a  href="bom.php?" title="">Boletín Oficial<br/>de Minería</a>
+                        </nav>
+                                </header><div class="containerdate2">LEYES, REGLAMENTOS, DECRETOS Y RESOLUCIONES DE ORDEN GENERAL</div>
+<section class="norma_general">
+    
+    <div class="wrapsection">
+
+                    <p class="nofound">No existen publicaciones en esta edición en la fecha seleccionada</p>
+    </div>
+</section>
+
+<footer>
+    <div class="wrapcontact">
+        <ul class="contact">
+            <li class="info" style="width: 30%">
+                <div>
+                    <label>Director:</label>
+                    <p><strong>Giovanni Calderón Bassi</strong></p>
+                </div>
+                <div>
+                    <label>Sitio Web:</label>
+                    <p>www.diarioficial.cl</p>
+                </div>
+                
+               
+            </li>
+            <li class="info" style="width: 38%">
+                 <div>
+                    <label>Mesa Central:</label>
+                    <span style="display: block">600 613 5700</span>
+                    <!--<p>+56 2 24863600</p>-->
+                </div>
+                <div>
+                    <label>Dirección:</label>
+                    <p>Dr. Torres Boonen 511, Providencia, Santiago</p>
+                </div>
+               
+            </li>
+            <li class="info" style="width: 29%">
+                 <div>
+                    <label class="large">Consultas E-mail:</label>
+                    <p>consultas@diarioficial.cl</p>
+                </div>
+                                    <div>
+                        <label class="large">Representación:</label>
+                        <p>
+
+                            <a style="color: #000;" target="_blank" href="/publicaciones/2026/10/21/impresos/.pdf" title="">
+                                Impresa referencial
+                            </a>
+
+                        </p>
+                    </div>
+                            </li>
+           <!-- <li class="logoboa" style="width: 200px">
+                <p>Miembro de la Red de Diarios Oficiales Americanos</p>
+                <img src="css/bitmaps/logo_redboa.jpg" alt="">
+            </li>-->
+        </ul>
+    </div>
+    <aside id="banners">
+        <ul>
+            <!--<li><a class="bt_foot bt_verifica" href="/verificacion/"></a></li>-->
+            <li><a class="bt_foot bt_tarifas" href="/tarifas/"></a></li>
+            <li><a class="bt_foot bt_reglamentos" href="/normativa/"></a></li>
+            <!--<li><a class="bt_foot bt_boleta" href="https://pagos.diarioficial.cl/BuscarBoleta/" target="_blank"></a></li>-->
+        
+            <!--<li><a class="bt_foot bt_suplementos" href="/suplementos/"></a></li>-->
+            <li><a class="bt_foot bt_lib_historia" href="/#openModalLHDO"></a></li>
+            <!--<li><a class="bt_foot bt_librocons" href="/#openModal"></a></li>-->
+        
+        
+            <li><a class="bt_foot bt_estadistica" href="/informe/"></a></li>
+            <li><a class="bt_foot bt_memoria" href="/documentos/"></a></li>
+            <!--<li><a class="bt_foot bt_boletin" href="http://www.boletinoficialdemineria.cl/" target="_blank"></a></li>-->
+        </ul>
+
+    </aside>
+
+    <div id="logofooterDiv">
+        <span class="destacado">MESA DE AYUDA</span> 600 613 5700 | HORARIO DE ATENCIÓN: De Lunes a Jueves de 9:30 a 14:00 hrs. y de 15:00 a 17:30 hrs. Viernes de 9:30 a 14:00 hrs. y de 15:00 a 16:30 hrs. 
+        <div style="text-align:center; margin-top: 10px;" ><a href="/politica/" style="color:#808080;">Política de Tratamiento de Datos Personales</a> | <a href="/condiciones/" style="color:#808080;">Condiciones de Uso de Publicaciones</a></div>
+    </div>
+</footer>
+</div>
+<script>
+    (function (i, s, o, g, r, a, m) {
+        i['GoogleAnalyticsObject'] = r;
+        i[r] = i[r] || function () {
+            (i[r].q = i[r].q || []).push(arguments)
+        }, i[r].l = 1 * new Date();
+        a = s.createElement(o),
+                m = s.getElementsByTagName(o)[0];
+        a.async = 1;
+        a.src = g;
+        m.parentNode.insertBefore(a, m)
+    })(window, document, 'script', '//www.google-analytics.com/analytics.js', 'ga');
+
+    ga('create', 'UA-43680279-1', 'auto');
+    ga('send', 'pageview');
+
+</script>
+</body>
+</html>

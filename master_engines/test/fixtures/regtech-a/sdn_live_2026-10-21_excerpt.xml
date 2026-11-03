@@ -1,0 +1,219 @@
+<?xml version="1.0" standalone="yes"?>
+<!--
+  Verbatim entries copied from the LIVE OFAC SDN.XML feed fetched on 2026-10-21 from
+  https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/SDN.XML
+  (Publish_Date 10/15/2026). Only the surrounding ~19,450 unrelated sdnEntry records were removed;
+  the publshInformation header is deliberately left UNEDITED, so it still declares
+  Record_Count 19457 although only 5 entries remain (the connector's completeness guard
+  must - and does - refuse such a document; tests that need a "complete" feed rewrite the count).
+
+  Included on purpose:
+    - uid 173   ANGLO-CARIBBEAN CO., LTD. (Entity)    -> must be FILTERED OUT (not a vessel)
+    - uid 15055 HAPPINESS I (IRAN + SDGT)             -> two programs, IMO + MMSI, four f.k.a. names,
+                                                          remarks with TWO "Linked To:" clauses
+    - uid 17104 RYONG GUN BONG (DPRK)                 -> "Vessel Registration Identification" is a BARE
+                                                          7-digit number, not "IMO <digits>": must land in
+                                                          otherIds, imoNumber stays null
+    - uid 15904 DINO I (IRAN)                         -> vesselOwner populated ("NITC")
+    - uid 4238  MAR AZUL (CUBA)                       -> vesselOwner populated, no idList at all
+-->
+<sdnList xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/XML">
+  <publshInformation>
+    <Publish_Date>10/15/2026</Publish_Date>
+    <Record_Count>19457</Record_Count>
+  </publshInformation>
+    <sdnEntry>
+    <uid>173</uid>
+    <lastName>ANGLO-CARIBBEAN CO., LTD.</lastName>
+    <sdnType>Entity</sdnType>
+    <programList>
+      <program>CUBA</program>
+    </programList>
+    <akaList>
+      <aka>
+        <uid>57</uid>
+        <type>a.k.a.</type>
+        <category>strong</category>
+        <lastName>AVIA IMPORT</lastName>
+      </aka>
+    </akaList>
+    <addressList>
+      <address>
+        <uid>129</uid>
+        <address1>Ibex House, The Minories</address1>
+        <city>London</city>
+        <postalCode>EC3N 1DY</postalCode>
+        <country>United Kingdom</country>
+      </address>
+    </addressList>
+  </sdnEntry>
+  <sdnEntry>
+    <uid>15055</uid>
+    <lastName>HAPPINESS I</lastName>
+    <sdnType>Vessel</sdnType>
+    <remarks>(Linked To: NATIONAL IRANIAN TANKER COMPANY; Linked To: HOKOUL SAL OFFSHORE)</remarks>
+    <programList>
+      <program>IRAN</program>
+      <program>SDGT</program>
+    </programList>
+    <idList>
+      <id>
+        <uid>8064</uid>
+        <idType>Vessel Registration Identification</idType>
+        <idNumber>IMO 9212905</idNumber>
+      </id>
+      <id>
+        <uid>8133</uid>
+        <idType>MMSI</idType>
+        <idNumber>256875000</idNumber>
+      </id>
+      <id>
+        <uid>111494</uid>
+        <idType>Former Vessel Flag</idType>
+        <idNumber>Malta</idNumber>
+      </id>
+      <id>
+        <uid>113031</uid>
+        <idType>Former Vessel Flag</idType>
+        <idNumber>Tuvalu</idNumber>
+      </id>
+      <id>
+        <uid>114791</uid>
+        <idType>Former Vessel Flag</idType>
+        <idNumber>Tanzania</idNumber>
+      </id>
+      <id>
+        <uid>132474</uid>
+        <idType>Former Vessel Flag</idType>
+        <idNumber>Panama</idNumber>
+      </id>
+      <id>
+        <uid>119304</uid>
+        <idType>Additional Sanctions Information -</idType>
+        <idNumber>Subject to Secondary Sanctions</idNumber>
+      </id>
+      <id>
+        <uid>186105</uid>
+        <idType>Secondary sanctions risk:</idType>
+        <idNumber>section 1(b) of Executive Order 13224, as amended by Executive Order 13886</idNumber>
+      </id>
+    </idList>
+    <akaList>
+      <aka>
+        <uid>22164</uid>
+        <type>f.k.a.</type>
+        <category>strong</category>
+        <lastName>HENGAM</lastName>
+      </aka>
+      <aka>
+        <uid>23482</uid>
+        <type>f.k.a.</type>
+        <category>strong</category>
+        <lastName>LOYAL</lastName>
+      </aka>
+      <aka>
+        <uid>24778</uid>
+        <type>f.k.a.</type>
+        <category>strong</category>
+        <lastName>TULAR</lastName>
+      </aka>
+      <aka>
+        <uid>40662</uid>
+        <type>f.k.a.</type>
+        <category>strong</category>
+        <lastName>HAPPINESS</lastName>
+      </aka>
+    </akaList>
+    <vesselInfo>
+      <callSign>T2ER4</callSign>
+      <vesselType>Crude Oil Tanker</vesselType>
+      <vesselFlag>Iran</vesselFlag>
+      <tonnage>299214</tonnage>
+      <grossRegisteredTonnage>160930</grossRegisteredTonnage>
+    </vesselInfo>
+  </sdnEntry>
+  <sdnEntry>
+    <uid>17104</uid>
+    <lastName>RYONG GUN BONG</lastName>
+    <sdnType>Vessel</sdnType>
+    <programList>
+      <program>DPRK</program>
+    </programList>
+    <idList>
+      <id>
+        <uid>9556</uid>
+        <idType>Vessel Registration Identification</idType>
+        <idNumber>8606173</idNumber>
+      </id>
+      <id>
+        <uid>134976</uid>
+        <idType>Transactions Prohibited For Persons Owned or Controlled By U.S. Financial Institutions:</idType>
+        <idNumber>North Korea Sanctions Regulations section 510.214</idNumber>
+      </id>
+      <id>
+        <uid>127091</uid>
+        <idType>Secondary sanctions risk:</idType>
+        <idNumber>North Korea Sanctions Regulations, sections 510.201 and 510.210</idNumber>
+      </id>
+    </idList>
+    <vesselInfo>
+      <vesselType>General Cargo</vesselType>
+      <vesselFlag>Democratic People's Republic of Korea</vesselFlag>
+    </vesselInfo>
+  </sdnEntry>
+  <sdnEntry>
+    <uid>15904</uid>
+    <lastName>DINO I</lastName>
+    <sdnType>Vessel</sdnType>
+    <remarks>(Linked To: NATIONAL IRANIAN TANKER COMPANY)</remarks>
+    <programList>
+      <program>IRAN</program>
+    </programList>
+    <idList>
+      <id>
+        <uid>8633</uid>
+        <idType>Vessel Registration Identification</idType>
+        <idNumber>IMO 9569671</idNumber>
+      </id>
+      <id>
+        <uid>130000</uid>
+        <idType>Former Vessel Flag</idType>
+        <idNumber>Tanzania</idNumber>
+      </id>
+      <id>
+        <uid>119221</uid>
+        <idType>Additional Sanctions Information -</idType>
+        <idNumber>Subject to Secondary Sanctions</idNumber>
+      </id>
+    </idList>
+    <akaList>
+      <aka>
+        <uid>40685</uid>
+        <type>f.k.a.</type>
+        <category>strong</category>
+        <lastName>INFINITY</lastName>
+      </aka>
+    </akaList>
+    <vesselInfo>
+      <callSign>5IM411</callSign>
+      <vesselType>Crude Oil Tanker</vesselType>
+      <vesselFlag>Iran</vesselFlag>
+      <vesselOwner>NITC</vesselOwner>
+    </vesselInfo>
+  </sdnEntry>
+  <sdnEntry>
+    <uid>4238</uid>
+    <lastName>MAR AZUL</lastName>
+    <sdnType>Vessel</sdnType>
+    <programList>
+      <program>CUBA</program>
+    </programList>
+    <vesselInfo>
+      <callSign>CL2192</callSign>
+      <vesselType>Tug</vesselType>
+      <vesselFlag>Cuba</vesselFlag>
+      <vesselOwner>Samir de Navegacion S.A.</vesselOwner>
+      <grossRegisteredTonnage>212</grossRegisteredTonnage>
+    </vesselInfo>
+  </sdnEntry>
+</sdnList>

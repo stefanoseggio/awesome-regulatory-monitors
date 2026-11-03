@@ -1,0 +1,13 @@
+# Algolia-Crawler-Verif: 62132C95F3D6FBFC 
+User-agent: * 
+Disallow: /sitecore 
+Disallow: /sitecore/modules 
+Disallow: /search-result 
+Disallow: /search/ 
+Disallow: /api/ 
+Disallow: /ajax/ 
+Disallow: /private/ 
+Disallow: /admin/ 
+Disallow: /login/ 
+Disallow: /user/ 
+Sitemap: https://www.difc.com/sitemap.xml

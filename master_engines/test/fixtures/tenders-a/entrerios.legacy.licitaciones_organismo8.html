@@ -1,0 +1,740 @@
+<link href="../bootstrap/dist/css/bootstrap_verdecito.min.css" rel="stylesheet" media="screen">
+<style type="text/css">
+	#main-menu {
+		position:relative;
+		z-index:0;
+		width:24em;
+	}
+	#main-menu ul {
+		width:24em; /* fixed width only please - you can use the "subMenusMinWidth"/"subMenusMaxWidth" script options to override this if you like */
+	}
+	h1 small, .h1 small, h2 small, .h2 small, h3 small, .h3 small, h1 .small, .h1 .small, h2 .small, .h2 .small, h3 .small, .h3 .small {
+    font-size: 100%;
+}
+@media (min-width: 1200px){
+	.container {
+		 width: 90%;
+		}}
+</style>
+
+<script type="text/javascript" src="https://code.jquery.com/jquery-3.7.0.js"></script>
+<script type="text/javascript" src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script><script src="../bootstrap/dist/js/bootstrap.min.js"></script><link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css" />
+<link rel="stylesheet" href="https://cdn.datatables.net/2.0.8/css/dataTables.dataTables.css" />
+<!--  -->
+<script src="https://cdn.datatables.net/2.0.8/js/dataTables.js"></script>
+<script src="https://cdn.datatables.net/buttons/3.0.2/js/dataTables.buttons.js"></script>
+<script src="https://cdn.datatables.net/buttons/3.0.2/js/buttons.dataTables.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
+<script src="https://cdn.datatables.net/buttons/3.0.2/js/buttons.html5.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/3.0.2/js/buttons.print.min.js"></script>
+
+<style>
+	.pagination-container {
+		display: flex;
+		justify-content: space-between;
+		margin-top: 16px;
+	}
+</style>
+
+<div class="col-md-12" id="container">
+	<img src="./constancia/encabezado_no_constancia.png" style="display: none" id="encabezado-contancia" />
+	<p>&nbsp;</p>
+	<p style="font-size:18px">Utilice las opciones de b&uacute;squeda para localizar un Procedimiento de
+		Contrataci&oacute;n</p>
+	<hr>
+	<form name="form" method="post" action="">
+		<div class="col-md-2">
+			<label>Procedimiento de Contrataci&oacute;n****</label>
+			<select name="tipo_licitacion" id="tipo_licitacion" class="form-control">
+				<option value="">Seleccionï¿½</option>
+				<option value = 1>Licitación Privada</option><option value = 2>Licitación Pública</option><option value = 3>Solicitud de Cotización</option><option value = 4>Contratación Directa</option>			</select>
+		</div>
+		<div class="col-md-2">
+			<label>Aï¿½o</label>
+			<select name="anio" id="anio" class="form-control">
+				<option value="">Seleccionï¿½</option>
+				<option  value = 2025>2025</option><option  value = 2024>2024</option><option  value = 2023>2023</option><option  value = 2022>2022</option><option  value = 2021>2021</option><option  value = 2020>2020</option><option  value = 2019>2019</option><option  value = 2018>2018</option><option  value = 2017>2017</option><option  value = 2016>2016</option><option  value = 2015>2015</option><option  value = 2014>2014</option><option  value = 2013>2013</option><option  value = 2012>2012</option><option  value = 2011>2011</option><option  value = 2010>2010</option><option  value = 2009>2009</option><option  value = 2008>2008</option><option  value = 2007>2007</option><option  value = 2006>2006</option><option  value = 2005>2005</option><option  value = 2004>2004</option><option  value = 0>0</option>			</select>
+
+			<!-- <input name="anio" type="text" id="anio" value="" size="4" maxlength="4" class="form-control" placeholder="Ingrese AÃ¯Â¿Â½o" data-bv-stringlength="true" data-bv-stringlength-min="2" data-bv-stringlength-max="4" data-bv-stringlength-message="El AÃ¯Â¿Â½o debe tener como m&iacute;nimo 3 caracteres y 4 de m&aacute;ximo."/> -->
+		</div>
+		<div class="col-md-2">
+			<label>Estado</label>
+			<select name="estado" id="estado" class="form-control">
+				<option value="">Seleccionï¿½</option>
+				<option value = 1>Próximas Aperturas</option><option value = 2>En proceso de evaluación</option><option value = 3>Realizada</option><option value = 4>Fracasada</option>			</select>
+		</div>
+		<div class="col-md-2">
+			<label>Palabra</label>
+						<input name="palabra" type="text" id="palabra" value="" size="20" class="form-control"
+				placeholder="Ingresï¿½ Palabras" />
+		</div>
+		<div class="col-md-2">
+			<label>ORGANISMO</label>
+			<select name="cmb_organismo" id="cmb_organismo" class="form-control">
+				<option value="">Seleccionï¿½</option>
+				<option value = 1>Unidad Central de Contrataciones</option><option value = 3>Ministerio de Desarrollo Social</option><option value = 4>Consejo General de Educación</option><option value = 5>Administradora Tributaria de Entre Ríos</option><option value = 6>UADER</option><option value = 7>Oficina de Compras y Asesoramiento - Poder Judicial de Entre Ríos</option><option SELECTED value = 8>Ministerio de Salud</option><option value = 9>Dirección Provincial de Vialidad</option>			</select>
+		</div>
+		<div class="col-md-1" style="display: flex; justify-content: end; align-items: flex-end;">
+			<button type="submit" name="buscar" id="buscar" class="btn btn-success" style="margin-top: 25px;">Buscar</button>
+		</div>
+		<div class="col-md-1" style="display: flex; justify-content: end; align-items: flex-end;">
+			<button name="resetear" id="resetear" class="btn btn-success" style="margin-top: 25px;">Limpiar</button>
+		</div>
+	</form>
+	<p>&nbsp;</p>
+	<hr>
+	</hr>
+	<div align="center">
+					<main id="main">
+				<div style="display: flex; justify-content: space-between">
+					<div>
+						<h7>
+							Resultados de tu bï¿½squeda:  <strong> Ministerio de Salud</strong>
+						</h7>
+					</div>
+					<div>
+						<button id="imprimir-resultado" title="Imprimir resultados" class="btn" style="width: 46px; color: black;">
+							<svg viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg" fill="#000000">
+								<g id="SVGRepo_bgCarrier" stroke-width="0"></g>
+								<g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g>
+								<g id="SVGRepo_iconCarrier">
+									<g fill="none" fill-rule="evenodd" transform="matrix(0 -1 1 0 2 19)">
+										<path
+											d="m3.5 4.38378906v-1.89752528c0-1.1045695.8954305-2 2-2h4c1.1045695 0 2 .8954305 2 2v12.01373622c0 1.1045695-.8954305 2-2 2h-4c-1.1045695 0-2-.8954305-2-2v-2"
+											stroke="#000000" stroke-linecap="round" stroke-linejoin="round"></path>
+										<path
+											d="m1.5 4.5h5.0013251v8h-5.0013251c-.55228475 0-1-.4477153-1-1v-6c0-.55228475.44771525-1 1-1zm12 0h2c.5522847 0 1 .44771525 1 1v6c0 .5522847-.4477153 1-1 1h-2"
+											stroke="#000000" stroke-linecap="round" stroke-linejoin="round"></path>
+										<circle cx="9" cy="14" fill="#000000" r="1"></circle>
+									</g>
+								</g>
+							</svg>
+						</button>
+					</div>
+				</div>
+				<p>&nbsp;</p>
+				<table id="tabla-resultados" class="display">
+					<thead>
+						<tr class="table-primary">
+							<td style="text-align:center;font-size:12px"><strong>PROCEDIMIENTO DE CONTRATACI&Oacute;N</strong></td>
+							<td style="text-align:center;font-size:12px"><strong>OBJETO</strong></td>
+														<td style="text-align:center;font-size:12px"><strong>DESTINO</strong></td>
+															<td style="text-align:center;font-size:12px"><strong>ESTADO</strong></td>
+														<td style="text-align:center;font-size:12px"><strong>ORGANISMO</strong></td>
+													</tr>
+					</thead>
+					<tbody>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Pública 17/2024</strong>
+								</td>
+								<td style="font-size:14px">Adquisicion de Una (01) Mesa de Anestesia</td>
+																<td style="font-size:14px">Servicio de Cirugía del Hospital “Justo José de Urquiza” de Federal, dependiente del Ministerio de Salud de la Provincia de Entre Ríos</td>
+																	<td style="font-size:14px" class="Estilo3">Realizada</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Pública 18/2024</strong>
+								</td>
+								<td style="font-size:14px">Adquisición de Un (01) Equipo de RX móvil con arco en C y detector digital para uso en cirugías y estudios vasculares y Un (01) Equipo de RX móvil con intensificador de imágenes y arco en C para uso en cirugías traumatológicas</td>
+																<td style="font-size:14px">Hospital “San Martín” de Paraná y  Hospital “Santa Rosa” de Chajarí, dependientes del Ministerio de Salud de la Provincia de Entre Ríos</td>
+																	<td style="font-size:14px" class="Estilo3">En proceso de Evaluaciï¿½n</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Privada 17/2024</strong>
+								</td>
+								<td style="font-size:14px">Adquisición de Una (01) Centrífuga Refrigerada para Bolsas de Sangre</td>
+																<td style="font-size:14px">Hospital “Delicia Concepción Masvernat” de Concordia, dependiente del Ministerio de Salud</td>
+																	<td style="font-size:14px" class="Estilo3">En proceso de Evaluaciï¿½n</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Pública 19/2024</strong>
+								</td>
+								<td style="font-size:14px">Adquirir Un (01) Esterilizador Autoclave de vapor por ciclo de vacío</td>
+																<td style="font-size:14px">Hospital “San Benjamín” de Colón, dependiente del Ministerio de Salud de la Provincia de Entre Ríos</td>
+																	<td style="font-size:14px" class="Estilo3">En proceso de Evaluaciï¿½n</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Pública 20/2024</strong>
+								</td>
+								<td style="font-size:14px">Adquirir Una (01) Mesa de Cirugía para uso con Arco en C</td>
+																<td style="font-size:14px">Hospital “Delicia Concepción Masvernat” de Concordia dependiente del Ministerio de Salud de la Provincia de Entre Ríos</td>
+																	<td style="font-size:14px" class="Estilo3">Realizada</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Pública 21/2024</strong>
+								</td>
+								<td style="font-size:14px">Adquirir Cincuenta Mil Trescientos Cuatro (50.304) Unidades de Pañales</td>
+																<td style="font-size:14px">Programa Federal Incluir Salud </td>
+																	<td style="font-size:14px" class="Estilo3">Realizada</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Privada 18/2024</strong>
+								</td>
+								<td style="font-size:14px">Adquirir Un (01) Motor para embarcación fuera de borda pata larga nuevo y sin uso</td>
+																<td style="font-size:14px">Ambulancia de agua perteneciente al Hospital “Paranacito” de Villa Paranacito</td>
+																	<td style="font-size:14px" class="Estilo3">Fracasada</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Pública 22/2024</strong>
+								</td>
+								<td style="font-size:14px">Adquirir Un (01) Ecógrafo </td>
+																<td style="font-size:14px">Hospital Sagrado Corazón de Jesús de la Localidad de Basavilbaso</td>
+																	<td style="font-size:14px" class="Estilo3">Realizada</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Privada 19/2024</strong>
+								</td>
+								<td style="font-size:14px">Adquirir Un (01) Cardiodesfibrilador Bifásico </td>
+																<td style="font-size:14px">Hospital “Santa Rosa” de la localidad de Lucas Gonzalez– Departamento Nogoya</td>
+																	<td style="font-size:14px" class="Estilo3">Realizada</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Privada 20/2024</strong>
+								</td>
+								<td style="font-size:14px">Adquirir Un (01) Sistema de Digitalización CR para radiografía general</td>
+																<td style="font-size:14px">Sala de Radiología del Hospital Geriátrico “Dr. Pascual Palma” de Paraná</td>
+																	<td style="font-size:14px" class="Estilo3">En proceso de Evaluaciï¿½n</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Pública 23/2024</strong>
+								</td>
+								<td style="font-size:14px">Adquirir Veinte Mil (20.000) Kilogramos de Leche Entera en Polvo Instantánea, Fortificada con Hierro, Zinc y Acido Ascórbico</td>
+																<td style="font-size:14px">Dirección de Salud Materno Infanto Juvenil, en el marco del “Programa de Apoyo Nutricional Ampliado de Entre Ríos” (PANAER)</td>
+																	<td style="font-size:14px" class="Estilo3">Realizada</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Pública 24/2024</strong>
+								</td>
+								<td style="font-size:14px">Adquirir Test de Embarazo </td>
+																<td style="font-size:14px">Programa de Salud Sexual y Reproductiva </td>
+																	<td style="font-size:14px" class="Estilo3">Realizada</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Pública 25/2024</strong>
+								</td>
+								<td style="font-size:14px">Adquirir Medicamentos </td>
+																<td style="font-size:14px">Pacientes con patologías crónicas sin cobertura social, solicitados por el Programa Remediar dependiente del Ministerio de Salud de la Provincia de Entre Ríos</td>
+																	<td style="font-size:14px" class="Estilo3">Realizada</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Privada 21/2024</strong>
+								</td>
+								<td style="font-size:14px">Adquirir Un (01) Cardiodesfibrilador Bifásico</td>
+																<td style="font-size:14px">Hospital “Santa Rosa” de la Ciudad de Chajarí - Departamento Federación</td>
+																	<td style="font-size:14px" class="Estilo3">Realizada</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Privada 22/2024</strong>
+								</td>
+								<td style="font-size:14px">Adquirir Larvicidas biológicos</td>
+																<td style="font-size:14px">Dirección General de Epidemiología del Ministerio de Salud</td>
+																	<td style="font-size:14px" class="Estilo3">Fracasada</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Privada 23/2024</strong>
+								</td>
+								<td style="font-size:14px">Adquirir Diez Mil (10.000) Unidades de Repelente en crema para mosquitos, vector del dengue</td>
+																<td style="font-size:14px">Dirección General de Epidemiología dependiente del Ministerio de Salud de la Provincia de Entre Ríos</td>
+																	<td style="font-size:14px" class="Estilo3">Realizada</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Privada 24/2024</strong>
+								</td>
+								<td style="font-size:14px">Adquirir Un (01) Equipo Odontológico completo y Una (01) Esterilizadora</td>
+																<td style="font-size:14px">Centro de Salud “Gregoria Pucheta” de Los Conquistadores – Departamento Federación, dependiente del Ministerio de Salud de la Provincia de Entre Ríos,</td>
+																	<td style="font-size:14px" class="Estilo3">Realizada</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Privada 25/2024</strong>
+								</td>
+								<td style="font-size:14px">Adquirir Reactivos para diagnóstico de Dengue</td>
+																<td style="font-size:14px">Laboratorio Provincial de Epidemiología</td>
+																	<td style="font-size:14px" class="Estilo3">Realizada</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Privada 26/2024</strong>
+								</td>
+								<td style="font-size:14px">Adquirir Un (01) Respirador de Transporte (para ambulancia)</td>
+																<td style="font-size:14px">Hospital “Centenario” de Gualeguaychú, dependiente de este Ministerio de Salud de la Provincia de Entre Ríos</td>
+																	<td style="font-size:14px" class="Estilo3">En proceso de Evaluaciï¿½n</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Privada 27/2024</strong>
+								</td>
+								<td style="font-size:14px">Adquirir Una (01) Incubadora de Terapia </td>
+																<td style="font-size:14px">Hospital “Centenario” de Gualeguaychú, dependiente de este Ministerio de Salud de la Provincia de Entre Ríos</td>
+																	<td style="font-size:14px" class="Estilo3">Realizada</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Privada 28/2024</strong>
+								</td>
+								<td style="font-size:14px">Adquirir Un (01) Contador Hematológico</td>
+																<td style="font-size:14px">Hospital “Behring” de la localidad de Ibicuy – Departamento Ibicuy, dependiente del Ministerio de Salud de la Provincia de Entre Ríos</td>
+																	<td style="font-size:14px" class="Estilo3">En proceso de Evaluaciï¿½n</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Pública 26/2024</strong>
+								</td>
+								<td style="font-size:14px">Adquirir Preservativos</td>
+																<td style="font-size:14px">Programa Provincial VIH/ETS </td>
+																	<td style="font-size:14px" class="Estilo3">Realizada</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Privada 29/2024</strong>
+								</td>
+								<td style="font-size:14px">Adquirir Un (01) Sistema de Digitalización CR para radiografía general</td>
+																<td style="font-size:14px">Sala de Radiología del Hospital Geriátrico “Dr. Pascual Palma” de Paraná</td>
+																	<td style="font-size:14px" class="Estilo3">Realizada</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Privada 30/2024</strong>
+								</td>
+								<td style="font-size:14px">adquirir Quince (15) Computadoras Personales </td>
+																<td style="font-size:14px">Diferentes Efectores de la Provincia</td>
+																	<td style="font-size:14px" class="Estilo3">En proceso de Evaluaciï¿½n</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Privada 31/2024</strong>
+								</td>
+								<td style="font-size:14px">Adquirir Setenta y Cinco Mil (75.000) Comprimidos de Gliclazida 60 mg.</td>
+																<td style="font-size:14px">Programa Provincial de Diabetes </td>
+																	<td style="font-size:14px" class="Estilo3">Realizada</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Privada 32/2024</strong>
+								</td>
+								<td style="font-size:14px">Adquirir Medicamentos</td>
+																<td style="font-size:14px">Programa Salud Sexual y Reproductiva</td>
+																	<td style="font-size:14px" class="Estilo3">Realizada</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Pública 27/2024</strong>
+								</td>
+								<td style="font-size:14px">Adquirir Insumos Médicos necesarios para realizar controles de glucemia a pacientes diabéticos, sin cobertura social y que requieren de insulina</td>
+																<td style="font-size:14px">Programa Provincial de Diabetes</td>
+																	<td style="font-size:14px" class="Estilo3">En proceso de Evaluaciï¿½n</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Privada 01/2025</strong>
+								</td>
+								<td style="font-size:14px">Adquirir Mifepristona 200 mg.</td>
+																<td style="font-size:14px">Programa Provincial de Salud Sexual y Reproductiva dependiente de la Dirección Materno Infanto Juvenil </td>
+																	<td style="font-size:14px" class="Estilo3">En proceso de Evaluaciï¿½n</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Privada 02/2025</strong>
+								</td>
+								<td style="font-size:14px">Adquirir Sulfato Ferroso y Acido Fólico</td>
+																<td style="font-size:14px">División de Maternidad y Perinatología dependiente de la Dirección Salud Materno Infanto Juvenil </td>
+																	<td style="font-size:14px" class="Estilo3">En proceso de Evaluaciï¿½n</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Privada 03/2025</strong>
+								</td>
+								<td style="font-size:14px">Adquirir Preservativos</td>
+																<td style="font-size:14px">Programa Provincial de Salud Sexual y Reproductiva dependiente de la Dirección Salud Materno Infanto Juvenil </td>
+																	<td style="font-size:14px" class="Estilo3">En proceso de Evaluaciï¿½n</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Privada 04/2025</strong>
+								</td>
+								<td style="font-size:14px">Adquirir Elementos de Prótesis Dental </td>
+																<td style="font-size:14px">Programa de Prótesis Dental y Ortopedia Funcional de los Maxilares dependiente de la Dirección de Odontología</td>
+																	<td style="font-size:14px" class="Estilo3">En proceso de Evaluaciï¿½n</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Pública 1/2025</strong>
+								</td>
+								<td style="font-size:14px">Adquirir Veinte Mil (20.000) Kilogramos de Leche Entera en Polvo Instantánea, Fortificada con Hierro, Zinc y Ácido Ascórbico.-</td>
+																<td style="font-size:14px">Direccion Materno Infanto Juvenil </td>
+																	<td style="font-size:14px" class="Estilo3">En proceso de Evaluaciï¿½n</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Pública 02/2025</strong>
+								</td>
+								<td style="font-size:14px">Adquirir Un (01) Sistema de Tomografía Axial Computada Helicoidal Multicorte</td>
+																<td style="font-size:14px">Hospital Materno Infantil “San Roque” de la localidad de Paraná, dependiente del Ministerio de Salud de la Provincia de Entre Ríos, </td>
+																	<td style="font-size:14px" class="Estilo3">En proceso de Evaluaciï¿½n</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Pública 03/2025</strong>
+								</td>
+								<td style="font-size:14px">Adquirir Insulinas para pacientes diabéticos, sin cobertura social</td>
+																<td style="font-size:14px">Programa Provincial de Diabetes, dependiente del  Ministerio de Salud de la Provincia de Entre Ríos</td>
+																	<td style="font-size:14px" class="Estilo3">En proceso de Evaluaciï¿½n</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Pública 4/2025</strong>
+								</td>
+								<td style="font-size:14px">Adquirir Medicación oral para pacientes diabéticos, sin cobertura social, que son atendidos en el sector público.-</td>
+																<td style="font-size:14px">Programa Provincial de Diabetes, dependiente del Ministerio de Salud de la Provincia de Entre Ríos.- </td>
+																	<td style="font-size:14px" class="Estilo3">En proceso de Evaluaciï¿½n</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Privada 5/2025</strong>
+								</td>
+								<td style="font-size:14px">Adquirir Surfactante Pulmonar </td>
+																<td style="font-size:14px">División de Maternidad y Perinatología dependiente de la  Dirección Materno Infanto Juvenil del Ministerio de Salud de la Provincia de Entre Ríos.-</td>
+																	<td style="font-size:14px" class="Estilo3">En proceso de Evaluaciï¿½n</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Privada 6/2025</strong>
+								</td>
+								<td style="font-size:14px">Adquirir Sulfato Ferroso</td>
+																<td style="font-size:14px">División de Maternidad y Perinatología dependiente de la Dirección Materno Infanto Juvenil del Ministerio de Salud de la Provincia de Entre Ríos.-</td>
+																	<td style="font-size:14px" class="Estilo3">En proceso de Evaluaciï¿½n</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Privada 7/2025</strong>
+								</td>
+								<td style="font-size:14px">Adquirir Tres (03) Equipos odontológicos </td>
+																<td style="font-size:14px">Diferentes efectores dependientes del Ministerio de Salud de la Provincia de Entre Ríos</td>
+																	<td style="font-size:14px" class="Estilo3">En proceso de Evaluaciï¿½n</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Privada 8/2025</strong>
+								</td>
+								<td style="font-size:14px">Adquirir Anticonceptivos Inyectables </td>
+																<td style="font-size:14px">Programa de Salud Sexual y Reproductiva dependiente de la Dirección Materno Infanto Juvenil del Ministerio de Salud de la Provincia de Entre Ríos.-</td>
+																	<td style="font-size:14px" class="Estilo3">En proceso de Evaluaciï¿½n</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Pública 5/2025</strong>
+								</td>
+								<td style="font-size:14px">Adquirir Mil Ochocientos (1.800) Sensores de Glucosa Intersticial  necesarios para atender la programación del consumo de pacientes menores de 18 años que se encuentran actualmente asistidos.- </td>
+																<td style="font-size:14px">Programa Provincial de Diabetes, dependiente del Ministerio de Salud de la Provincia de Entre Ríos.-</td>
+																	<td style="font-size:14px" class="Estilo3">En proceso de Evaluaciï¿½n</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Privada 9/2025</strong>
+								</td>
+								<td style="font-size:14px">Adquirir Insumos Odontológicos</td>
+																<td style="font-size:14px">Centros Asistenciales de toda la provincia dependientes de la Dirección de Odontología del Ministerio de Salud de la Provincia de Entre Ríos.-</td>
+																	<td style="font-size:14px" class="Estilo3">En proceso de Evaluaciï¿½n</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Privada 10/2025</strong>
+								</td>
+								<td style="font-size:14px">Un (01) Respirador de Transporte (para ambulancia) </td>
+																<td style="font-size:14px">Hospital “Centenario” de Gualeguaychú dependiente de este Ministerio de Salud de la Provincia de Entre Ríos.-</td>
+																	<td style="font-size:14px" class="Estilo3">En proceso de Evaluaciï¿½n</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Privada 11/2025</strong>
+								</td>
+								<td style="font-size:14px">Adquirir Tres (03) Centrifugas de Mesa y Un (01) Baño Termostatizado.-</td>
+																<td style="font-size:14px">Diferentes efectores de la Provincia, dependientes del Ministerio de Salud de Entre Ríos.-</td>
+																	<td style="font-size:14px" class="Estilo3">En proceso de Evaluaciï¿½n</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Privada 12/2025</strong>
+								</td>
+								<td style="font-size:14px">Adquirir Sulfato de Magnesio.-</td>
+																<td style="font-size:14px">División de Maternidad y Perinatología dependiente de la  Dirección Materno Infanto Juvenil del Ministerio de Salud de la Provincia de Entre Ríos.-</td>
+																	<td style="font-size:14px" class="Estilo3">En proceso de Evaluaciï¿½n</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Pública 6/2025</strong>
+								</td>
+								<td style="font-size:14px">Adquirir medicamentos</td>
+																<td style="font-size:14px">Pacientes con patologías crónicas sin cobertura social, solicitados por el Programa Remediar dependiente del Ministerio de Salud de la Provincia de Entre Ríos</td>
+																	<td style="font-size:14px" class="Estilo3">En proceso de Evaluaciï¿½n</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Pública 07/2025</strong>
+								</td>
+								<td style="font-size:14px">Adquirir Dos (02) Mesas de Anestesia </td>
+																<td style="font-size:14px">Servicios de Quirófano de Pediatría y del Quirófano de Maternidad y Obstetricia del Hospital Materno Infanto Juvenil “San Roque” de Paraná, dependientes del Ministerio de Salud de la Provincia de Entre Ríos.-</td>
+																	<td style="font-size:14px" class="Estilo3">En proceso de Evaluaciï¿½n</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Privada 13/2025</strong>
+								</td>
+								<td style="font-size:14px">Adquirir Cincuenta y Tres Mil Doscientos Ochenta (53.280) Unidades de Pañales.-</td>
+																<td style="font-size:14px">Para abastecer la demanda de Seis (6) meses a los beneficiarios del Programa Federal Incluir Salud dependiente de la Dirección General de Prestaciones del Ministerio de Salud de Entre Ríos.-</td>
+																	<td style="font-size:14px" class="Estilo3">En proceso de Evaluaciï¿½n</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Privada 14/2025</strong>
+								</td>
+								<td style="font-size:14px">Adquirir un (01) Equipo analizador de gases en sangre </td>
+																<td style="font-size:14px">Hospital “Dr. Fermín Salaberry” de Victoria, dependiente de este Ministerio de Salud de la Provincia de Entre Ríos, solicitado por el Programa Redes.-</td>
+																	<td style="font-size:14px" class="Estilo3">En proceso de Evaluaciï¿½n</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Privada 15/2025</strong>
+								</td>
+								<td style="font-size:14px">Adquirir Labetalol </td>
+																<td style="font-size:14px">División de Maternidad y Perinatología dependiente de la Dirección Materno Infanto Juvenil del Ministerio de Salud de la Provincia de Entre Ríos.-</td>
+																	<td style="font-size:14px" class="Estilo3">En proceso de Evaluaciï¿½n</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Privada 16/2025</strong>
+								</td>
+								<td style="font-size:14px">Adquirir Equipamiento Médico </td>
+																<td style="font-size:14px">Hospital “Dr. Fermín Salaberry” de la localidad de Victoria y Hospital “Perú” de la localidad de Gral. Galarza, ambos dependientes del Ministerio de Salud de Entre Ríos</td>
+																	<td style="font-size:14px" class="Estilo3">En proceso de Evaluaciï¿½n</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Pública 8/2025</strong>
+								</td>
+								<td style="font-size:14px">Adquirir Anticonceptivos Orales.-</td>
+																<td style="font-size:14px">Programa de Salud Sexual y Reproductiva dependiente de la Dirección Materno Infanto Juvenil del Ministerio de Salud de la Provincia de Entre Ríos.-</td>
+																	<td style="font-size:14px" class="Estilo3">En proceso de Evaluaciï¿½n</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Privada 17/2025</strong>
+								</td>
+								<td style="font-size:14px">Adquirir Un (01) Autoanalizador Clínico </td>
+																<td style="font-size:14px">Hospital “Santa Rosa” de la localidad de Lucas González– Departamento Nogoya, dependiente del Ministerio de Salud de la Provincia de Entre Ríos</td>
+																	<td style="font-size:14px" class="Estilo3">En proceso de Evaluaciï¿½n</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Privada 18/2025</strong>
+								</td>
+								<td style="font-size:14px">Adquirir Elementos Odontológicos.- </td>
+																<td style="font-size:14px">170 Centros Asistenciales de toda la provincia dependientes de la Dirección de Odontología del Ministerio de Salud de la Provincia de Entre Ríos.-</td>
+																	<td style="font-size:14px" class="Estilo3">En proceso de Evaluaciï¿½n</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+													<tr class="table-primary">
+								<td style="font-size:14px">
+									<strong>Licitación Pública 09/2025</strong>
+								</td>
+								<td style="font-size:14px">Provisión, Instalación y Puesta en Servicio de Una (01) Central Telefónica.- </td>
+																<td style="font-size:14px">Hospital “San Martin” de Paraná, dependiente del Ministerio de Salud de la Provincia de Entre Ríos.-</td>
+																	<td style="font-size:14px" class="Estilo3">En proceso de Evaluaciï¿½n</td>								<td style="font-size:14px">Ministerio de Salud </td>
+
+															</tr>
+											</tbody>
+				</table>
+			</main>
+			</div>
+</div>
+
+<script>
+	document.getElementById("resetear").addEventListener("click", (e) => {
+		e.preventDefault()
+
+		document.getElementById("tipo_licitacion").value = ""
+		document.getElementById("anio").value = "";
+		document.getElementById("estado").value = ""
+		document.getElementById("palabra").value = ""
+		document.getElementById("cmb_organismo").value = ""
+	})
+
+	function enviarTamanio(height) {
+		window.parent.postMessage(
+			{ height: height + 50 },
+			"*"
+		);
+	};
+
+	function getBase64(selector) {
+		let c = document.createElement('canvas');
+		let img = document.querySelector(selector);
+		c.height = img.naturalHeight * 0.8;
+		c.width = img.naturalWidth * 0.8;
+		let ctx = c.getContext('2d');
+
+		ctx.drawImage(img, 0, 0, c.width, c.height);
+		return c.toDataURL();
+	}
+
+	$(document).ready(function () {
+		let primeraCarga = Boolean(``);
+
+		window.addEventListener('DOMContentLoaded', () => {
+			enviarTamanio(document.getElementById("container").scrollHeight)
+		})
+
+		const table = $('#tabla-resultados').DataTable({
+			"dom": "Blrt<'pagination-container'ip>",
+			"paging": 'false',
+			"ordering": 'false',
+			"order": [],
+			"pageLength": primeraCarga ? 54 : 10,
+			"scrollX": /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent),
+			scrollCollapse: true,
+			columnDefs: [{
+				targets: "_all",
+				sortable: false
+			}],
+			layout: {
+				topStart: {
+					buttons: ['pdf']
+				}
+			},
+			buttons: [{
+				text: "PDF",
+				extend: 'pdfHtml5',
+				title: 'Unidad Central de Contrataciones',
+				messageTop: 'Procedimientos de Contrataciï¿½n: Ministerio de Salud',
+				className: "pdf-button",
+				customize: function (obj) {
+					const [subTitulo, busqueda] = obj.content[1].text.split(":")
+
+					obj.content.splice(0, 0, { image: getBase64('#encabezado-contancia') })
+
+					obj.content[1] = {
+						text: `Fecha de consulta: ${new Date().toLocaleString("es-AR", {
+							year: "numeric",
+							month: "2-digit",
+							day: "2-digit"
+						})}`,
+						margin: [0, 20, 0, 10]
+					}
+					obj.content[2].text = [`${subTitulo}: `, { text: busqueda, bold: true }]
+
+					obj.content[3] = { ...obj.content[3], fontSize: 10 }
+
+
+				},
+				exportOptions: {
+					columns: [0, 1, 2, 3, 4]
+				}
+			}],
+			language: {
+				"info": "Total _TOTAL_ registros",
+				"infoEmpty": "",
+				"lengthMenu": '',
+				"zeroRecords": "Sin resultados encontrados",
+
+				"paginate": {
+					"sInfo": 'false', "sortable": '',
+					"first": "Primero",
+					"last": "Ultimo",
+					"next": ">>",
+					"previous": "<<",
+				}
+			},
+			initComplete: function () {
+				let pdfButtonTable = $('.pdf-button')[0];
+				//En vez de usar el boton de dataTable utilizo uno custom
+				$('#imprimir-resultado').on("click", () => pdfButtonTable.click())
+				pdfButtonTable.style.display = "none"
+			},
+			drawCallback: function (settings) {
+				let pagination = $(".pagination-container")
+				if (54 <= 10 || primeraCarga)
+					pagination.hide();
+				else pagination.show();
+			}
+		});
+
+		/* table.buttons().container()
+			.appendTo('#imprimir-resultado'); */
+
+		new ResizeObserver(entries => {
+			for (let entry of entries) {
+				enviarTamanio(entry.contentRect.height)
+			}
+		}).observe(document.querySelector("#container"))
+	});
+</script>

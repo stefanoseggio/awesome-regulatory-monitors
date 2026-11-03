@@ -1,0 +1,69 @@
+{
+  "meta": {
+    "disclaimer": "Do not rely on openFDA to make decisions regarding medical care. While we make every effort to ensure that data is accurate, you should assume all results are unvalidated. We may limit or otherwise restrict your access to the API in line with our Terms of Service.",
+    "terms": "https://open.fda.gov/terms/",
+    "license": "https://open.fda.gov/license/",
+    "last_updated": "2026-10-20",
+    "results": {
+      "skip": 2,
+      "limit": 2,
+      "total": 48865
+    }
+  },
+  "results": [
+    {
+      "approval_date": "20261007",
+      "product_number": "002",
+      "products": [
+        {
+          "active_ingredients": [
+            {
+              "name": "MIRABEGRON",
+              "strength": "50MG"
+            }
+          ],
+          "brand_name": "MIRABEGRON",
+          "application_name": "CREEKWOOD PHARMS",
+          "application_type": "A",
+          "application_number": "219599",
+          "therapeutic_equivalence_codes": [
+            "AB"
+          ],
+          "reference_listed_drug": false,
+          "reference_standard": false,
+          "marketing_status": "HUMAN PRESCRIPTION DRUG",
+          "application_full_name": "CREEKWOOD PHARMACEUTICALS LLC",
+          "dosage_form": "TABLET, EXTENDED RELEASE",
+          "route": "ORAL"
+        }
+      ]
+    },
+    {
+      "approval_date": "20261007",
+      "product_number": "001",
+      "products": [
+        {
+          "active_ingredients": [
+            {
+              "name": "FIDAXOMICIN",
+              "strength": "200MG"
+            }
+          ],
+          "brand_name": "FIDAXOMICIN",
+          "application_name": "HIKMA",
+          "application_type": "A",
+          "application_number": "219737",
+          "therapeutic_equivalence_codes": [
+            "AB"
+          ],
+          "reference_listed_drug": false,
+          "reference_standard": false,
+          "marketing_status": "HUMAN PRESCRIPTION DRUG",
+          "application_full_name": "HIKMA PHARMACEUTICALS USA INC",
+          "dosage_form": "TABLET",
+          "route": "ORAL"
+        }
+      ]
+    }
+  ]
+}

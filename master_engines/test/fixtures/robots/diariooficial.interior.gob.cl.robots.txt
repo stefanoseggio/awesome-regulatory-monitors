@@ -1,0 +1,12 @@
+User-agent: *
+#Denegar todas las publicaciones y sumario
+Disallow: /publicaciones/
+Disallow: /edicionelectronica/
+Disallow: /media/
+#Permitir publicaciones y sumario de seccion normas generales
+Allow: /publicaciones/*/*/*/*/01/
+Allow: /edicionelectronica/index.php
+
+User-agent: node-XMLHttpRequest
+Disallow: / 
+

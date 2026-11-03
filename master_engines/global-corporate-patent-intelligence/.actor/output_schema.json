@@ -1,0 +1,19 @@
+{
+    "actorOutputSchemaVersion": 1,
+    "title": "global-corporate-patent-intelligence output",
+    "description": "The records delivered by this run and the summary of the run.",
+    "properties": {
+        "records": {
+            "type": "string",
+            "title": "Records",
+            "description": "One dataset row per delivered record: engine, source, record_id, delta_status, is_new, is_watchlist_match, matched_watchlist_keyword and scraped_at, plus the fields of the source.",
+            "template": "{{links.apiDefaultDatasetUrl}}/items"
+        },
+        "runSummary": {
+            "type": "string",
+            "title": "Run summary",
+            "description": "Per-source counts, warnings and watchlist accounting of this run (the RUN_SUMMARY record of the default key-value store).",
+            "template": "{{links.apiDefaultKeyValueStoreUrl}}/records/RUN_SUMMARY"
+        }
+    }
+}

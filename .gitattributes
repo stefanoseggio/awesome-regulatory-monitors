@@ -1,0 +1,26 @@
+# Line endings.
+#
+# Tests byte-compare generated files with the committed ones (`.actor/*`, `engines.json`, the pricing reference bodies), `sha256sum -c` checks the freeze manifest,
+# and `apify push` uploads the working tree as it is. A checkout that turns LF into CRLF (Git for Windows defaults to core.autocrlf=true) therefore fails tests and uploads
+# bytes that differ from the committed ones. Every platform must see LF in text files, whatever core.autocrlf says.
+* text=auto eol=lf
+*.ts text eol=lf
+*.mjs text eol=lf
+*.js text eol=lf
+*.py text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+*.sh text eol=lf
+*.sha256 text eol=lf
+*.patch text eol=lf
+Dockerfile text eol=lf
+.dockerignore text eol=lf
+.gitignore text eol=lf
+.gitattributes text eol=lf
+
+# Captured real responses and expected outputs are compared byte for byte: never normalised, on any platform.
+master_engines/test/fixtures/** -text
+master_engines/distribution/python/tests/fixtures/** -text

@@ -1,0 +1,147 @@
+<?xml version="1.0" standalone="yes"?>
+<!--
+  Trimmed real excerpt of the live OFAC SDN.XML feed, fetched from
+  https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/SDN.XML
+  on 2026-09-07. Entries below are copied verbatim (uid, names, id/vessel
+  fields, remarks) from that live download - only the surrounding ~19,300
+  unrelated sdnEntry records were removed to keep this fixture small. This
+  is real government data, not synthetic/fabricated test data.
+
+  Included on purpose:
+    - uid 36  (AEROCARIBBEAN AIRLINES, sdnType=Entity)  -> must be FILTERED OUT (not a vessel)
+    - uid 4238 (MAR AZUL, sdnType=Vessel)                -> vessel with NO idList/IMO at all
+    - uid 4243 (EBANO, sdnType=Vessel)                   -> vessel with IMO + two f.k.a. akas
+    - uid 15036 (ARTAVIL, sdnType=Vessel)                -> vessel with IMO + MMSI + former
+                                                             flags + "Linked To" remarks
+-->
+<sdnList xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/XML">
+  <publshInformation>
+    <Publish_Date>09/04/2026</Publish_Date>
+    <Record_Count>19329</Record_Count>
+  </publshInformation>
+  <sdnEntry>
+    <uid>36</uid>
+    <lastName>AEROCARIBBEAN AIRLINES</lastName>
+    <sdnType>Entity</sdnType>
+    <programList>
+      <program>CUBA</program>
+    </programList>
+    <akaList>
+      <aka>
+        <uid>12</uid>
+        <type>a.k.a.</type>
+        <category>strong</category>
+        <lastName>AERO-CARIBBEAN</lastName>
+      </aka>
+    </akaList>
+    <addressList>
+      <address>
+        <uid>25</uid>
+        <city>Havana</city>
+        <country>Cuba</country>
+      </address>
+    </addressList>
+  </sdnEntry>
+  <sdnEntry>
+    <uid>4238</uid>
+    <lastName>MAR AZUL</lastName>
+    <sdnType>Vessel</sdnType>
+    <programList>
+      <program>CUBA</program>
+    </programList>
+    <vesselInfo>
+      <callSign>CL2192</callSign>
+      <vesselType>Tug</vesselType>
+      <vesselFlag>Cuba</vesselFlag>
+      <vesselOwner>Samir de Navegacion S.A.</vesselOwner>
+      <grossRegisteredTonnage>212</grossRegisteredTonnage>
+    </vesselInfo>
+  </sdnEntry>
+  <sdnEntry>
+    <uid>4243</uid>
+    <lastName>EBANO</lastName>
+    <sdnType>Vessel</sdnType>
+    <programList>
+      <program>CUBA</program>
+    </programList>
+    <idList>
+      <id>
+        <uid>22133</uid>
+        <idType>Vessel Registration Identification</idType>
+        <idNumber>IMO 7406784</idNumber>
+      </id>
+    </idList>
+    <akaList>
+      <aka>
+        <uid>3408</uid>
+        <type>f.k.a.</type>
+        <category>weak</category>
+        <lastName>ANA I</lastName>
+      </aka>
+      <aka>
+        <uid>50788</uid>
+        <type>f.k.a.</type>
+        <category>weak</category>
+        <lastName>SAND SWAN</lastName>
+      </aka>
+    </akaList>
+    <vesselInfo>
+      <vesselType>General Cargo</vesselType>
+      <vesselFlag>Panama</vesselFlag>
+      <tonnage>2595</tonnage>
+      <grossRegisteredTonnage>1865</grossRegisteredTonnage>
+    </vesselInfo>
+  </sdnEntry>
+  <sdnEntry>
+    <uid>15036</uid>
+    <lastName>ARTAVIL</lastName>
+    <sdnType>Vessel</sdnType>
+    <remarks>(Linked To: NATIONAL IRANIAN TANKER COMPANY)</remarks>
+    <programList>
+      <program>IRAN</program>
+    </programList>
+    <idList>
+      <id>
+        <uid>8045</uid>
+        <idType>Vessel Registration Identification</idType>
+        <idNumber>IMO 9187629</idNumber>
+      </id>
+      <id>
+        <uid>8114</uid>
+        <idType>MMSI</idType>
+        <idNumber>572469210</idNumber>
+      </id>
+      <id>
+        <uid>111445</uid>
+        <idType>Former Vessel Flag</idType>
+        <idNumber>Malta</idNumber>
+      </id>
+      <id>
+        <uid>119227</uid>
+        <idType>Additional Sanctions Information -</idType>
+        <idNumber>Subject to Secondary Sanctions</idNumber>
+      </id>
+    </idList>
+    <akaList>
+      <aka>
+        <uid>22153</uid>
+        <type>f.k.a.</type>
+        <category>strong</category>
+        <lastName>ABADAN</lastName>
+      </aka>
+      <aka>
+        <uid>23827</uid>
+        <type>f.k.a.</type>
+        <category>weak</category>
+        <lastName>ALPHA</lastName>
+      </aka>
+    </akaList>
+    <vesselInfo>
+      <callSign>T2EU4</callSign>
+      <vesselType>Crude/Oil Products Tanker</vesselType>
+      <vesselFlag>Iran</vesselFlag>
+      <tonnage>99144</tonnage>
+      <grossRegisteredTonnage>56068</grossRegisteredTonnage>
+    </vesselInfo>
+  </sdnEntry>
+</sdnList>

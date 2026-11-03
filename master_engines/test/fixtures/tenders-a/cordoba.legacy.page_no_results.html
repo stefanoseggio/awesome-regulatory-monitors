@@ -1,0 +1,24 @@
+<!--
+Hand-built minimal fixture, not a live capture: the real Cordoba portal's
+active-tenders count grew substantially over the course of building this
+actor (93 -> 125+ tenders across a single working session, confirmed live
+2026-09-04), so a "genuinely empty page" boundary kept moving further out
+faster than it could be captured. This fixture instead encodes the exact
+real empty-grid shape observed directly during that same session (grid
+header row present, zero "Renglon"/"RenglonAlternativo" data rows) so the
+zero-rows code path stays covered without chasing a moving live target.
+-->
+<html>
+<body>
+<form method="post" action="./ConsultaPublicaCotizacion.aspx?TIPO_CONSULTA_PUBLICA=LI" id="form1">
+<input type="hidden" name="__VIEWSTATE" id="__VIEWSTATE" value="abc123" />
+<input type="hidden" name="__VIEWSTATEGENERATOR" id="__VIEWSTATEGENERATOR" value="C9F7B97E" />
+<input type="hidden" name="__EVENTVALIDATION" id="__EVENTVALIDATION" value="def456" />
+<table class="Grilla" cellspacing="0" rules="all" border="1" id="gv" width="100%">
+<tr class="Encabezado">
+<th scope="col">Nro Cotizacion</th><th scope="col">Tipo Contratación</th><th scope="col">Servicio Administrativo</th><th scope="col">Jurisdicción</th><th scope="col">Fecha Inicio</th><th scope="col">Fecha Finalización</th><th scope="col">Estado</th><th scope="col">Prorroga</th><th scope="col">Acciones</th>
+</tr>
+</table>
+</form>
+</body>
+</html>

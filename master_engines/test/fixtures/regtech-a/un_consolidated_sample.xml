@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Trimmed real excerpt of the live UN Security Council Consolidated
+  Sanctions List, fetched from
+  https://scsanctions.un.org/resources/xml/en/consolidated.xml
+  on 2026-09-07. Entries below are copied verbatim (DATAID, names,
+  REFERENCE_NUMBER, LISTED_ON, COMMENTS1 free text) from that live
+  download - only the surrounding thousands of unrelated records were
+  removed. This is real UN data, not synthetic/fabricated test data.
+
+  The UN consolidated list has NO dedicated vessel record type or IMO
+  field - IMO numbers for vessels linked to a sanctioned shipping entity
+  appear only inside the free-text COMMENTS1 field. That is exactly the
+  limitation documented in src/unConsolidatedList.ts.
+
+  Included on purpose:
+    - DATAID 6908046 (OCEAN MARITIME MANAGEMENT COMPANY, LIMITED) -> COMMENTS1
+      contains "International Maritime Organization (IMO) Number: 1790183."
+    - DATAID 6908516 (CHONGCHONGANG SHIPPING COMPANY) -> COMMENTS1 contains
+      "IMO Number: 5342883."
+    - DATAID 690770 (KOREA COMPLEX EQUIPMENT IMPORT CORPORATION) -> control
+      entry with NO IMO number anywhere in its COMMENTS1 (negative case)
+-->
+<CONSOLIDATED_LIST>
+  <ENTITIES>
+    <ENTITY>
+      <DATAID>690770</DATAID>
+      <VERSIONNUM>1</VERSIONNUM>
+      <FIRST_NAME>KOREA COMPLEX EQUIPMENT IMPORT CORPORATION</FIRST_NAME>
+      <UN_LIST_TYPE>DPRK</UN_LIST_TYPE>
+      <REFERENCE_NUMBER>KPe.019</REFERENCE_NUMBER>
+      <LISTED_ON>2013-03-07</LISTED_ON>
+      <COMMENTS1>Korea Ryonbong General Corporation is the parent company of Korea Complex Equipment Import Corporation. Korea Ryonbong General Corporation was designated by the Committee in April 2009 and is a defense conglomerate specializing in acquisition for DPRK defense industries and support to that country's military-related sales.</COMMENTS1>
+      <LIST_TYPE>
+        <VALUE>UN List</VALUE>
+      </LIST_TYPE>
+    </ENTITY>
+    <ENTITY>
+      <DATAID>6908046</DATAID>
+      <VERSIONNUM>1</VERSIONNUM>
+      <FIRST_NAME>OCEAN MARITIME MANAGEMENT COMPANY, LIMITED (OMM)</FIRST_NAME>
+      <UN_LIST_TYPE>DPRK</UN_LIST_TYPE>
+      <REFERENCE_NUMBER>KPe.020</REFERENCE_NUMBER>
+      <LISTED_ON>2014-07-28</LISTED_ON>
+      <COMMENTS1>Ocean Maritime Management Company, Limited is the operator/manager of the vessel Chong Chon Gang. It played a key role in arranging the shipment of concealed cargo of arms and related materiel from Cuba to the DPRK in July 2013. As such, Ocean Maritime Management Company, Limited contributed to activities prohibited by the resolutions, namely the arms embargo imposed by resolution 1718 (2006), as modified by resolution 1874 (2009), and contributed to the evasion of the measures imposed by these resolutions. International Maritime Organization (IMO) Number: 1790183.</COMMENTS1>
+      <LIST_TYPE>
+        <VALUE>UN List</VALUE>
+      </LIST_TYPE>
+    </ENTITY>
+    <ENTITY>
+      <DATAID>6908516</DATAID>
+      <VERSIONNUM>1</VERSIONNUM>
+      <FIRST_NAME>CHONGCHONGANG SHIPPING COMPANY</FIRST_NAME>
+      <UN_LIST_TYPE>DPRK</UN_LIST_TYPE>
+      <REFERENCE_NUMBER>KPe.022</REFERENCE_NUMBER>
+      <LISTED_ON>2016-03-02</LISTED_ON>
+      <COMMENTS1>IMO Number: 5342883. The Chongchongang Shipping Company, through its vessel, the Chong Chon Gang, attempted to directly import the illicit shipment of conventional weapons and arms to the DPRK in July 2013.</COMMENTS1>
+      <LIST_TYPE>
+        <VALUE>UN List</VALUE>
+      </LIST_TYPE>
+    </ENTITY>
+  </ENTITIES>
+</CONSOLIDATED_LIST>

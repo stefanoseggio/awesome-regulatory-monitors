@@ -1,0 +1,58 @@
+<!--
+TRIMMED REAL CAPTURE. Derived from the legacy repo cordoba-compras-monitor test/fixtures/page9_empty.html (a real capture of
+https://webecommerce.cba.gov.ar/VistaPublica/ConsultaPublicaCotizacion.aspx?TIPO_CONSULTA_PUBLICA=LI taken 2026-09-04).
+What was changed: the __VIEWSTATE and __EVENTVALIDATION values were replaced by short tokens, the page chrome/scripts/popups
+were dropped, line endings were normalised to LF, and only the first 0 rows of the #gv grid were kept. The hidden inputs, the grid rows, the pager (<span id="pag">)
+and lblTotal are verbatim.
+-->
+<html><head><title>Compras Publicas (trimmed fixture)</title></head><body>
+<form method="post" action="./ConsultaPublicaCotizacion.aspx?TIPO_CONSULTA_PUBLICA=LI" id="form1">
+<input type="hidden" name="__VIEWSTATE" id="__VIEWSTATE" value="TRIMMED_VIEWSTATE_TOKEN" />
+<input type="hidden" name="__VIEWSTATEGENERATOR" id="__VIEWSTATEGENERATOR" value="C9F7B97E" />
+<input type="hidden" name="__VIEWSTATEENCRYPTED" id="__VIEWSTATEENCRYPTED" value="" />
+<input type="hidden" name="__EVENTVALIDATION" id="__EVENTVALIDATION" value="TRIMMED_EVENTVALIDATION_TOKEN" />
+<input type="hidden" name="txtFecha_Desde_Limite_hidDia" id="txtFecha_Desde_Limite_hidDia" value="4" />
+<input type="hidden" name="txtFecha_Desde_Limite_hidMes" id="txtFecha_Desde_Limite_hidMes" value="9" />
+<input type="hidden" name="txtFecha_Desde_Limite_hidAno" id="txtFecha_Desde_Limite_hidAno" value="2026" />
+<input type="hidden" name="txtFecha_Hasta_Limite_hidDia" id="txtFecha_Hasta_Limite_hidDia" value="4" />
+<input type="hidden" name="txtFecha_Hasta_Limite_hidMes" id="txtFecha_Hasta_Limite_hidMes" value="9" />
+<input type="hidden" name="txtFecha_Hasta_Limite_hidAno" id="txtFecha_Hasta_Limite_hidAno" value="2026" />
+<input name="ddljurisdiccion" type="text" value="--Seleccionar--" maxlength="32000" id="ddljurisdiccion" onmousedown="AbrirCerrarControlddljurisdiccion()" onkeydown="return false;" style="vertical-align:Middle;" />
+<input id="ddljurisdiccion_CheckBoxLista_0" type="checkbox" name="ddljurisdiccion_CheckBoxLista$0" onclick="checkAllddljurisdiccion(this); CargarValoresTododdljurisdiccion();" value="" />
+<select name="ddlID_VIGENCIA" id="ddlID_VIGENCIA" class="DropDownListDeDatos">
+		<option selected="selected" value="172">2014</option>
+		<option value="173">2015</option>
+		<option value="176">2016</option>
+		<option value="181">2017</option>
+		<option value="186">2018</option>
+		<option value="187">2019</option>
+		<option value="191">2020</option>
+		<option value="196">2021</option>
+		<option value="201">2022</option>
+		<option value="206">2023</option>
+		<option value="207">2024</option>
+		<option value="208">2025</option>
+		<option value="211">2026</option>
+		<option value="212">2027</option>
+		<option value="213">2028</option>
+		<option value="214">2029</option>
+		<option value="216">2030</option>
+		<option value="217">2031</option>
+
+	</select>
+<div>
+<table class="Grilla" cellspacing="0" rules="all" border="1" id="gv" width="100%">
+		<tr class="Encabezado">
+			<th scope="col">Nro Cotizacion</th><th scope="col">Tipo Contrataci&#243;n</th><th scope="col">Servicio Administrativo</th><th scope="col">Jurisdicci&#243;n</th><th scope="col">Fecha Inicio</th><th scope="col">Fecha Finalizaci&#243;n</th><th scope="col">Estado</th><th scope="col">Prorroga</th><th scope="col">Acciones</th>
+		</tr>
+	</table>
+</div>
+<span id="pag"><table>
+	<tr>
+		<td><a id="paglbA" href="javascript:__doPostBack(&#39;paglbA&#39;,&#39;&#39;)"><<</a><a> </a><a id="paglb1" href="javascript:__doPostBack(&#39;paglb1&#39;,&#39;&#39;)">1</a><a> </a><a id="paglb2" href="javascript:__doPostBack(&#39;paglb2&#39;,&#39;&#39;)">2</a><a> </a><a id="paglb3" href="javascript:__doPostBack(&#39;paglb3&#39;,&#39;&#39;)">3</a><a> </a><a id="paglb4" href="javascript:__doPostBack(&#39;paglb4&#39;,&#39;&#39;)">4</a><a> </a><a id="paglb5" href="javascript:__doPostBack(&#39;paglb5&#39;,&#39;&#39;)">5</a><a> </a><a id="paglb6" href="javascript:__doPostBack(&#39;paglb6&#39;,&#39;&#39;)">6</a><a> </a><a id="paglb7" href="javascript:__doPostBack(&#39;paglb7&#39;,&#39;&#39;)">7</a><a> </a><a id="paglb8" href="javascript:__doPostBack(&#39;paglb8&#39;,&#39;&#39;)">8</a><a> </a><span id="paglbl9" class="PaginadorSeleccion">9</span><a> </a><a id="paglb10" href="javascript:__doPostBack(&#39;paglb10&#39;,&#39;&#39;)">10</a><a> </a><a id="paglb11" href="javascript:__doPostBack(&#39;paglb11&#39;,&#39;&#39;)">11</a><a> </a><a id="paglbS" href="javascript:__doPostBack(&#39;paglbS&#39;,&#39;&#39;)">>></a><span> de 65 </span><input name="pagtxtIrA" type="text" maxlength="2" id="pagtxtIrA" onkeydown="if (event.keyCode == 13) pagbtnIrA.focus();" /><input type="submit" name="pagbtnIrA" value="Ir a" id="pagbtnIrA" /></td>
+	</tr>
+</table>
+</span>
+                    
+<span id="lblTotal" class="LabelDeDatos">646 registros encontrados.</span>
+</form></body></html>
