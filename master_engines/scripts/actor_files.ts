@@ -148,6 +148,33 @@ export function buildInputSchema(engine: EngineDefinition): Record<string, unkno
     };
 }
 
+/**
+ * The Actor output schema (https://docs.apify.com/platform/actors/development/actor-definition/output-schema): what the Output tab of
+ * a run links to. The platform refuses to publish an Actor whose default build has none (error `schemas-required`).
+ */
+export function buildOutputSchema(engine: EngineDefinition): Record<string, unknown> {
+    return {
+        actorOutputSchemaVersion: 1,
+        title: `${engine.slug} output`,
+        description: 'The records delivered by this run and the summary of the run.',
+        properties: {
+            records: {
+                type: 'string',
+                title: 'Records',
+                description:
+                    'One dataset row per delivered record: engine, source, record_id, delta_status, is_new, is_watchlist_match, matched_watchlist_keyword and scraped_at, plus the fields of the source.',
+                template: '{{links.apiDefaultDatasetUrl}}/items',
+            },
+            runSummary: {
+                type: 'string',
+                title: 'Run summary',
+                description: 'Per-source counts, warnings and watchlist accounting of this run (the RUN_SUMMARY record of the default key-value store).',
+                template: '{{links.apiDefaultKeyValueStoreUrl}}/records/RUN_SUMMARY',
+            },
+        },
+    };
+}
+
 export function buildActorJson(engine: EngineDefinition, pricing: EnginePricing): Record<string, unknown> {
     const meta = ENGINE_META[engine.slug];
     if (!meta) throw new Error(`No ENGINE_META for ${engine.slug}`);
@@ -164,6 +191,7 @@ export function buildActorJson(engine: EngineDefinition, pricing: EnginePricing)
         minMemoryMbytes: pricing.memoryMbytes,
         maxMemoryMbytes: pricing.memoryMbytes,
         inputSchema: './input_schema.json',
+        output: './output_schema.json',
     };
 }
 

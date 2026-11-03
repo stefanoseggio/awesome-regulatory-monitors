@@ -8,5 +8,6 @@
     "buildTag": "latest",
     "minMemoryMbytes": 2048,
     "maxMemoryMbytes": 2048,
-    "inputSchema": "./input_schema.json"
+    "inputSchema": "./input_schema.json",
+    "output": "./output_schema.json"
 }

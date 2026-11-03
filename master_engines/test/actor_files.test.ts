@@ -8,7 +8,7 @@ import { patentsEngine } from '../global-corporate-patent-intelligence/index.js'
 import { tendersEngine } from '../latam-global-tender-intelligence/index.js';
 import { ALL_PRICING, PATENTS_PRICING, REGTECH_PRICING, TENDERS_PRICING } from '../pricing/event_catalog.js';
 import { EngineInputSchema, resolveSources } from '../lib/router_core.js';
-import { buildActorJson, buildDockerfile, buildInputSchema, ENGINE_META, STORE_TEST_MAX_ITEMS } from '../scripts/actor_files.js';
+import { buildActorJson, buildDockerfile, buildInputSchema, buildOutputSchema, ENGINE_META, STORE_TEST_MAX_ITEMS } from '../scripts/actor_files.js';
 
 const TARGETS = [
     { engine: regtechEngine, pricing: REGTECH_PRICING },
@@ -76,6 +76,23 @@ describe.each(TARGETS.map((t) => [t.engine.slug, t] as const))('%s actor files',
         expect(JSON.parse(await readFile(`${dir}actor.json`, 'utf8'))).toEqual(buildActorJson(engine, pricing));
         expect(JSON.parse(await readFile(`${dir}input_schema.json`, 'utf8'))).toEqual(buildInputSchema(engine));
         expect(await readFile(`${dir}Dockerfile`, 'utf8')).toBe(buildDockerfile(engine));
+        expect(JSON.parse(await readFile(`${dir}output_schema.json`, 'utf8'))).toEqual(buildOutputSchema(engine));
+    });
+
+    it('declares an output schema, which the platform requires before it lets an Actor be published (F-27)', () => {
+        const actor = buildActorJson(engine, pricing) as Record<string, unknown>;
+        expect(actor.output).toBe('./output_schema.json');
+        const output = buildOutputSchema(engine) as { actorOutputSchemaVersion: number; title: string; properties: Record<string, { type: string; title: string; template: string }> };
+        expect(output.actorOutputSchemaVersion).toBe(1);
+        expect(output.title.length).toBeGreaterThan(0);
+        expect(Object.keys(output.properties)).toEqual(['records', 'runSummary']);
+        for (const [key, property] of Object.entries(output.properties)) {
+            expect(property.title.length, key).toBeGreaterThan(0);
+            expect(property.type, key).toBe('string');
+        }
+        // the templates point at what the engines really write: the default dataset and the RUN_SUMMARY record
+        expect(output.properties.records?.template).toBe('{{links.apiDefaultDatasetUrl}}/items');
+        expect(output.properties.runSummary?.template).toBe('{{links.apiDefaultKeyValueStoreUrl}}/records/RUN_SUMMARY');
     });
 });
 

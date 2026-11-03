@@ -94,7 +94,8 @@ const REQUIRED_ACTOR_JSON_KEYS = ['$schema', 'actorSpecification', 'buildTag', '
  * Anything else (usesStandbyMode, storages, defaultMemoryMbytes, readme, output schemas, web server keys, ...) changes how
  * the platform builds or runs the Actor and needs a deliberate audit update.
  */
-const TOLERATED_OPTIONAL_ACTOR_JSON_KEYS = [...KNOWN_REPORTED_ACTOR_JSON_DEVIATIONS, 'dockerfile'];
+// `output` was added deliberately (F-27): the platform refuses to publish an Actor whose default build has no output schema.
+const TOLERATED_OPTIONAL_ACTOR_JSON_KEYS = [...KNOWN_REPORTED_ACTOR_JSON_DEVIATIONS, 'dockerfile', 'output'];
 const OFFICIAL_MEMORY_VALUES = [128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768];
 const OFFICIAL_EDITORS: Record<string, string[]> = {
     string: ['javascript', 'python', 'textfield', 'textarea', 'datepicker', 'select', 'fileupload', 'hidden'],
@@ -291,6 +292,7 @@ describe.each(CASES.map((c) => [c.slug, c] as const))('%s: actor.json', (slug, c
         expect(keys.filter((key) => !REQUIRED_ACTOR_JSON_KEYS.includes(key) && !TOLERATED_OPTIONAL_ACTOR_JSON_KEYS.includes(key))).toEqual([]);
         expect(f.actor.usesStandbyMode).toBeUndefined();
         expect(f.actor.defaultMemoryMbytes).toBeUndefined();
+        expect(f.actor.output).toBe('./output_schema.json');
     });
 
     it('pins the memory to the value the pricing was computed for, using only memory sizes the platform offers', () => {
@@ -766,7 +768,7 @@ describe.each(CASES.map((c) => [c.slug, c] as const))('%s: staged build context 
         for (const other of CASES.map((x) => x.slug).filter((s) => s !== slug)) expect(files.some((p) => p.startsWith(`${other}/`)), other).toBe(false);
         for (const forbidden of ['test/', 'scripts/', 'docs-research/', 'storage/', 'node_modules/', 'stage/']) expect(files.some((p) => p.startsWith(forbidden)), forbidden).toBe(false);
         expect(files.some((p) => /(^|\/)\.env|\.pem$|\.key$|id_rsa|credentials\.json$/u.test(p))).toBe(false);
-        expect(files.filter((p) => p.startsWith('.actor/')).sort()).toEqual(['.actor/Dockerfile', '.actor/actor.json', '.actor/input_schema.json']);
+        expect(files.filter((p) => p.startsWith('.actor/')).sort()).toEqual(['.actor/Dockerfile', '.actor/actor.json', '.actor/input_schema.json', '.actor/output_schema.json']);
     });
 
     it('ships the committed Dockerfile at both locations the platform looks (.actor/ and ../Dockerfile) and the committed Actor files', async () => {
