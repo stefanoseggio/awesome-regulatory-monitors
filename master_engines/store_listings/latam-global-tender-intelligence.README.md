@@ -16,7 +16,7 @@ Typical users: bid teams and consultants tracking public tenders, grant scouts, 
 | `world_bank_notices` | World Bank procurement notices (invitations for bids, expressions of interest, general procurement notices, award announcements) from the World Bank's procurement-notices API | ADB and IDB notices are not included. |
 | `it_lombardia_grants` | Regione Lombardia regional grants and tenders register ("Anagrafica dei bandi regionali") with a derived UPCOMING / OPEN / CLOSED status | CC BY 4.0, attribution Regione Lombardia, carried in each row's `license` field. The policy-area taxonomy of the earlier Actor is not reproduced. An optional Socrata app token is accepted. |
 
-**Not available (held):** `ar_santafe` (no request from Apify's cloud got an answer: five runs ended `fetch failed` after 53 seconds on 2026-11-03, while the portal answers within a second from Argentina), `ar_cordoba` and `ar_pba` (their portals block non-residential, non-Argentine traffic at the network level, and this Actor does not route around network blocks), `ar_salta` and `ar_mendoza` (held by the Actor publisher's decision), `au_grantconnect` (the host answers HTTP 403 to honestly identified requests and offers no API, CSV or RSS feed for awards), `adb_procurement` (bot-challenge on every path) and `idb_procurement` (robots.txt disallows the programmatic paths). Selecting one stops the run before any request to a source is made and before any record is billed, and the error says why; the platform still charges the start event of a run that has started.
+**Not available (held):** `ar_santafe` (no request from Apify's cloud got an answer: five runs ended `fetch failed` after 53 seconds on 2026-11-03, while the portal answers within a second from Argentina), `ar_cordoba` and `ar_pba` (their portals block non-residential, non-Argentine traffic at the network level, and this Actor does not route around network blocks), `ar_salta` and `ar_mendoza` (held by the Actor publisher's decision), `au_grantconnect` (the host answers HTTP 403 to honestly identified requests and offers no API, CSV or RSS feed for awards), `adb_procurement` (bot-challenge on every path) and `idb_procurement` (robots.txt disallows the programmatic paths). A held source cannot be selected: the input form does not list it, and the platform rejects an API call that names one as invalid input before a run starts, so nothing is charged. Should one ever reach the Actor, the run stops before any request to a source is made and before any record is billed; the platform still charges the start event of a run that has started.
 
 ## How to use it
 
@@ -49,7 +49,7 @@ Each source validates its own slice of `sourceOptions` and rejects unknown keys,
 | `onlyNew` | Records seen for the first time |
 | `all` | Every record, unchanged ones included (tagged `delta_status: "unchanged"`) |
 
-Delta memory is kept per `stateNamespace` (default: one per Task) in a key-value store named `latam-global-tender-intelligence-delta-state` in your account. Give two Tasks that run at the same time different namespaces: a second concurrent run of the same namespace and source is refused. To restart a source from scratch, delete its `state.<namespace>.<source>` and `journal.<namespace>.<source>` records.
+Delta memory is kept per `stateNamespace` (default: one per Task) in a key-value store named `latam-global-tender-intelligence-delta-state` in your account. Give two Tasks that run at the same time different namespaces: a second concurrent run of the same namespace and source is refused. A run that is killed (timeout, abort, out of memory) cannot release its lease, so a restart on the same namespace is refused until 15 minutes after that run's last heartbeat (the refused run still pays the start event); a new namespace would start from an empty memory and deliver, and bill, everything again. To restart a source from scratch, delete its `state.<namespace>.<source>` and `journal.<namespace>.<source>` records.
 
 ## Output
 
@@ -74,7 +74,7 @@ With `deltaMode: "all"` every delivered record is billed, unchanged ones at the 
 ### Control your spend
 
 * The first run of a source delivers up to `maxItemsPerSource` records (default 500, range 1 to 10,000) and bills each one. The Entre Ríos portal alone lists thousands of rows; for a trial set a low value such as 20.
-* Use Apify's maximum-cost-per-run setting as an additional ceiling.
+* Use Apify's maximum-cost-per-run setting as an additional ceiling. When the limit is reached the run stops cleanly and `RUN_SUMMARY` says so (`stoppedOnChargeLimit`). The platform refuses a limit below the start event plus the most expensive single event of the Actor and names the minimum in its error.
 * Keep `deltaMode` at `onlyChanged` for scheduled runs.
 
 ## Reliability notes

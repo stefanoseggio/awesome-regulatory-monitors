@@ -88,16 +88,18 @@ npx tsc --noEmit
 npx vitest run                                  # all passing; the count is in section 8.9
 npm install --no-save recheck                   # the analyser of the ReDoS gate is optional; without it the gate exits 2
 npm run audit:redos                             # exit 0; the safe/allowlisted split follows recheck's fuzzer time budget, see 8.9
-for slug in $ENGINES; do npx tsx scripts/stage_actor.ts "$slug"; done
-for slug in $ENGINES; do (cd "stage/$slug" && apify validate-schema); done
+# Stage OUTSIDE the repository (finding F-25): an `apify push` made from a folder inside it uploads only the files its .gitignore lets through, so the build fails at `npm ci`.
+STAGE_ROOT="${STAGE_ROOT:-$(dirname "$(git rev-parse --show-toplevel)")/apify_stage}"
+for slug in $ENGINES; do npx tsx scripts/stage_actor.ts "$slug" --out="$STAGE_ROOT/$slug"; done
+for slug in $ENGINES; do (cd "$STAGE_ROOT/$slug" && apify validate-schema); done
 ```
 
-`stage_actor.ts` writes `stage/<slug>/` (git-ignored): `lib/`, `pricing/` without `payloads/`, the engine, `package.json`, the committed `package-lock.json`, `.actor/`, a root `Dockerfile` copied from `.actor/Dockerfile`, a `tsconfig.json` narrowed to the three directories and a `.dockerignore`. Nothing outside those directories is shipped, no test, no payload, no fixture.
+`stage_actor.ts` writes `<out>/` (default `stage/<slug>/`, git-ignored, which is why section 5 pushes from `$STAGE_ROOT` instead): `lib/`, `pricing/` without `payloads/`, the engine, `package.json`, the committed `package-lock.json`, `.actor/`, a root `Dockerfile` copied from `.actor/Dockerfile`, the Store `README.md` (finding F-20), `.actor/output_schema.json` (finding F-27: the platform refuses to publish an Actor whose build has no output schema), a `tsconfig.json` narrowed to the three directories and a `.dockerignore`. Nothing outside those directories is shipped, no test, no payload, no fixture.
 
 Optional, needs a Docker daemon (a build takes about 15 seconds after the first):
 
 ```bash deploy-manual:docker
-for slug in $ENGINES; do docker build -t "master-engines-$slug:stage" "stage/$slug"; done
+for slug in $ENGINES; do docker build -t "master-engines-$slug:stage" "$STAGE_ROOT/$slug"; done
 ```
 
 ---
@@ -107,10 +109,11 @@ for slug in $ENGINES; do docker build -t "master-engines-$slug:stage" "stage/$sl
 ```bash deploy-manual:push
 apify login --token "$APIFY_TOKEN"
 apify info
-for slug in $ENGINES; do (cd "stage/$slug" && apify push --wait-for-finish 900); done
+STAGE_ROOT="${STAGE_ROOT:-$(dirname "$(git rev-parse --show-toplevel)")/apify_stage}"   # the folders of section 4
+for slug in $ENGINES; do (cd "$STAGE_ROOT/$slug" && apify push --wait-for-finish 900); done
 ```
 
-`apify push` creates the Actor named in `.actor/actor.json` if it does not exist (private), uploads the source, and waits up to 900 seconds for the build; the exit code reflects the build outcome only. A new Actor is not public and has no Store listing: publishing is a separate step this runbook does not cover (the listing texts are not written; strategy 12.2). Check each build before continuing:
+`apify push` creates the Actor named in `.actor/actor.json` if it does not exist (private), uploads the source, and waits up to 900 seconds for the build; the exit code reflects the build outcome only. A new Actor is not public and has no Store listing: publishing is a separate step (the listing texts are in `store_listings/`; section 12.4 lists the order that worked on 2026-11-03). Check each build before continuing:
 
 ```bash deploy-manual:builds
 for slug in $ENGINES; do
@@ -390,7 +393,7 @@ What this pass did **not** do: run `pytest` (the two description strings of `dis
 **Build (section 4)**
 
 - [ ] `npm ci`, `npx tsc --noEmit`, `npx vitest run`, `npm run audit:redos` all exit 0.
-- [ ] The three `stage/<slug>/` directories exist and `apify validate-schema` succeeds in each.
+- [ ] The three staged directories (`$STAGE_ROOT/<slug>`, outside the repository) exist and `apify validate-schema` succeeds in each.
 - [ ] (Optional) `docker build` succeeds for each.
 
 **Push (section 5)**
@@ -477,7 +480,7 @@ This is the order in which a person runs the blocks of this document. It does no
 1. **Read** sections 0 and 12 and the audit report. Accept or change G1 to G5. If a price changes, change the catalogue constant and its ratification in `pricing/event_catalog.ts`, regenerate the reference payloads (`generate_pricing_payloads.ts --now=2026-10-21T00:00:00.000Z --strict`) and the distribution data, and run the suite: the tests that pin the old numbers will say what else moves.
 2. **Get the tree.** A checkout of `75becb3ff6b32cc99c3ce8ef021baf364e5c59c3` with the patch applied (`git am --keep-cr remediation_2026-11-02.patch`, never plain `git am`), after a review that is yours. `sha256sum -c docs/deployment/frozen_artifacts_remediated_2026-11-02.sha256` prints 52 lines ending in `OK`. The patch is not in PR #2; getting it there is your push.
 3. **Local build and gates** (`deploy-manual:stage`, section 4): `npm ci`, `npm install --no-save recheck`, `npx tsc --noEmit`, `npx vitest run`, `npm run audit:redos`, `stage_actor.ts` for the three engines, `apify validate-schema` in each staged directory. Run `pytest` in `distribution/python` on 3.11, 3.12 and 3.13 (not run on this tree).
-4. **Login and push** (`deploy-manual:push`, section 5): `apify login --token "$APIFY_TOKEN"`, `apify info`, `apify push --wait-for-finish 900` in each `stage/<slug>`. The Actors are created private. Check the builds (`deploy-manual:builds`).
+4. **Login and push** (`deploy-manual:push`, section 5): `apify login --token "$APIFY_TOKEN"`, `apify info`, `apify push --wait-for-finish 900` in each `$STAGE_ROOT/<slug>`. The Actors are created private. Check the builds (`deploy-manual:builds`).
 5. **Canary first.** After the shared definitions (`deploy:env`) set `ENGINES="global-regtech-compliance-feed"` to price one Actor, run steps 6 and 7 for it, and only then widen `ENGINES` to the other two. The reason is in the audit report: whether the platform accepts a first pricing record is unverified.
 6. **Price** (section 6, same shell, minutes apart): `deploy:identify`, `deploy:payloads` (`--strict`, `--now` at this moment), `deploy:payload-guard`, `deploy:preflight`, then `CONFIRM_PRICING=send-pricing-to-production` typed by you and `deploy:put`, which sends `PUT /v2/actors/<username>~<slug>` with the generated body, then `deploy:verify`. Variant A (`PAYING_USERS` unset or `true`) puts `startedAt` 14 days out (Terms 9.4); variant B (`PAYING_USERS=false`) is only for an Actor that has never had a paying user.
 7. **Smoke** (section 7): `deploy:smoke`, then `deploy-manual:held-check`. A run inside the 14-day window carries no pay-per-event pricing; the first priced run is after `startedAt`.
@@ -490,3 +493,17 @@ This is the order in which a person runs the blocks of this document. It does no
 * G5 departs from the brief (an automated sunset): it keeps the legacy Actors live, as the owner decided on 2026-10-16.
 * Nothing has run on the platform; the Python suite, the Docker builds, `apify validate-schema` and `apify push` were not run on this tree; Linux and macOS were not available.
 * No Store listing text exists, and the keyword floor (finding F-11) is still an owner decision.
+
+### 12.4 What the production run of 2026-11-03 changed in this procedure
+
+Everything above 12.3 is the text frozen on 2026-11-02. These points replace the statements they contradict; each was found by running the step on the platform.
+
+1. **Stage outside the repository** (F-25): `stage_actor.ts <slug> --out=<folder outside any repository>`, then `apify push` from there. Sections 4, 5 and 12.2 now say so.
+2. **An output schema is mandatory to publish** (F-27): `PUT /v2/acts/<id> {"isPublic":true}` is refused with `schemas-required` otherwise. `.actor/output_schema.json` is committed for each engine and shipped by `stage_actor.ts`.
+3. **Variant B was used** for the three new Actors (no paying user ever existed): the first record is effective at once, with no 14-day notice. The history is append-only: a later change is a PUT that carries the whole history and one new record.
+4. **Store fields**: `seoTitle`, `seoDescription` and `categories` are set with `PUT /v2/acts/<id>`; `title` and `description` come from `.actor/actor.json` at push; the README comes from the staged `README.md`. All of them are in `store_listings/`.
+5. **Held sources** (F-28): `ar_santafe` and `ae_registers` failed on the platform and are refused at input validation; no UAE event is priced.
+6. **Prefill** (F-23): the input schema prefill (a default source, `deltaMode: "all"`, 10 records) is what Apify's daily Actor test runs; `onlyChanged` on an empty memory returns no rows and would fail that test.
+7. **Per-run cost limit**: the platform refuses a `maxTotalChargeUsd` below the start event plus the most expensive single event; the engines stop cleanly at the limit (`stoppedOnChargeLimit` in `RUN_SUMMARY`).
+8. **A killed run keeps its lease** (F-29): on the platform a run that had ended with `TIMED-OUT` was still treated as the holder (the engines run with limited permissions and the status check gives no verdict, so the heartbeat decides), and the lease of a run that was killed (timeout, abort, out of memory) is honoured until 15 minutes after its last heartbeat. A restart inside that window is refused with a message that says so, and the refused run still pays the start event.
+9. **Retirement of the legacy Actors**: the platform refuses `isPublic: false` on a pay-per-event Actor (`cannot-unpublish-paid-actor`); `isDeprecated: true` hides an Actor from Store search and leaves it public and runnable.

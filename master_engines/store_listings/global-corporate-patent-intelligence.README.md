@@ -13,7 +13,7 @@ Typical users: IP and litigation teams watching patent disputes, pharma competit
 | `clinicaltrials_orange_book` | ClinicalTrials.gov v2 studies (newest update first) and FDA Orange Book products with patent and exclusivity data (openFDA) | Choose `clinicaltrials`, `orange_book` or both through `subSources`. Optional filters include sponsors, keywords and condition. An optional openFDA API key raises openFDA's limits. |
 | `sg_acra` | Singapore ACRA register of corporate entities from data.gov.sg (monthly extract in 27 first-letter shards), newest registrations first | The default shard is `A` only; list the shards you need in `shardSelection`. Optional `ssicCodeFilter` and `entityStatusFilter`. Released under the Singapore Open Data Licence. |
 
-**Not available (held):** `ae_registers` (ADGM's register service has answered every search with a server error, `System.NullPointerException` in `RASearchUtil.getSearchResponseForPR`, since at least 2026-09-17, from Apify's cloud and from elsewhere, and no row has ever been obtained; the DIFC register is disallowed by the site's robots.txt and Dubai mainland licences need an approval). Selecting one stops the run before any request to a source is made and before any record is billed, and the error says why; the platform still charges the start event of a run that has started.
+**Not available (held):** `ae_registers` (ADGM's register service has answered every search with a server error, `System.NullPointerException` in `RASearchUtil.getSearchResponseForPR`, since at least 2026-09-17, from Apify's cloud and from elsewhere, and no row has ever been obtained; the DIFC register is disallowed by the site's robots.txt and Dubai mainland licences need an approval). A held source cannot be selected: the input form does not list it, and the platform rejects an API call that names one as invalid input before a run starts, so nothing is charged. Should one ever reach the Actor, the run stops before any request to a source is made and before any record is billed; the platform still charges the start event of a run that has started.
 
 ## How to use it
 
@@ -47,7 +47,7 @@ Each source validates its own slice of `sourceOptions` and rejects unknown keys,
 | `onlyNew` | Records seen for the first time |
 | `all` | Every record, unchanged ones included (tagged `delta_status: "unchanged"`) |
 
-Delta memory is kept per `stateNamespace` (default: one per Task) in a key-value store named `global-corporate-patent-intelligence-delta-state` in your account. Give two Tasks that run at the same time different namespaces: a second concurrent run of the same namespace and source is refused. To restart a source from scratch, delete its `state.<namespace>.<source>` and `journal.<namespace>.<source>` records.
+Delta memory is kept per `stateNamespace` (default: one per Task) in a key-value store named `global-corporate-patent-intelligence-delta-state` in your account. Give two Tasks that run at the same time different namespaces: a second concurrent run of the same namespace and source is refused. A run that is killed (timeout, abort, out of memory) cannot release its lease, so a restart on the same namespace is refused until 15 minutes after that run's last heartbeat (the refused run still pays the start event); a new namespace would start from an empty memory and deliver, and bill, everything again. To restart a source from scratch, delete its `state.<namespace>.<source>` and `journal.<namespace>.<source>` records.
 
 ## Output
 
@@ -72,7 +72,7 @@ With `deltaMode: "all"` every delivered record is billed, unchanged ones at the 
 ### Control your spend
 
 * The first run of a source delivers up to `maxItemsPerSource` records (default 500, range 1 to 10,000) and bills each one. Registers can be large; for a trial set a low value such as 20.
-* Use Apify's maximum-cost-per-run setting as an additional ceiling.
+* Use Apify's maximum-cost-per-run setting as an additional ceiling. When the limit is reached the run stops cleanly and `RUN_SUMMARY` says so (`stoppedOnChargeLimit`). The platform refuses a limit below the start event plus the most expensive single event of the Actor and names the minimum in its error.
 * Keep `deltaMode` at `onlyChanged` for scheduled runs.
 
 ## Reliability notes

@@ -15,7 +15,7 @@ Typical users: compliance and sanctions-screening teams that want a scheduled de
 | `ai_crawler_signals` | For each domain you list: robots.txt permissions for 18 AI-crawler user agents, Cloudflare Content-Signal values, and presence plus SHA-256 of `/llms.txt` and `/llms-full.txt` | Requests only `/robots.txt`, `/llms.txt` and `/llms-full.txt` of the domains you supply (at most 200 per run). You can replace the default bot list. |
 | `fda_ema_recalls` | FDA drug enforcement (recall) records from openFDA, and EMA direct healthcare-professional communications | Choose `fda`, `ema` or both. An optional openFDA API key raises openFDA's request limits. |
 
-**Not available (held):** `paris_mou_thetis` (login wall), `tokyo_mou_apcis` (CAPTCHA), `imo_gisis` (robots.txt disallows the needed paths and no open bulk feed was found). Selecting one of them stops the run before any request to a source is made and before any record is billed, and the error says why; the platform still charges the start event of a run that has started. This Actor does not log in to portals, solve CAPTCHAs or disguise its requests.
+**Not available (held):** `paris_mou_thetis` (login wall), `tokyo_mou_apcis` (CAPTCHA), `imo_gisis` (robots.txt disallows the needed paths and no open bulk feed was found). A held source cannot be selected: the input form does not list it, and the platform rejects an API call that names one as invalid input before a run starts, so nothing is charged. Should one ever reach the Actor, the run stops before any request to a source is made and before any record is billed; the platform still charges the start event of a run that has started. This Actor does not log in to portals, solve CAPTCHAs or disguise its requests.
 
 ## How to use it
 
@@ -49,7 +49,7 @@ Each source validates its own slice of `sourceOptions` and rejects unknown keys,
 | `onlyNew` | Records seen for the first time |
 | `all` | Every record, unchanged ones included (tagged `delta_status: "unchanged"`) |
 
-Delta memory is kept per `stateNamespace` (default: one per Task) in a key-value store named `global-regtech-compliance-feed-delta-state` in your account. Give two Tasks that run at the same time different namespaces: a second concurrent run of the same namespace and source is refused. To restart a source from scratch, delete its `state.<namespace>.<source>` and `journal.<namespace>.<source>` records.
+Delta memory is kept per `stateNamespace` (default: one per Task) in a key-value store named `global-regtech-compliance-feed-delta-state` in your account. Give two Tasks that run at the same time different namespaces: a second concurrent run of the same namespace and source is refused. A run that is killed (timeout, abort, out of memory) cannot release its lease, so a restart on the same namespace is refused until 15 minutes after that run's last heartbeat (the refused run still pays the start event); a new namespace would start from an empty memory and deliver, and bill, everything again. To restart a source from scratch, delete its `state.<namespace>.<source>` and `journal.<namespace>.<source>` records.
 
 ## Output
 
@@ -74,7 +74,7 @@ With `deltaMode: "all"` every delivered record is billed, unchanged ones at the 
 ### Control your spend
 
 * The first run of a source delivers up to `maxItemsPerSource` records (default 500, range 1 to 10,000) and bills each one. For a trial, set a low value such as 20.
-* Use Apify's maximum-cost-per-run setting as an additional ceiling.
+* Use Apify's maximum-cost-per-run setting as an additional ceiling. When the limit is reached the run stops cleanly and `RUN_SUMMARY` says so (`stoppedOnChargeLimit`). The platform refuses a limit below the start event plus the most expensive single event of the Actor and names the minimum in its error.
 * Keep `deltaMode` at `onlyChanged` for scheduled runs.
 
 ## Reliability notes

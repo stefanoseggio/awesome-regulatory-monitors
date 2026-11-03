@@ -72,11 +72,14 @@ export class LeaseConflictError extends FatalConfigError {
     constructor(
         readonly conflicts: readonly LeaseConflict[],
         namespace: string,
+        staleAfterMs: number = DEFAULT_LEASE_STALE_MS,
     ) {
         super(
             `Another run is already delivering into the same delta memory: ${conflicts.map((c) => `source "${c.source}" is held by run ${c.holder} (last heartbeat ${c.heartbeatAt})`).join('; ')}. ` +
                 `Two overlapping runs of the same stateNamespace ("${namespace}") would deliver and bill the same records twice, so this run did not start. ` +
-                'Wait for the other run to finish, or give a concurrent run its own stateNamespace.',
+                'Wait for the other run to finish, or give a concurrent run its own stateNamespace. ' +
+                `If that run was killed (timeout, abort, out of memory) it could not release its lease: the lease expires ${Math.ceil(staleAfterMs / 60_000)} minutes after the last heartbeat, and this run can start after that. ` +
+                'A new stateNamespace starts from an empty memory, so every record would be delivered and billed again.',
         );
         this.name = 'LeaseConflictError';
     }
@@ -239,6 +242,7 @@ export class RunLeases implements RunLeasePort {
             throw new LeaseConflictError(
                 conflicts.sort((a, b) => a.source.localeCompare(b.source)),
                 this.options.namespace,
+                this.staleAfterMs,
             );
         }
     }

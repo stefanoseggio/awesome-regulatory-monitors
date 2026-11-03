@@ -75,6 +75,9 @@ describe('RunLeases.acquire', () => {
         expect((error as Error).message).toContain('source "ofac" is held by run run-a');
         expect((error as Error).message).toContain('stateNamespace ("default")');
         expect((error as Error).message).toContain('did not start');
+        // a killed run (timeout, abort, out of memory) never releases its lease: the message says when it expires and what a new namespace costs
+        expect((error as Error).message).toContain('expires 15 minutes after the last heartbeat');
+        expect((error as Error).message).toContain('empty memory');
         // run-b holds nothing: the free source it wrote is released again, run-a's lease is untouched
         expect(storage.peek('sec_enforcement')).toBeUndefined();
         expect(storage.peek('ofac')).toMatchObject({ runId: 'run-a' });

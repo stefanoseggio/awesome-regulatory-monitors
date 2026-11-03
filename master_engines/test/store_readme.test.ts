@@ -46,10 +46,11 @@ describe.each(TARGETS.map((t) => [t.engine.slug, t] as const))('%s Store README'
         expect(rows.sort()).toEqual(engine.connectors.filter((c) => c.status === 'active').map((c) => c.id).sort());
     });
 
-    it('names every held source, and says that selecting one stops the run before any request or charge', () => {
+    it('names every held source, and says that it cannot be selected (rejected as invalid input before a run starts) and that a run reaching one stops before any request or charge', () => {
         for (const held of engine.connectors.filter((c) => c.status === 'held')) expect(readme, held.id).toContain(`\`${held.id}\``);
         if (engine.connectors.some((c) => c.status === 'held')) expect(readme).toMatch(/before any request to a source is made and before any record is billed/u);
         if (engine.connectors.some((c) => c.status === 'held')) expect(readme).toContain('the platform still charges the start event of a run that has started');
+        if (engine.connectors.some((c) => c.status === 'held')) expect(readme).toContain('rejects an API call that names one as invalid input before a run starts, so nothing is charged');
     });
 
     it('names every credential field of the engine, and no secret the engine does not have', () => {

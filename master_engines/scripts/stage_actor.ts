@@ -50,4 +50,4 @@ tsconfig.include = ['lib/**/*.ts', 'pricing/**/*.ts', `${slug}/**/*.ts`];
 await writeFile(join(out, 'tsconfig.json'), `${JSON.stringify(tsconfig, null, 4)}\n`);
 await writeFile(join(out, '.dockerignore'), ['node_modules', 'dist', '.git', 'storage', 'apify_storage', ''].join('\n'));
 
-console.log(`Staged ${slug} at ${out}\nNext: cd ${out} && npm install && npm run build && apify push`);
+console.log(`Staged ${slug} at ${out}\nNext: cd ${out} && apify push --wait-for-finish 900   (stage with --out outside any repository: a push from inside one drops the files its .gitignore matches)`);
