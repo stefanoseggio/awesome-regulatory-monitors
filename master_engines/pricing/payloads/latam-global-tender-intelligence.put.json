@@ -13,13 +13,13 @@
                     "tender-detail": {
                         "eventTitle": "Tender record",
                         "eventDescription": "One tender delivered with its full detail (buyer, budget, dates, documents).",
-                        "eventPriceUsd": 0.003,
+                        "eventPriceUsd": 0.004,
                         "isPrimaryEvent": true
                     },
                     "tender-summary": {
                         "eventTitle": "Tender summary record",
                         "eventDescription": "One tender delivered from the listing only (no detail page fetched).",
-                        "eventPriceUsd": 0.001
+                        "eventPriceUsd": 0.0015
                     },
                     "notice-record": {
                         "eventTitle": "Procurement notice",

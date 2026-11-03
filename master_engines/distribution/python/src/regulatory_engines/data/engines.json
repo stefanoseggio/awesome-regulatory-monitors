@@ -502,14 +502,14 @@
         {
           "name": "tender-detail",
           "title": "Tender record",
-          "priceUsd": 0.003,
-          "basis": "legacy-readme"
+          "priceUsd": 0.004,
+          "basis": "operator-stated"
         },
         {
           "name": "tender-summary",
           "title": "Tender summary record",
-          "priceUsd": 0.001,
-          "basis": "legacy-readme"
+          "priceUsd": 0.0015,
+          "basis": "operator-stated"
         },
         {
           "name": "notice-record",

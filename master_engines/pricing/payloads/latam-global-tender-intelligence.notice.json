@@ -14,9 +14,29 @@
         "grant-updated"
     ],
     "operatorStatedEvents": [
+        "tender-detail",
+        "tender-summary",
         "watchlist-hit"
     ],
     "ratifiedEvents": [
+        {
+            "name": "tender-detail",
+            "gate": "F-24",
+            "decidedOn": "2026-11-03",
+            "decidedPriceUsd": 0.004,
+            "priceMatchesDecision": true,
+            "rationale": "Parity with the live price of the legacy `result` event: $0.004 on santafe-, tucuman-, entrerios- and cordoba-compras-monitor since 2026-11-01 (public Apify API, anonymous, read 2026-11-02; the P1 increase of 2026-10-17). The README prices of $0.003 that this catalogue first quoted are the pre-P1 values, so an engine at $0.003 would undercut the Actors its callers use today. One event serves five sources: the Diario Oficial and Florida legacy Actors charge $0.003 and pay $0.004 here.",
+            "reviewWhen": "After 30 days: if conversion is poor, lower it (a decrease is immediate); an increase after the first paying user needs 14 days of notice (Terms 9.4) and is limited to one per month."
+        },
+        {
+            "name": "tender-summary",
+            "gate": "F-24",
+            "decidedOn": "2026-11-03",
+            "decidedPriceUsd": 0.0015,
+            "priceMatchesDecision": true,
+            "rationale": "Parity with the live price of the legacy `result-summary` event: $0.0015 on santafe- and cordoba-compras-monitor since 2026-11-01 (public Apify API, anonymous, read 2026-11-02). The instruction wrote $0.015; that is ten times the legacy price it asks to match and was read as a decimal slip. If $0.015 was meant, change this constant and this ratification and regenerate with --strict.",
+            "reviewWhen": "After 30 days: the summary event is billed for listing-only rows of ar_santafe and us_florida; compare its volume with the detail event."
+        },
         {
             "name": "grant-updated",
             "gate": "G3",

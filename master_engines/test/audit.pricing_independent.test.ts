@@ -167,8 +167,8 @@ const CASES: Case[] = [
             memoryMbytes: 1024,
             prices: {
                 [START]: 5_000n,
-                'tender-detail': 3_000n,
-                'tender-summary': 1_000n,
+                'tender-detail': 4_000n,
+                'tender-summary': 1_500n,
                 'notice-record': 1_000n,
                 'notice-new': 20_000n,
                 'notice-updated': 10_000n,
@@ -177,7 +177,7 @@ const CASES: Case[] = [
                 [HIT]: 150_000n,
             },
             primary: 'tender-detail',
-            basis: { legacy: 6, provisional: 1, operator: 1 },
+            basis: { legacy: 4, provisional: 1, operator: 3 },
             active: 8,
             held: 7,
             exposure: { emptyRun: 5_000n, dearestRow: 20_000n, oneRow: 170_000n, uncapped1000: 170_005_000n, capped1000: 50_005_000n, killWithJournal: 20_000n, killOldWindow: 4_250_000n },
@@ -469,7 +469,8 @@ describe.each(CASES.map((c) => [c.slug, c] as const))('%s: committed Pay-Per-Eve
         expect(count('operator-stated')).toBe(golden.basis.operator);
         expect(c.catalog.events.map((e) => e.basis).every((b) => ['legacy-readme', 'provisional', 'operator-stated'].includes(b))).toBe(true);
         expect(c.catalog.events).toHaveLength(Object.keys(f.events).length - 1);
-        expect(c.catalog.events.filter((e) => e.basis === 'operator-stated').map((e) => e.name)).toEqual([HIT]);
+        // the watchlist hit in every engine, and in the tender engine the two prices the owner set by parity with the legacy Actors (F-24)
+        expect(c.catalog.events.filter((e) => e.basis === 'operator-stated').map((e) => e.name)).toEqual(c.slug === 'latam-global-tender-intelligence' ? ['tender-detail', 'tender-summary', HIT] : [HIT]);
     });
 
     it('cites every documented price with a structured file:line citation, and quoted dollar amounts agree with the price', () => {
@@ -500,12 +501,12 @@ describe.each(CASES.map((c) => [c.slug, c] as const))('%s: committed Pay-Per-Eve
 });
 
 describe('the three payloads together', () => {
-    it('price 25 events beyond the start event: 18 legacy-readme, 4 provisional, 3 operator-stated', () => {
+    it('price 25 events beyond the start event: 16 legacy-readme, 4 provisional, 5 operator-stated', () => {
         const all = ALL_PRICING.flatMap((p) => p.events);
         expect(all).toHaveLength(25);
-        expect(all.filter((e) => e.basis === 'legacy-readme')).toHaveLength(18);
+        expect(all.filter((e) => e.basis === 'legacy-readme')).toHaveLength(16);
         expect(all.filter((e) => e.basis === 'provisional').map((e) => e.name)).toEqual(['crawler-signal', 'grant-updated', 'uae-entity-updated', 'sg-entity-updated']);
-        expect(all.filter((e) => e.basis === 'operator-stated').map((e) => e.name)).toEqual([HIT, HIT, HIT]);
+        expect(all.filter((e) => e.basis === 'operator-stated').map((e) => e.name)).toEqual([HIT, 'tender-detail', 'tender-summary', HIT, HIT]);
         const committed = CASES.reduce((sum, c) => sum + Object.keys(factsOf(c.slug).events).length - 1, 0);
         expect(committed).toBe(25);
     });
@@ -667,7 +668,7 @@ describe('pricing exposure figures', () => {
             expect(first.stdout).toContain(`| \`${START}\` | ${usd6(must(c.golden.prices[START], 'start'))} | platform |`);
             for (const event of c.catalog.events) expect(first.stdout).toContain(`| \`${event.name}\` | ${usd6(must(c.golden.prices[event.name], event.name))} | ${event.basis} |`);
         }
-        expect(first.stdout).toContain('| **all engines** | 18 | 4 | 3 |');
+        expect(first.stdout).toContain('| **all engines** | 16 | 4 | 5 |');
         expect(first.stdout).not.toMatch(/\d{4}-\d{2}-\d{2}T/u);
     }, 120_000);
 });
@@ -786,8 +787,8 @@ describe('the exposure script on controlled inputs', () => {
     });
 
     it('refuses to report on a payload that disagrees with the catalog or is malformed', async () => {
-        const priceDrift = await controlledRoot(tenders, { put: (text) => text.replace('"eventPriceUsd": 0.003', '"eventPriceUsd": 0.0031') });
-        await expect(collectEngineExposure(priceDrift, tenders.engine)).rejects.toThrow(/tender-detail is 0\.003100 in the payload but 0\.003000 in the catalog/u);
+        const priceDrift = await controlledRoot(tenders, { put: (text) => text.replace('"eventPriceUsd": 0.004', '"eventPriceUsd": 0.0041') });
+        await expect(collectEngineExposure(priceDrift, tenders.engine)).rejects.toThrow(/tender-detail is 0\.004100 in the payload but 0\.004000 in the catalog/u);
 
         const orphan = await controlledRoot(tenders, {
             put: (text) => text.replace('"watchlist-hit": {', '"orphan-record": {\n "eventTitle": "Orphan",\n "eventDescription": "Nothing bills it.",\n "eventPriceUsd": 0.01\n },\n "watchlist-hit": {'),
@@ -839,7 +840,7 @@ describe('the exposure script on controlled inputs', () => {
         expect(control.stdout).toBe(renderReport(await collectExposure(ROOT)));
 
         const payload = join(root, 'pricing', 'payloads', `${tenders.slug}.put.json`);
-        await writeFile(payload, (await readFile(payload, 'utf8')).replace('"eventPriceUsd": 0.003', '"eventPriceUsd": 0.0031'));
+        await writeFile(payload, (await readFile(payload, 'utf8')).replace('"eventPriceUsd": 0.004', '"eventPriceUsd": 0.0041'));
         const failure = await run(process.execPath, args, { cwd: root, timeout: 90_000 }).then(
             () => undefined,
             (error: unknown) => error as { code?: number; stdout?: string; stderr?: string },
@@ -847,6 +848,6 @@ describe('the exposure script on controlled inputs', () => {
         expect(failure).toBeDefined();
         expect(failure?.code).toBe(1);
         expect(failure?.stdout).toBe('');
-        expect(failure?.stderr).toContain('tender-detail is 0.003100 in the payload but 0.003000 in the catalog');
+        expect(failure?.stderr).toContain('tender-detail is 0.004100 in the payload but 0.004000 in the catalog');
     }, 180_000);
 });

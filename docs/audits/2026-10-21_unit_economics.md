@@ -24,11 +24,11 @@ Memory 1024 MB, 1 start event(s) at 0.005000, marketplace margin 20 percent.
 | Scenario | Net revenue (USD) | Break-even at 0.20/GB-h | Break-even at 0.25/GB-h | Break-even at 0.30/GB-h | Break-even at 0.40/GB-h |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | empty run | 0.004000 | 72 s | 57 s | 48 s | 36 s |
-| 10 rows at tender-summary (0.001000) | 0.012000 | 216 s | 172 s | 144 s | 108 s |
+| 10 rows at notice-record (0.001000) | 0.012000 | 216 s | 172 s | 144 s | 108 s |
 | 10 rows at notice-new (0.020000) | 0.164000 | 2952 s | 2361 s | 1968 s | 1476 s |
-| 100 rows at tender-summary (0.001000) | 0.084000 | 1512 s | 1209 s | 1008 s | 756 s |
+| 100 rows at notice-record (0.001000) | 0.084000 | 1512 s | 1209 s | 1008 s | 756 s |
 | 100 rows at notice-new (0.020000) | 1.604000 | 28872 s | 23097 s | 19248 s | 14436 s |
-| 1000 rows at tender-summary (0.001000) | 0.804000 | 14472 s | 11577 s | 9648 s | 7236 s |
+| 1000 rows at notice-record (0.001000) | 0.804000 | 14472 s | 11577 s | 9648 s | 7236 s |
 | 1000 rows at notice-new (0.020000) | 16.004000 | 288072 s | 230457 s | 192048 s | 144036 s |
 
 ## global-corporate-patent-intelligence

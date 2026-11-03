@@ -198,16 +198,18 @@ describe('buildPricingPutBody', () => {
 
     it('every non-documented price carries a complete decision: who, when, why and what reopens it', () => {
         const undocumented = ALL_PRICING.flatMap((p) => p.events.filter((e) => e.basis !== 'legacy-readme').map((e) => ({ engine: p.engine, event: e })));
-        expect(undocumented.map(({ event }) => event.name).sort()).toEqual(['crawler-signal', 'grant-updated', 'sg-entity-updated', 'uae-entity-updated', 'watchlist-hit', 'watchlist-hit', 'watchlist-hit']);
+        expect(undocumented.map(({ event }) => event.name).sort()).toEqual(['crawler-signal', 'grant-updated', 'sg-entity-updated', 'tender-detail', 'tender-summary', 'uae-entity-updated', 'watchlist-hit', 'watchlist-hit', 'watchlist-hit']);
         for (const { engine, event } of undocumented) {
             const r = event.ratification;
             expect(r, `${engine}/${event.name} has no ratification`).toBeDefined();
-            expect(r?.decidedOn).toBe('2026-11-02');
+            // the two tender prices (F-24) were set by the owner's own instruction of 2026-11-03; every other decision is the delegate's of 2026-11-02
+            const ownerPrice = event.name === 'tender-detail' || event.name === 'tender-summary';
+            expect(r?.decidedOn).toBe(ownerPrice ? '2026-11-03' : '2026-11-02');
             expect(r?.priceUsd, `${engine}/${event.name} was decided at another price than it carries`).toBe(event.priceUsd);
-            expect(r?.decidedBy).toContain('mandate of 2026-11-02');
+            expect(r?.decidedBy).toContain(ownerPrice ? 'instruction of 2026-11-03' : 'mandate of 2026-11-02');
             expect((r?.rationale ?? '').length, `${engine}/${event.name} rationale`).toBeGreaterThan(120);
             expect((r?.reviewWhen ?? '').length, `${engine}/${event.name} reviewWhen`).toBeGreaterThan(60);
-            expect(r?.gate).toBe(event.name === 'watchlist-hit' ? 'G2' : 'G3');
+            expect(r?.gate).toBe(ownerPrice ? 'F-24' : event.name === 'watchlist-hit' ? 'G2' : 'G3');
         }
         // a documented price needs no ratification, and none was added to one
         for (const p of ALL_PRICING) for (const e of p.events.filter((x) => x.basis === 'legacy-readme')) expect(e.ratification, `${p.engine}/${e.name}`).toBeUndefined();
@@ -238,8 +240,8 @@ describe('buildPricingPutBody', () => {
         expect(price(REGTECH_PRICING, 'vessel-record')).toBe(0.0005);
         expect(price(REGTECH_PRICING, 'enforcement-release')).toBe(0.05);
         expect(price(REGTECH_PRICING, 'statement-new')).toBe(0.02);
-        expect(price(TENDERS_PRICING, 'tender-detail')).toBe(0.003);
-        expect(price(TENDERS_PRICING, 'tender-summary')).toBe(0.001);
+        expect(price(TENDERS_PRICING, 'tender-detail')).toBe(0.004);
+        expect(price(TENDERS_PRICING, 'tender-summary')).toBe(0.0015);
         expect(price(PATENTS_PRICING, 'patent-proceeding')).toBe(0.002);
         expect(price(PATENTS_PRICING, 'sg-entity-new')).toBe(0.03);
     });

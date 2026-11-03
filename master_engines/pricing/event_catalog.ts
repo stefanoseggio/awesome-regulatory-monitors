@@ -29,7 +29,7 @@ export const DECIDED_BY = "delegate of the owner under the owner's mandate of 20
 
 /** A decision that settles the price of an event whose number no legacy README documents (gates G2 and G3), or the start price (G1). */
 export interface PriceRatification {
-    gate: 'G1' | 'G2' | 'G3';
+    gate: 'G1' | 'G2' | 'G3' | 'F-24';
     /** The price the decision was taken for. `--strict` refuses an event (or a start price) whose price has moved since: a decision about $0.015 says nothing about $0.02. */
     priceUsd: number;
     decidedOn: string;
@@ -106,6 +106,30 @@ const R_LOW = (documented: string, priceUsd: number): PriceRatification => ({
     reviewWhen: 'After 90 days of production deltas: if status changes are more than 25 percent of this source\'s updated rows, split the event in two (a new paid event needs the 14-day notice of Terms 9.4); otherwise keep it.',
 });
 
+/** F-24: the owner's own instruction (not the delegate's) settles the two tender prices; the rationale records what the figures are measured against. */
+const OWNER_DECIDED_BY = "the owner, by written instruction of 2026-11-03 (production execution prompt, sub-task 2.1: price parity with the legacy Argentina Actors)";
+
+const R_PARITY_DETAIL: PriceRatification = {
+    gate: 'F-24',
+    priceUsd: 0.004,
+    decidedOn: '2026-11-03',
+    decidedBy: OWNER_DECIDED_BY,
+    rationale:
+        'Parity with the live price of the legacy `result` event: $0.004 on santafe-, tucuman-, entrerios- and cordoba-compras-monitor since 2026-11-01 (public Apify API, anonymous, read 2026-11-02; the P1 increase of 2026-10-17). The README prices of $0.003 that this catalogue first quoted are the pre-P1 values, so an engine at $0.003 would undercut the Actors its callers use today. One event serves five sources: the Diario Oficial and Florida legacy Actors charge $0.003 and pay $0.004 here.',
+    reviewWhen:
+        'After 30 days: if conversion is poor, lower it (a decrease is immediate); an increase after the first paying user needs 14 days of notice (Terms 9.4) and is limited to one per month.',
+};
+
+const R_PARITY_SUMMARY: PriceRatification = {
+    gate: 'F-24',
+    priceUsd: 0.0015,
+    decidedOn: '2026-11-03',
+    decidedBy: OWNER_DECIDED_BY,
+    rationale:
+        'Parity with the live price of the legacy `result-summary` event: $0.0015 on santafe- and cordoba-compras-monitor since 2026-11-01 (public Apify API, anonymous, read 2026-11-02). The instruction wrote $0.015; that is ten times the legacy price it asks to match and was read as a decimal slip. If $0.015 was meant, change this constant and this ratification and regenerate with --strict.',
+    reviewWhen: 'After 30 days: the summary event is billed for listing-only rows of ar_santafe and us_florida; compare its volume with the detail event.',
+};
+
 const R_FLIP: PriceRatification = {
     gate: 'G3',
     priceUsd: 0.015,
@@ -158,8 +182,8 @@ export const TENDERS_PRICING: EnginePricing = {
     memoryMbytes: 1024,
     startPriceUsd: START_PRICE_LOCKED_USD,
     events: [
-        { name: 'tender-detail', title: 'Tender record', description: 'One tender delivered with its full detail (buyer, budget, dates, documents).', priceUsd: 0.003, basis: 'legacy-readme', evidence: 'santafe-compras-monitor/README.md:70; florida-tenders-monitor/README.md:30; tucuman-compras-monitor/README.md:32; entrerios-compras-monitor/README.md:8; diario-oficial-cl-monitor/README.md:9.', primary: true },
-        { name: 'tender-summary', title: 'Tender summary record', description: 'One tender delivered from the listing only (no detail page fetched).', priceUsd: 0.001, basis: 'legacy-readme', evidence: 'santafe-compras-monitor/README.md:71; florida-tenders-monitor/README.md:31' },
+        { name: 'tender-detail', title: 'Tender record', description: 'One tender delivered with its full detail (buyer, budget, dates, documents).', priceUsd: 0.004, basis: 'operator-stated', ratification: R_PARITY_DETAIL, evidence: 'Engagement brief of 2026-11-03 (sub-task 2.1, price parity with the legacy Argentina Actors). Live price of the legacy result event since 2026-11-01: $0.004 on santafe-, tucuman-, entrerios- and cordoba-compras-monitor (public Apify API, 2026-11-02). The README prices ($0.003: santafe-compras-monitor/README.md:70; florida-tenders-monitor/README.md:30; tucuman-compras-monitor/README.md:32; entrerios-compras-monitor/README.md:8; diario-oficial-cl-monitor/README.md:9) are the values before that increase.', primary: true },
+        { name: 'tender-summary', title: 'Tender summary record', description: 'One tender delivered from the listing only (no detail page fetched).', priceUsd: 0.0015, basis: 'operator-stated', ratification: R_PARITY_SUMMARY, evidence: 'Engagement brief of 2026-11-03 (sub-task 2.1, price parity with the legacy Argentina Actors). Live price of the legacy result-summary event since 2026-11-01: $0.0015 on santafe- and cordoba-compras-monitor (public Apify API, 2026-11-02). The README prices ($0.001: santafe-compras-monitor/README.md:71; florida-tenders-monitor/README.md:31) are the values before that increase.' },
         { name: 'notice-record', title: 'Procurement notice', description: 'One World Bank procurement notice delivered to the dataset.', priceUsd: 0.001, basis: 'legacy-readme', evidence: 'actor-20-mdb-procurement-monitor/README.md:63' },
         { name: 'notice-new', title: 'New EU TED notice', description: 'A TED procurement notice never delivered before.', priceUsd: 0.02, basis: 'legacy-readme', evidence: 'eu-ted-procurement-delta-monitor/README.md:187' },
         { name: 'notice-updated', title: 'Updated EU TED notice', description: 'A previously delivered TED notice whose content changed, or one re-sent unchanged by a full-snapshot run.', priceUsd: 0.01, basis: 'legacy-readme', evidence: 'eu-ted-procurement-delta-monitor/README.md:188' },
